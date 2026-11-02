@@ -238,7 +238,7 @@ def fab_check(board, rules="jlcpcb-2") -> List[str]:
                 if dist > 1e-6 and gap < r["hole_gap"] - 1e-6:
                     out.append(f"{na} at {tuple(round(c, 2) for c in a)} and {nb} at {tuple(round(c, 2) for c in b)}: "
                                f"drills {gap:.2f} mm apart (min {r['hole_gap']:.2f})")
-    return out
+    return list(dict.fromkeys(out))                       # (a pad number with several holes says it once)
 
 
 def order(board, out_dir: str, boards: int = 5, spare: float = 0.1, origin=(0.0, 0.0)) -> Dict[str, str]:

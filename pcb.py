@@ -815,6 +815,7 @@ class Board:
         return sorted(groups.values(), key=len, reverse=True)
 
     def check(self) -> List[str]:
+        import shapely
         from shapely.geometry import LineString, Point, Polygon
         from shapely.ops import unary_union
         probs: List[str] = []
@@ -879,8 +880,8 @@ class Board:
                 na, nb = nets_[i], nets_[j]
                 if na.startswith("~") and nb.startswith("~"):
                     continue
-                if A_[na].distance(A_[nb]) >= self.clear - 2e-3:
-                    continue
+                if not shapely.dwithin(A_[na], A_[nb], self.clear - 2e-3):     # (stops at the first close pair:
+                    continue                                                # a full distance is far dearer)
                 ds = []
                 if R_[na] is not None:
                     ds.append((R_[na].distance(A_[nb]), R_[na], A_[nb]))
