@@ -61,7 +61,19 @@ def lines(board, boards: int = 1, spare: float = 0.1, min_spare: int = 0) -> Lis
     quantity for ``boards`` boards plus ``spare`` (a fraction, at least ``min_spare`` parts; passives get at least
     10% extra since they are lost in assembly by the tape)"""
     out = []
-    for r in board.bom():
+    rows: Dict[tuple, Dict] = {}                         # one line per part to buy: the same part number (or LCSC
+    for r in board.bom():                                # number) on parts of different values merges into one
+        key = ("mpn", r["mpn"].lower(), r["footprint"]) if r["mpn"] else \
+            (("lcsc", r["lcsc"]) if r["lcsc"] else ("row", r["value"], r["footprint"], r["refs"][0]))
+        if key in rows:
+            m = rows[key]
+            m["refs"] = m["refs"] + r["refs"]
+            m["qty"] += r["qty"]
+            if r["value"] not in m["value"].split(" / "):
+                m["value"] = f"{m['value']} / {r['value']}"
+        else:
+            rows[key] = dict(r)
+    for r in rows.values():
         maker, pn = split_mpn(r["mpn"])
         need = r["qty"] * boards
         extra = max(min_spare, math.ceil(need * spare))

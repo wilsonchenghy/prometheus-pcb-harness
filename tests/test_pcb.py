@@ -943,3 +943,14 @@ def test_clearance_between_pours_tracks_and_pads():
     assert any(p.startswith("F.Cu: A and B short") for p in b.check())
     b.pours[1]["poly"] = [(16.1, 0), (30, 0), (30, 20), (16.1, 20)]
     assert any(p.startswith("F.Cu: A and B 0.10 mm apart") for p in b.check())
+
+
+def test_cart_merges_one_part_used_under_two_values():
+    """two buttons of one part number labelled EN and BOOT are one line to buy, with both refs and both values"""
+    import fab
+    import pcb
+    b = pcb.Board("cart2", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("SW1", "Button_Switch_SMD:SW_SPST_TL3342", (8, 10), 0, "EN", "E-Switch TL3342F160QG")
+    b.place("SW2", "Button_Switch_SMD:SW_SPST_TL3342", (20, 10), 0, "BOOT", "E-Switch TL3342F160QG")
+    ls = fab.lines(b, boards=5)
+    assert len(ls) == 1 and ls[0]["refs"] == ["SW1", "SW2"] and ls[0]["need"] == 10 and ls[0]["value"] == "EN / BOOT"
