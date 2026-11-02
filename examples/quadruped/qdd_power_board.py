@@ -252,6 +252,8 @@ def board_route(b, top_pours, vbus):
     for n in ("CB", "SW", "FB", "5V", "LED", "VSENSE", "CAN_TX", "CAN_RX", "SCK", "MOSI", "MISO", "IMU_CS", "UART_TX", "UART_RX", "3V3",
               "CANH", "CANL"):
         probs += route(b, n, width=widths.get(n, 0.25), keepout={"F": ko_all})
+    from pcb import repair
+    probs += repair(b, width=0.3, amps=0.5, keepout={"F": ko_all})   # (a pour scrap left by later nets joined back)
     return probs
 
 

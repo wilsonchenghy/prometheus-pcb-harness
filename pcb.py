@@ -1353,7 +1353,7 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
               track_keepout=track_keepout, seed_pins=seed_pins)
     forced = [(a, getattr(board, a)) for a in ("root_big", "pour_root") if hasattr(board, a)]
     if forced or only:                                   # (a caller's own choice, or a partial route: one attempt)
-        return _route_once(board, net, **kw)
+        return _join_islands(board, net, _route_once(board, net, **kw), kw, only)
     t0, v0, f0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
     best = None
     for rb, pr in ((False, False), (False, True), (True, True)):
@@ -1382,6 +1382,46 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
         finally:
             del board.root_big, board.pour_root
         probs = [p_ for p_ in probs if not re.match(rf"route {re.escape(net)}: could not reach", p_)] + again
+    return _join_islands(board, net, probs, kw, only)
+
+
+def repair(board: Board, width: float = 0.25, nets: Optional[Sequence[str]] = None, **kw) -> List[str]:
+    """the last step of a routing: every net (or those in ``nets``) that a later net's tracks split (a pour cut in
+    two, a pad left on a scrap of it) gets its stray groups joined back to its main group. Returns what could not be
+    joined"""
+    probs = []
+    for net in (nets or list(board.nets)):
+        if len(board.islands(net)) > 1:
+            kw2 = dict(width=width, grid=0.25, via_cost=8.0, layers="".join(L for L in board.layers if L in "FB"),
+                       keepout=None, via=(0.3, 0.6), only=None, amps=None, track_keepout=None, seed_pins=None)
+            kw2.update(kw)
+            probs += _join_islands(board, net, [], kw2)
+    return probs
+
+
+def _join_islands(board: Board, net: str, probs: List[str], kw: dict, only=None) -> List[str]:
+    """after routing: a pin the route took as reached that sits on copper cut off from the rest (a scrap of pour
+    between tracks) is joined to the net's main group with seed_pins (``only``: just those pins)"""
+    if net not in board.nets or any(re.match(rf"route {re.escape(net)}: could not reach", p_) for p_ in probs):
+        return probs
+    groups = board.islands(net)
+    if len(groups) < 2:
+        return probs
+    want = set(map(tuple, only)) if only else None
+    main = [tuple(p_) for p_ in groups[0]]
+    for g in groups[1:]:
+        g = [tuple(p_) for p_ in g if want is None or tuple(p_) in want]
+        if not g:
+            continue
+        kw2 = dict(kw, only=g[:1], seed_pins=main)
+        board.root_big = board.pour_root = False
+        try:
+            more = _route_once(board, net, **kw2)
+        finally:
+            del board.root_big, board.pour_root
+        probs = probs + more
+        if not more:
+            main += g
     return probs
 
 
@@ -1448,11 +1488,16 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
             dl = math.hypot(bx - ax, by - ay) or 1.0
             cl = getattr(board, "corridor", 1.0)            # how far past a stub its way out is kept clear
             corridors.append((t["layer"], LineString([(bx, by), (bx + (bx - ax) / dl * cl, by + (by - ay) / dl * cl)]).buffer(t["w"] / 2)))
+    # a keep-out (a pour kept clear of signals) does not wall in this net's own pads: round each, room for its way
+    # out and a via (a gate resistor sitting inside a power pour still has to be reached)
+    own_zone = {L: unary_union([g.buffer(width + board.clear + via[1] + 0.3, 8) for (r_, n_), (g, l_) in pads.items()
+                                if l_ == L and pn.get((r_, n_)) == net] or [Polygon()]) for L in board.layers}
+    ko_ = lambda polys, L: [Polygon(k).difference(own_zone.get(L, Polygon())) for k in polys]
     blk0 = {}
     for L in Ls:
         other = unary_union([g for (n, l), g in cu_fixed.items() if l == L and n != net] + [holes] +
-                            [Polygon(k) for k in keepout.get(L, []) + track_keepout.get(L, []) +
-                             board.keepout_zones(L)] +
+                            ko_(keepout.get(L, []) + track_keepout.get(L, []), L) +
+                            [Polygon(k) for k in board.keepout_zones(L)] +
                             [c_ for l_, c_ in corridors if l_ == L])
         inside = _cxy(board.outline.buffer(-(width / 2 + max(0.3, board.edge + 0.04))), XX, YY)
         blk0[L] = (_cxy(other.buffer(board.clear + 0.04 + width / 2, 8), XX, YY) if not other.is_empty
@@ -1462,7 +1507,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         vb = []
         for L in board.layers:                          # (a via passes every layer: their copper and keep-outs)
             other = unary_union([g for (n, l), g in cu_fixed.items() if l == L and n != net] + [holes] +
-                                [Polygon(k) for k in board.keepout_zones(L) + keepout.get(L, [])] +
+                                [Polygon(k) for k in board.keepout_zones(L)] + ko_(keepout.get(L, []), L) +
                                 [c_ for l_, c_ in corridors if l_ == L])
             vb.append(_cxy(other.buffer(board.clear + 0.04 + via[1] / 2, 8), XX, YY) if not other.is_empty
                       else np.zeros_like(blk0[Ls[0]]))

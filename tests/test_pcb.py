@@ -484,8 +484,8 @@ def test_pcb_route_through_an_inner_layer():
 
 
 def test_pcb_route_seed_pins_joins_an_island_to_the_main_group():
-    """a pad sitting in a piece of its net's pour that nothing joins to the rest passes for routed, unless route()
-    is told which pads are the main group (seed_pins): then it is routed back to them"""
+    """a pad sitting in a piece of its net's pour that nothing joins to the rest is joined back to the net's main
+    group: by route() itself now (it checks the net's islands after routing), or with seed_pins named"""
     import pytest
     pytest.importorskip("shapely")
     try:
@@ -499,10 +499,12 @@ def test_pcb_route_seed_pins_joins_an_island_to_the_main_group():
     b.net("A", [("R1", "2"), ("R2", "1")], amps=0.1)
     b.net("G", [("R1", "1"), ("R2", "2")], amps=0.1, volts=0)
     b.pour("A", "F", [(20, 2), (29, 2), (29, 18), (20, 18)])        # an island of A's pour round R2 only
+    b2 = pcb.Board("i", [(0, 0), (30, 0), (30, 20), (0, 20)], clearance=0.15)
+    b2.comps, b2.nets, b2.pours = dict(b.comps), dict(b.nets), list(b.pours)
     assert pcb.route(b, "A", width=0.2, only=[("R2", "1")]) == []
-    assert len(b.islands("A")) == 2                                # (taken as reached: nothing was routed)
-    assert pcb.route(b, "A", width=0.2, only=[("R2", "1")], seed_pins=[("R1", "2")]) == []
-    assert len(b.islands("A")) == 1
+    assert len(b.islands("A")) == 1                                # (the island found and joined)
+    assert pcb.route(b2, "A", width=0.2, only=[("R2", "1")], seed_pins=[("R1", "2")]) == []
+    assert len(b2.islands("A")) == 1
 
 
 def test_pcb_check_finds_a_pour_neck_and_says_where():
