@@ -1259,6 +1259,7 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     from shapely.geometry import LineString, Point, Polygon
     from shapely.ops import nearest_points, unary_union
     probs: List[str] = []
+    n_route0 = len(board.tracks)
     x0, y0, x1, y1 = board.outline.bounds
     nx, ny = int((x1 - x0) / grid) + 1, int((y1 - y0) / grid) + 1
     xs = x0 + np.arange(nx) * grid
@@ -1507,8 +1508,12 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
         tree[L_pin].append(g_pin)
         if pin in fan_geo:
             tree[fan_geo[pin][0]].append(fan_geo[pin][1])
-    if getattr(board, "prune", True):                    # the net's dead ends (a way-out stub, a fan-out the route
-        board.prune_spurs([k for k, t in enumerate(board.tracks) if t["net"] == net])   # joined part-way along);
+    if getattr(board, "prune", True):                    # the dead ends (a way-out stub or fan-out the route joined
+        mine = [k for k, t in enumerate(board.tracks) if t["net"] == net]    # part-way along): the whole net's once
+        if not probs and len(board.islands(net)) == 1:   # it is whole, else only this call's (a stub of a pin not
+            board.prune_spurs(mine)                      # reached yet is its way out, kept for the next call)
+        else:
+            board.prune_spurs([k for k in mine if k >= n_route0])
     #                                                      board.prune = False keeps a deliberate stub (an antenna)
     return probs
 
