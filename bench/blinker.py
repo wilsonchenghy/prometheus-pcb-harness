@@ -29,6 +29,10 @@ R06, C06 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric"
 OUT = [(0.0, 0.0), (35.0, 0.0), (35.0, 25.0), (0.0, 25.0)]
 
 
+FPS = ["Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", R06, C06,
+       "LED_SMD:LED_0603_1608Metric"]
+
+
 def build():
     b = Board("blinker", OUT, thickness=1.6, copper_oz=1.0)
     b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (4.0, 11.0), 0, "5V in", "header")

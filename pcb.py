@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
-LOCAL_FP = Path(__file__).parent / "footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
+LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
 HOLE_GAP = 0.25             # mm between drill walls (a common fab minimum)
 EDGE = 0.25                 # mm from copper (tracks, vias) to the board edge
@@ -77,12 +77,8 @@ def _fp_file(name: str) -> Path:
     return CACHE / "kicad_fp" / f"{fp}.kicad_mod"
 
 
-def footprint(name: str) -> Dict:
-    """KiCad footprint "Lib:Name" -> {"pads": {number: [pad, ...]}, "courtyard": (x0, y0, x1, y1)}; a pad is
-    {"at": (x, y) board frame (y up), "size": (w, h), "rot": deg, "shape": rect|roundrect|circle|oval|...,
-    "drill": dia or None, "layers": "F" | "B" | "FB"}. Fetched once into the parts cache."""
-    if name in _FP:
-        return _FP[name]
+def _download_fp(name: str) -> Path:
+    """fetch footprint "Lib:Name" from KiCad's library into the cache (the project library needs no fetch)"""
     lib, fp = name.split(":")
     dst = _fp_file(name)
     if not dst.exists() or dst.stat().st_size < 200:
@@ -93,6 +89,63 @@ def footprint(name: str) -> Dict:
         if not data.lstrip().startswith(b"(footprint") and not data.lstrip().startswith(b"(module"):
             raise FileNotFoundError(f"no KiCad footprint {name}")
         dst.write_bytes(data)
+    return dst
+
+
+def prefetch(names: Sequence[str], workers: int = 16) -> List[str]:
+    """download every footprint in ``names`` not yet cached, in parallel (a cold board otherwise waits on one
+    download per footprint, a few seconds each). Returns the names that could not be fetched."""
+    from concurrent.futures import ThreadPoolExecutor
+    todo = sorted({n for n in names if n not in _FP})
+    bad = []
+
+    def one(n):
+        try:
+            _download_fp(n)
+        except Exception:
+            bad.append(n)
+    with ThreadPoolExecutor(max_workers=max(1, min(workers, len(todo) or 1))) as ex:
+        list(ex.map(one, todo))
+    return bad
+
+
+_SCANNED: set = set()
+_FP_NAME = re.compile(r'["\']([A-Za-z0-9_.\-]+:[A-Za-z0-9_.,+\-]+)["\']')
+
+
+def _prefetch_callers():
+    """on the first footprint the cache lacks, fetch every footprint named in the running program's source files
+    (the main script and the modules it imported from beside it) in parallel, so a cold board waits once, not once
+    per footprint"""
+    import sys
+    files = []
+    for m in list(sys.modules.values()):
+        f = getattr(m, "__file__", None) or ""
+        if f.endswith(".py") and "site-packages" not in f and f not in _SCANNED and Path(f).name != "pcb.py":
+            files.append(f)
+    names = set()
+    for f in files:
+        _SCANNED.add(f)
+        try:
+            names |= {n for n in _FP_NAME.findall(Path(f).read_text(errors="ignore")) if not n.startswith(("http", "C:"))
+                      and n.split(":")[0][:1].isupper()}
+        except OSError:
+            pass
+    if names:
+        prefetch(sorted(names))
+
+
+def footprint(name: str) -> Dict:
+    """KiCad footprint "Lib:Name" -> {"pads": {number: [pad, ...]}, "courtyard": (x0, y0, x1, y1)}; a pad is
+    {"at": (x, y) board frame (y up), "size": (w, h), "rot": deg, "shape": rect|roundrect|circle|oval|...,
+    "drill": dia or None, "layers": "F" | "B" | "FB"}. Fetched once into the parts cache."""
+    if name in _FP:
+        return _FP[name]
+    lib, fp = name.split(":")
+    f0 = _fp_file(name)
+    if not f0.exists() or f0.stat().st_size < 200:
+        _prefetch_callers()
+    dst = _download_fp(name)
     tree = _sexpr(dst.read_text())
     pads: Dict[str, List[Dict]] = {}
     for p in _find(tree, "pad"):
@@ -1521,93 +1574,8 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
     return d["probs"]
 
 
-def placement(board: Board) -> dict:
-    """each part's footprint, position, rotation and side: what a saved routing was routed round"""
-    return {r: (c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F")) for r, c in board.comps.items()}
 
 
-def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, float]] = ()) -> set:
-    """put back the routing of an earlier placement where it still holds, so moving a few parts re-routes only
-    what they disturb. ``old``: {"placement": placement(board) then, "tracks": [...], "vias": [...]} (tracks and
-    vias added by the routing, or all of them: ones already on the board are not added twice). A net's old copper
-    goes back unless one of its parts moved or any of it now comes within the clearance of another net's pads or
-    copper on the board, or (rip-up) within one of the circles ``rip`` ((x, y, r): round a pad that could not be
-    reached, so the net that failed there can route first). Returns the nets left out (route them again), every
-    net of a moved part included."""
-    from shapely.geometry import LineString, Point
-    from shapely.strtree import STRtree
-    now = placement(board)
-    moved = {r for r in set(now) | set(old["placement"]) if now.get(r) != old["placement"].get(r)}
-    pn = board.pad_net()
-    bad = {n for (r, _), n in pn.items() if r in moved}
-    for n, d in board.nets.items():                      # (a net that lost or gained a moved part's pin)
-        if any(r in moved for r, _ in d["pins"]):
-            bad.add(n)
-    have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) for t in board.tracks}
-    have_v = {(v["net"], tuple(v["at"])) for v in board.vias}
-    have_v_list = list(board.vias)
-    old_t = [t for t in old["tracks"] if (t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) not in have_t
-             and not t.get("fan")]                       # (escape stubs are laid afresh each build, not reused)
-    old_v = [v for v in old["vias"] if (v["net"], tuple(v["at"])) not in have_v]
-
-    def shape(it):
-        if "pts" in it:
-            return it["layer"], LineString(it["pts"]).buffer(it["w"] / 2, 8)
-        return None, Point(it["at"]).buffer(it["dia"] / 2, 8)     # (a via: every layer)
-    # what is on the board now: every pad, and the tracks and vias already there
-    obst = [(L, n, g, d) for r, num, L, g, d in board.pad_shapes() for n in [pn.get((r, num))]] + \
-           [(L, it["net"], g, 0) for it in board.tracks + board.vias for L, g in [shape(it)]]
-    tree = STRtree([g for _, _, g, _ in obst])
-    circles = [Point(x, y).buffer(r, 16) for x, y, r in rip]
-    inner = board.outline.buffer(-EDGE)
-    for it in old_t + old_v:
-        n = it["net"]
-        if n in bad:
-            continue
-        L, g = shape(it)
-        if any(g.intersects(c) for c in circles) or not inner.contains(g):
-            bad.add(n)
-            continue
-        for i in tree.query(g.buffer(board.clear)):
-            Lo, no, go, dr = obst[int(i)]
-            if no == n:
-                continue
-            if L is not None and Lo is not None and Lo != L and not dr:
-                continue                                  # (another layer; a plated hole is on all of them)
-            if g.distance(go) < board.clear - 1e-6:
-                bad.add(n)
-                break
-    # and clear of each other: a short between two kept nets (an earlier routing's own fault) sends both back
-    kept = [(it, n, L, g) for it in old_t + old_v if it["net"] not in bad for n in [it["net"]] for L, g in [shape(it)]]
-    kt = STRtree([g for *_, g in kept])
-    for i, (it, n, L, g) in enumerate(kept):
-        for j in kt.query(g.buffer(board.clear)):
-            _, n2, L2, g2 = kept[int(j)]
-            if n2 == n or (L is not None and L2 is not None and L2 != L):
-                continue
-            if g.distance(g2) < board.clear - 1e-6:
-                bad |= {n, n2}
-    n0 = len(board.tracks)
-    for t in old_t:
-        if t["net"] not in bad:
-            board.tracks.append(t)
-    for v in old_v:
-        if v["net"] not in bad:
-            board.vias.append(v)
-    # a kept track whose end no longer lands inside its net's copper (a pad reshaped, a stub gone) goes too, and
-    # so does a net it left whole that KiCad's end-point rule splits
-    loose = {board.tracks[k]["net"] for k, _ in board.loose_ends(only=range(n0, len(board.tracks)))}
-    poured = {pz["net"] for pz in board.pours}
-    cu_ = board.copper(pours=False)
-    failed = {m.split()[1].rstrip(":") for m in old.get("got", []) if m.startswith("route ")}
-    loose |= {n for n in {t["net"] for t in board.tracks[n0:]} - poured - bad - failed
-              if n in board.nets and len(board.anchor_groups(n, cu_)) > 1}
-    if loose:
-        bad |= loose
-        keep_t = board.tracks[:n0] + [t for t in board.tracks[n0:] if t["net"] not in loose]
-        board.vias = [v for v in board.vias if v["net"] not in loose or v in have_v_list]
-        board.tracks = keep_t
-    return bad
 
 
 def placement(board: Board) -> dict:

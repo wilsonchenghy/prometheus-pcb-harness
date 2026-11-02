@@ -444,7 +444,7 @@ def test_pcb_route_changes_layer_in_a_plated_hole_without_a_via():
 
 
 def test_pcb_project_footprint_library():
-    """footprints KiCad's library lacks come from footprints/ (no download): the BMP390's ten pads on
+    """footprints KiCad's library lacks come from pcb_footprints/ (no download): the BMP390's ten pads on
     Bosch's land, the servo block's 18 plated holes, numbered column by column"""
     import pytest
     pytest.importorskip("shapely")

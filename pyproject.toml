@@ -18,9 +18,10 @@ dev = ["pytest", "build123d", "schemdraw", "cairosvg", "pypdf"]
 
 [tool.setuptools]
 py-modules = ["pcb", "schem", "vendor_parts"]
+packages = ["pcb_footprints"]
 
 [tool.setuptools.package-data]
-"*" = ["footprints/**/*"]
+pcb_footprints = ["*.pretty/*.kicad_mod"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

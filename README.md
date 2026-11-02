@@ -16,7 +16,7 @@ b.plot("layers.png"); b.bom()
 
 What it does (`pcb.py`, its docstring has the details):
 
-- **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `footprints/`.
+- **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `pcb_footprints/`.
 - **Copper**: tracks, pours, vias, stitching, 2 or 4 layers (inner planes), an autorouter (`route`, `route_jobs`) with
   routes cached by board hash (`cached_route`, optionally stored in git).
 - **Checks**: every net connected, no shorts, track and pour widths for the current (IPC-2221, external and internal),
@@ -33,8 +33,7 @@ pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypd
 pytest -q                        # 26 tests
 ```
 
-Install from a checkout (`-e`): the project footprints in `footprints/` are read from beside `pcb.py`. KiCad
-footprints and 3D models are downloaded on first use into `~/.cache/prometheus/parts` (override with
+KiCad footprints and 3D models are downloaded on first use into `~/.cache/prometheus/parts` (override with
 `PROMETHEUS_PARTS_CACHE`).
 
 ## Example boards
