@@ -10,6 +10,8 @@ module-level ``board`` / ``b`` / ``PCB``. Parts placed without a position (``at=
 routed with ``pcb.place_and_route``; a placed board with nets but no tracks is routed with ``pcb.autoroute``.
 A KiCad netlist (``.net``: Eeschema, File > Export > Netlist) becomes a board of ``--size``, its parts placed
 (except those fixed with ``--at``) and routed to the ``--rules`` preset (default jlcpcb-2), GND poured on the bottom.
+Every run also writes ``out/result.json``: whether it is clean, each part's position, and every finding as data
+(stage, kind, the pins and place it names, and what to change), for an agent's next edit; ``--json`` prints it.
 Exit status 0 when routing, the design check and the house check are all clean, 1 otherwise.
 """
 from __future__ import annotations
@@ -51,6 +53,38 @@ def load_netlist(path: str, a):
     return pcb.from_netlist(path, (w, h), at=at, amps=amps, rules=a.rules or "jlcpcb-2", layers=a.layers), None
 
 
+# what an agent (or a person) can change for each kind of finding: the harness reports, the designer fixes
+HINTS = [
+    ("unreached", r"could not reach|no room to place", "move the parts named apart or nearer, widen a channel, or "
+     "route that net earlier (it fails first on the next pass)"),
+    ("split", r"is split", "the pins listed in different groups are not joined: route the net again or move parts"),
+    ("short", r"\bshort\b", "two nets touch: move or re-route one of them"),
+    ("clearance", r"mm apart \(clearance", "copper of two nets too close: move or re-route, or check the clearance"),
+    ("current", r"too narrow for|neck narrower", "widen the track or pour, or set the net's width= / amps="),
+    ("voltage drop", r"drops? ", "shorten or widen the path"),
+    ("drill", r"drill", "move the vias or holes apart, or use a larger drill (min_drill=)"),
+    ("dangling", r"dangling|loose track end", "remove the stub or end it on copper of its net"),
+    ("placement", r"courtyard|hangs off|no position|no part|has no pad", "fix the part's position or the pin name"),
+    ("edge", r"edge", "keep copper further inside the outline"),
+]
+
+
+def finding(stage: str, text: str) -> dict:
+    """a finding as data: its stage, kind, the parts / pins and the place it names, and what to change"""
+    import re
+    kind, hint = "other", "read the text"
+    for k, rx, h in HINTS:
+        if re.search(rx, text):
+            kind, hint = k, h
+            break
+    at = re.search(r"\((-?[\d.]+), (-?[\d.]+)\)", text)
+    pins = sorted(set(re.findall(r"\b([A-Z][A-Z0-9_]*\d+[A-Z]?\.[A-Za-z0-9]+)\b", text)))
+    out = {"stage": stage, "kind": kind, "text": text, "pins": pins, "hint": hint}
+    if at:
+        out["at"] = [float(at.group(1)), float(at.group(2))]
+    return out
+
+
 def main(argv=None) -> int:
     import fab
     import pcb
@@ -66,7 +100,10 @@ def main(argv=None) -> int:
     ap.add_argument("--at", action="append", metavar="REF=X,Y[,ROT[,SIDE]]",
                     help="a netlist's part fixed in place, e.g. --at J1=4,12.5,90 (repeat for each)")
     ap.add_argument("--amps", action="append", metavar="NET=A", help="a netlist's net current, e.g. --amps VBUS=2")
+    ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
     a = ap.parse_args(argv)
+    if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
+        real_stdout, sys.stdout = sys.stdout, sys.stderr
     t0 = time.perf_counter()
     b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
     for note in getattr(b, "import_notes", []):
@@ -97,7 +134,19 @@ def main(argv=None) -> int:
         if len(ps) > 20:
             print(f"   ... and {len(ps) - 20} more")
     print(f"wrote {a.out}: review {files['report']}, parts {files['html']} ({time.perf_counter() - t0:.1f} s)")
-    return 0 if not (probs or chk or fchk) else 1
+    import json
+    result = {"board": b.name, "clean": not (probs or chk or fchk), "parts": len(b.comps), "nets": len(b.nets),
+              "layers": len(b.layers), "seconds": round(time.perf_counter() - t0, 1),
+              "placement": {r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")] for r, c in b.comps.items()},
+              "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk))
+                           for p in ps],
+              "files": {k: str(v) for k, v in files.items()}}
+    with open(os.path.join(a.out, "result.json"), "w") as f:
+        json.dump(result, f, indent=1)
+    if a.json:
+        sys.stdout = real_stdout
+        print(json.dumps(result, indent=1))
+    return 0 if result["clean"] else 1
 
 
 if __name__ == "__main__":

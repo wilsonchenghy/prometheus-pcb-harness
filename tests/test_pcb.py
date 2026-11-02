@@ -964,3 +964,13 @@ def test_microstrip_impedance_and_width():
     w = pcb.width_for_z0(90, 0.2, gap=0.15)
     assert abs(pcb.microstrip_z0(w, 0.2, gap=0.15) - 90) < 0.5
     assert pcb.microstrip_z0(w, 0.2, gap=0.15) < 2 * pcb.microstrip_z0(w, 0.2)
+
+
+def test_cli_findings_are_data_for_an_agent():
+    """each finding comes back with its kind, the pins and place it names, and a hint"""
+    import pcb_cli
+    f = pcb_cli.finding("routing", "route GND: could not reach RB2V.2 (blocked; move parts or widen a channel)")
+    assert f["kind"] == "unreached" and f["pins"] == ["RB2V.2"] and f["hint"]
+    f = pcb_cli.finding("design", "F.Cu: A and B 0.18 mm apart (clearance 0.2) at (10.6, 10.6)")
+    assert f["kind"] == "clearance" and f["at"] == [10.6, 10.6]
+    assert pcb_cli.finding("design", "net GP0 is split in 2: J2.1 | U1.2")["pins"] == ["J2.1", "U1.2"]
