@@ -1008,9 +1008,11 @@ class Board:
                     i = par_[i]
                 return i
             touched = set()
-            for pg in pins:
-                hit = [i for i, part in enumerate(cs_) if not part.is_empty and
-                       part.buffer(need / 2 + 0.5).intersects(pg)]
+            import numpy as _np_
+            cs_arr = _np_.array(cs_, dtype=object)
+            live = _np_.array([not part.is_empty for part in cs_])
+            for pg in pins:                              # (within reach, by distance: no buffer per piece per pin)
+                hit = [int(i) for i in _np_.nonzero(live & shapely.dwithin(cs_arr, pg, need / 2 + 0.5))[0]]
                 for i in hit[1:]:
                     par_[_rt(i)] = _rt(hit[0])
                 touched |= set(hit)
