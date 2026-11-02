@@ -178,12 +178,13 @@ fill a cart in one go, or follow a line's links to search it at each shop.</p>
     return path
 
 
-# Design-rule presets: each house's STANDARD capabilities (no extra charge), conservative, mm. Houses revise these:
+# Design-rule presets: each house's STANDARD capabilities (no extra charge), conservative, mm (hole_gap: drill wall to
+# drill wall between nets; hole_gap_same: within one net, e.g. stitching vias; default the same). Houses revise these:
 # check the house's capabilities page for your order (layer count, copper weight, thickness change them).
 RULES = {
-    "jlcpcb-2": dict(track=0.127, space=0.127, drill=0.3, via_dia=0.6, annular=0.13, hole_gap=0.5, edge=0.3,
+    "jlcpcb-2": dict(track=0.127, space=0.127, drill=0.3, via_dia=0.6, annular=0.13, hole_gap=0.5, hole_gap_same=0.254, edge=0.3,
                      pth_drill=0.3, max_layers=2, note="JLCPCB 2-layer, 1 oz outer"),
-    "jlcpcb-4": dict(track=0.09, space=0.09, drill=0.3, via_dia=0.5, annular=0.1, hole_gap=0.5, edge=0.3,
+    "jlcpcb-4": dict(track=0.09, space=0.09, drill=0.3, via_dia=0.5, annular=0.1, hole_gap=0.5, hole_gap_same=0.254, edge=0.3,
                      pth_drill=0.3, max_layers=4, note="JLCPCB 4-layer, 1 oz outer, 0.5 oz inner"),
     "pcbway-std": dict(track=0.1, space=0.1, drill=0.2, via_dia=0.45, annular=0.15, hole_gap=0.4, edge=0.3,
                        pth_drill=0.2, max_layers=4, note="PCBWay standard"),
@@ -224,7 +225,7 @@ def fab_check(board, rules=None) -> List[str]:
                        f"{ring:.3f} mm (min pad {r['via_dia']:.2f}, ring {r['annular']:.3f})")
         if Point(v["at"]).distance(edge) - v["dia"] / 2 < r["edge"] - 1e-6:
             out.append(f"via {v['net']} at {tuple(round(c, 2) for c in v['at'])} is closer than {r['edge']:.2f} mm to the edge")
-        holes.append((v["at"], v["drill"], f"via {v['net']}"))
+        holes.append((v["at"], v["drill"], f"via {v['net']}", v["net"]))
     for ref, c in board.comps.items():
         for num, lst in c["pads"].items():
             for p in lst:
@@ -232,22 +233,23 @@ def fab_check(board, rules=None) -> List[str]:
                     if p["drill"] < r["pth_drill"] - 1e-9:
                         out.append(f"{ref}.{num}: drill {p['drill']:.2f} < {r['pth_drill']:.2f} mm")
     for (x, y, d) in board.holes:
-        holes.append(((x, y), d, "mounting hole"))
+        holes.append(((x, y), d, "mounting hole", None))
     if holes:                                            # drill wall to drill wall (vias and mounting holes):
         from shapely.strtree import STRtree              # only the pairs within reach, not every pair
-        pts = [Point(a) for a, _, _ in holes]
-        big = max(d for _, d, _ in holes)
+        pts = [Point(a) for a, _, _, _ in holes]
+        big = max(d for _, d, _, _ in holes)
         tree = STRtree(pts)
-        for i, (a, da, na) in enumerate(holes):
+        for i, (a, da, na, ea) in enumerate(holes):
             for j in sorted(int(j) for j in tree.query(pts[i], predicate="dwithin", distance=r["hole_gap"] + big)):
                 if j <= i:
                     continue
-                (b, db, nb) = holes[j]
+                (b, db, nb, eb) = holes[j]
                 dist = pts[i].distance(pts[j])
                 gap = dist - (da + db) / 2
-                if dist > 1e-6 and gap < r["hole_gap"] - 1e-6:
+                need = r.get("hole_gap_same", r["hole_gap"]) if ea is not None and ea == eb else r["hole_gap"]
+                if dist > 1e-6 and gap < need - 1e-6:
                     out.append(f"{na} at {tuple(round(c, 2) for c in a)} and {nb} at {tuple(round(c, 2) for c in b)}: "
-                               f"drills {gap:.2f} mm apart (min {r['hole_gap']:.2f})")
+                               f"drills {gap:.2f} mm apart (min {need:.2f})")
     return list(dict.fromkeys(out))                       # (a pad number with several holes says it once)
 
 
