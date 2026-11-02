@@ -954,3 +954,13 @@ def test_cart_merges_one_part_used_under_two_values():
     b.place("SW2", "Button_Switch_SMD:SW_SPST_TL3342", (20, 10), 0, "BOOT", "E-Switch TL3342F160QG")
     ls = fab.lines(b, boards=5)
     assert len(ls) == 1 and ls[0]["refs"] == ["SW1", "SW2"] and ls[0]["need"] == 10 and ls[0]["value"] == "EN / BOOT"
+
+
+def test_microstrip_impedance_and_width():
+    """IPC-2141: a wider track is a lower impedance, a pair below its single-ended double, and width_for_z0 inverts"""
+    import pcb
+    assert pcb.microstrip_z0(0.2, 0.2) > pcb.microstrip_z0(0.4, 0.2)
+    assert 45 < pcb.microstrip_z0(0.33, 0.2) < 55
+    w = pcb.width_for_z0(90, 0.2, gap=0.15)
+    assert abs(pcb.microstrip_z0(w, 0.2, gap=0.15) - 90) < 0.5
+    assert pcb.microstrip_z0(w, 0.2, gap=0.15) < 2 * pcb.microstrip_z0(w, 0.2)

@@ -289,6 +289,29 @@ def _pad_poly(pad: Dict, place: Tuple[float, float, float]):
     return affinity.translate(g, px, py)
 
 
+def microstrip_z0(width: float, height: float, er: float = 4.5, t: float = 0.035, gap: Optional[float] = None) -> float:
+    """characteristic impedance (ohm) of an outer-layer track over a plane (IPC-2141 microstrip): ``width`` the
+    track, ``height`` the dielectric to the plane below (1.6 mm 2-layer: ~1.5 mm; JLCPCB 4-layer 1.6 mm: ~0.2 mm to
+    In1), ``er`` FR4 ~4.5 (JLCPCB's 7628 prepreg: 4.4), ``t`` copper thickness (1 oz = 0.035 mm), mm. With ``gap``
+    (edge to edge to its partner): the differential impedance of the pair. A first-order figure, valid for
+    0.1 < w/h < 2.0 and 1 < er < 15; the house's own calculator decides the order"""
+    z0 = 87.0 / math.sqrt(er + 1.41) * math.log(5.98 * height / (0.8 * width + t))
+    return 2.0 * z0 * (1.0 - 0.48 * math.exp(-0.96 * gap / height)) if gap is not None else z0
+
+
+def width_for_z0(z0: float, height: float, er: float = 4.5, t: float = 0.035, gap: Optional[float] = None) -> float:
+    """the track width (mm) giving impedance ``z0`` (single-ended, or differential with ``gap``): e.g. USB's 90 ohm
+    pair, ``width_for_z0(90, 0.2, gap=0.15)`` on a 4-layer board. Bisects ``microstrip_z0``"""
+    lo, hi = 0.01, 20.0
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        if microstrip_z0(mid, height, er, t, gap) > z0:
+            lo = mid
+        else:
+            hi = mid
+    return round((lo + hi) / 2, 4)
+
+
 def ipc2221_width(amps: float, oz: float, rise_c: float = 20.0, external: bool = True) -> float:
     """track width (mm) carrying ``amps`` with a ``rise_c`` temperature rise on ``oz`` copper (IPC-2221)"""
     k = 0.048 if external else 0.024
