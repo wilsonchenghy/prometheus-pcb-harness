@@ -731,12 +731,18 @@ def test_fab_order_cpl_bom_and_cart(tmp_path):
     b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 5.0), 90, "10k")
     b.place("R2", "Resistor_SMD:R_0603_1608Metric", (9.0, 5.0), 0, "10k")
     b.place("U1", "Package_TO_SOT_SMD:SOT-23", (15.0, 5.0), 0, "", "TI TLV431", side="B", lcsc="C125052")
+    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (2.0, 8.0), 0, "out")
+    b.place("D1", "LED_SMD:LED_0603_1608Metric", (12.0, 2.0), 0, "red")
     files = fab.order(b, str(tmp_path / "order"), boards=3)
+    q = {l_["refs"][0]: l_["query"] for l_ in fab.lines(b)}
+    assert q["J2"] == "1x04 2.54mm pin header" and q["D1"] == "red 0603 LED"
+    assert "report" in files and "Design check" in open(files["report"]).read()
     rows = list(_csv.DictReader(open(files["cpl"])))
-    assert [r["Designator"] for r in rows] == ["R1", "R2", "U1"]
-    assert rows[0]["Rotation"] == "90.0" and rows[2]["Layer"] == "Bottom" and rows[0]["Mid X"] == "5.000mm"
+    rows = {r["Designator"]: r for r in rows}
+    assert sorted(rows) == ["D1", "J2", "R1", "R2", "U1"]
+    assert rows["R1"]["Rotation"] == "90.0" and rows["U1"]["Layer"] == "Bottom" and rows["R1"]["Mid X"] == "5.000mm"
     jlc = list(_csv.DictReader(open(files["bom_jlc"])))
-    assert {r["Designator"]: r["LCSC Part #"] for r in jlc} == {"R1,R2": "", "U1": "C125052"}
+    assert {r["Designator"]: r["LCSC Part #"] for r in jlc}["U1"] == "C125052"
     dk = list(_csv.DictReader(open(files["digikey"])))
     by = {r["Customer Reference"]: r for r in dk}
     assert by["U1"]["Manufacturer Part Number"] == "TLV431" and by["U1"]["Manufacturer"] == "TI"

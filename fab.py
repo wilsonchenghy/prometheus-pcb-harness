@@ -5,6 +5,7 @@
     fab.jlc_bom(b, "out/bom_jlc.csv")            # JLCPCB / LCSC assembly BOM (Comment, Designator, Footprint, LCSC Part #)
     fab.cart(b, "out/cart", boards=5)            # BOM-upload CSVs for DigiKey, Mouser and LCSC, and buy.html with a
                                                  # search link per line at each, quantities for 5 boards plus spares
+    fab.report(b, "out/review")                  # one page to review: the copper, both checks, the parts
     fab.order(b, "out/order", boards=5)          # all of the above, the Gerbers and their zip, in one folder
 
 Nothing here logs in or adds to a cart on your behalf: the distributors' BOM tools take the CSVs (DigiKey: myLists /
@@ -64,7 +65,14 @@ def lines(board, boards: int = 1, spare: float = 0.1, min_spare: int = 0) -> Lis
         maker, pn = split_mpn(r["mpn"])
         need = r["qty"] * boards
         extra = max(min_spare, math.ceil(need * spare))
-        query = pn or " ".join(x for x in (r["value"], _package(r["footprint"]), _kind(r["refs"])) if x)
+        fp = r["footprint"]
+        hdr = re.match(r"Pin(Header|Socket)_(\d+x\d+)_P([\d.]+)mm", fp)
+        if hdr:                                          # a generic header / socket: its shape is the part
+            query = f"{hdr.group(2)} {hdr.group(3)}mm pin {hdr.group(1).lower()}"
+        else:
+            kind = "LED" if fp.startswith("LED") else _kind(r["refs"])
+            query = " ".join(x for x in (r["value"], _package(fp), kind) if x)
+        query = pn or query
         out.append({**r, "maker": maker, "pn": pn, "query": query, "need": need, "order": need + extra,
                     "generic": not pn})
     return out
@@ -241,6 +249,59 @@ def fab_check(board, rules="jlcpcb-2") -> List[str]:
     return list(dict.fromkeys(out))                       # (a pad number with several holes says it once)
 
 
+def report(board, out_dir: str, rules="jlcpcb-2", boards: int = 5) -> str:
+    """one page to review a board before ordering it: the copper plot, its size and stack, the design check and the
+    house check (each problem in words, or "clean"), and the parts with their order quantities and search links.
+    Writes out_dir/report.html (and layers.png beside it); returns the page's path"""
+    import base64
+    import io
+    os.makedirs(out_dir, exist_ok=True)
+    png = os.path.join(out_dir, "layers.png")
+    board.plot(png, scale=14.0)
+    img = base64.b64encode(open(png, "rb").read()).decode()
+    chk, fchk = board.check(), fab_check(board, rules)
+    x0, y0, x1, y1 = board.outline.bounds
+    ls = lines(board, boards)
+    esc = html.escape
+
+    def plist(ps):
+        if not ps:
+            return '<p class="ok">clean</p>'
+        return "<ul>" + "".join(f"<li>{esc(p)}</li>" for p in ps) + "</ul>"
+    rows = "".join(f"<tr><td>{esc(', '.join(l_['refs']))}</td><td>{esc(' '.join(x for x in (l_['maker'], l_['pn']) if x) or l_['query'])}</td>"
+                   f"<td>{esc(l_['value'])}</td><td>{esc(l_['footprint'])}</td><td class=n>{l_['order']}</td></tr>" for l_ in ls)
+    r = RULES[rules] if isinstance(rules, str) else rules
+    doc = f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(board.name)} review</title>
+<style>
+:root {{ --bg:#fff; --fg:#1b1d21; --mute:#5f6670; --line:#e3e6ea; --ok:#1a7f37; --bad:#b42318; }}
+@media (prefers-color-scheme: dark) {{ :root {{ --bg:#16181c; --fg:#e8eaed; --mute:#9aa1aa; --line:#2b2f36; --ok:#4cc26a; --bad:#f07167; }} }}
+body {{ background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; margin:0; padding:24px 16px; }}
+main {{ max-width:1000px; margin:0 auto; }} h1 {{ font-size:22px; margin:0 0 4px; }} h2 {{ font-size:16px; margin:24px 0 8px; }}
+.mute {{ color:var(--mute); }} img {{ max-width:100%; border-radius:6px; }} .ok {{ color:var(--ok); font-weight:600; }}
+ul {{ color:var(--bad); padding-left:18px; }} .wrap {{ overflow-x:auto; }} table {{ border-collapse:collapse; width:100%; }}
+th, td {{ text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); }} th {{ color:var(--mute); }}
+.n {{ text-align:right; font-variant-numeric:tabular-nums; }}
+</style></head><body><main>
+<h1>{esc(board.name)}</h1>
+<p class="mute">{x1 - x0:.1f} x {y1 - y0:.1f} mm, {len(board.layers)} layers, {board.t} mm, {board.oz} oz outer copper,
+{len(board.comps)} parts, {len(board.nets)} nets, {len(board.tracks)} tracks, {len(board.vias)} vias.</p>
+<img alt="copper, top and bottom" src="data:image/png;base64,{img}">
+<h2>Design check</h2>{plist(chk)}
+<h2>House check: {esc(r.get('note', str(rules)))}</h2>{plist(fchk)}
+<h2>Parts for {boards} boards</h2>
+<div class="wrap"><table><thead><tr><th>Refs</th><th>Part</th><th>Value</th><th>Footprint</th><th class=n>Order</th></tr></thead>
+<tbody>{rows}</tbody></table></div>
+<p class="mute">The cart (cart/buy.html) has a search link per line at each shop; fab.order() writes it with the Gerbers.</p>
+</main></body></html>
+"""
+    path = os.path.join(out_dir, "report.html")
+    with open(path, "w") as f:
+        f.write(doc)
+    return path
+
+
 def order(board, out_dir: str, boards: int = 5, spare: float = 0.1, origin=(0.0, 0.0)) -> Dict[str, str]:
     """everything to order a board made and assembled and its parts bought, in one folder: gerbers/ and
     gerbers.zip, cpl.csv, bom_jlc.csv, and the cart (cart/: the three shops' CSVs and buy.html)"""
@@ -251,4 +312,5 @@ def order(board, out_dir: str, boards: int = 5, spare: float = 0.1, origin=(0.0,
              "cpl": cpl(board, os.path.join(out_dir, "cpl.csv"), origin),
              "bom_jlc": jlc_bom(board, os.path.join(out_dir, "bom_jlc.csv"))}
     files.update(cart(board, os.path.join(out_dir, "cart"), boards, spare))
+    files["report"] = report(board, out_dir, boards=boards)
     return files
