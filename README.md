@@ -42,6 +42,13 @@ parts cart, KiCad project, report; `--step` adds the 3D board; exit 0 when every
 python -m pcb_cli bench/esp32_sensor.py out/ --boards 10 --rules jlcpcb-2
 ```
 
+Already have a KiCad schematic? Export its netlist (Eeschema: File > Export > Netlist) and give the board's size;
+the parts are placed, routed to the fab's rules and written out for ordering (`pcb.from_netlist` in Python):
+
+```
+python -m pcb_cli examples/netlist/blinker_sch.net out/ --size 35x25 --at J1=4,12.5
+```
+
 New here? `docs/getting-started.md` walks a board from nothing to an order. `python bench/run.py` builds and times
 every example board.
 

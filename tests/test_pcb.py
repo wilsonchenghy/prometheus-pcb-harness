@@ -901,3 +901,20 @@ def test_autoplace_then_route_a_parts_list():
     from shapely.geometry import Point
     assert all(not b.courtyard(r).intersects(Point(30, 20).buffer(1.6)) for r in b.comps)
     assert b.check() == [] and fab.fab_check(b) == []
+
+
+def test_kicad_netlist_to_a_clean_board():
+    """a KiCad netlist (.net) becomes a board: footprints, values, MPN and LCSC fields, nets of two or more pins
+    (hierarchical '/' stripped, unconnected pins dropped), a part with no footprint noted and left out, GND poured;
+    then placed and routed clean"""
+    import uuid
+    import fab
+    import pcb
+    net = Path(__file__).parent.parent / "examples" / "netlist" / "blinker_sch.net"
+    b = pcb.from_netlist(str(net), (35, 25), at={"J1": (4, 12.5)}, rules="jlcpcb-2", name=f"nl{uuid.uuid4().hex[:8]}")
+    assert set(b.comps) == {"J1", "U1", "R1", "R2", "R3", "C1", "C2", "D1"}
+    assert any("TP1" in n for n in b.import_notes)
+    assert set(b.nets) == {"+5V", "GND", "DIS", "THR", "Net-(U1-Q)", "Net-(D1-A)"}
+    assert b.comps["U1"]["mpn"] == "TI NE555DR" and b.comps["R1"]["lcsc"] == "C21190"
+    assert [p["net"] for p in b.pours] == ["GND"]
+    assert pcb.place_and_route(b) == [] and b.check() == [] and fab.fab_check(b) == []

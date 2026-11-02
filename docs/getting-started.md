@@ -102,6 +102,14 @@ Or all of it in one command: `python -m pcb_cli bench/blinker.py out/` loads the
 `build()`, or a module-level `board` / `b`), routes it if it has no tracks, runs both checks, writes every file
 above plus `report.html`, and exits 0 only when everything is clean - a natural CI step.
 
+## From a KiCad schematic
+
+`pcb.from_netlist("design.net", (50, 40), at={"J1": (4, 20, 90)}, amps={"VBUS": 2}, rules="jlcpcb-2")` reads the
+netlist Eeschema exports (File > Export > Netlist): each part on the footprint the schematic gives it, with its
+value, MPN (a field named MPN or Manufacturer_Part_Number, with Manufacturer) and LCSC number (a field named LCSC),
+each net of two or more pins, GND poured on the bottom. Parts in `at` stay where you put them; then
+`pcb.place_and_route(b)` does the rest. A part the schematic gives no footprint is listed in `b.import_notes`.
+
 ## 6. Schematics
 
 `schem.py` draws schematic sheets from the board's netlist and checks them against the board; see

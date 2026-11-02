@@ -1467,6 +1467,75 @@ def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[st
     return probs + repair(board, **kw)
 
 
+def from_netlist(path: str, outline, name: Optional[str] = None, at: Optional[Dict[str, tuple]] = None,
+                 amps: Optional[Dict[str, float]] = None, pour: Optional[str] = "auto", **board_kw) -> Board:
+    """a Board from a KiCad schematic's netlist (Eeschema: File > Export > Netlist, KiCad format, ``.net``): every
+    part on its footprint with its value, MPN and LCSC number (from fields named MPN / Manufacturer_Part_Number /
+    Part Number, and LCSC / JLCPCB / LCSC Part), every net of two or more pins. ``outline``: the board's corners, or
+    (w, h) for a rectangle from (0, 0). ``at``: {ref: (x, y) or (x, y, rot[, side])} for parts the enclosure fixes;
+    the rest have no position yet, for ``place_and_route``. ``amps``: {net: amps} for nets that carry current.
+    ``pour``: the net poured on the bottom ("auto": GND, if there is one; None: none). Parts with no footprint
+    (power symbols aside, which are not in a netlist) are listed in ``board.import_notes`` and left out"""
+    from pathlib import Path as _P
+    tree = _sexpr(_P(path).read_text(encoding="utf-8"))
+    if isinstance(outline, (tuple, list)) and len(outline) == 2 and not isinstance(outline[0], (tuple, list)):
+        w, h = outline
+        outline = [(0.0, 0.0), (float(w), 0.0), (float(w), float(h)), (0.0, float(h))]
+    b = Board(name or _P(path).stem, outline, **board_kw)
+    b.import_notes = []
+    at, amps = dict(at or {}), dict(amps or {})
+
+    def val(node, key):
+        f = _find(node, key)
+        return f[0][1] if f and len(f[0]) > 1 and isinstance(f[0][1], str) else ""
+
+    def fields(comp):
+        out = {}
+        for fs in _find(comp, "fields"):
+            for f in _find(fs, "field"):
+                nm = val(f, "name")
+                v = next((x for x in f[1:] if isinstance(x, str)), "")
+                if nm:
+                    out[nm.lower()] = v
+        for pr in _find(comp, "property"):
+            nm, v = val(pr, "name"), val(pr, "value")
+            if nm:
+                out.setdefault(nm.lower(), v)
+        return out
+    comps = [c for cs in _find(tree, "components") for c in _find(cs, "comp")]
+    have = set()
+    for c in comps:
+        ref, value, fp = val(c, "ref"), val(c, "value"), val(c, "footprint")
+        if not fp:
+            b.import_notes.append(f"{ref} ({value}) has no footprint in the schematic: left out")
+            continue
+        fl = fields(c)
+        mpn = next((fl[k] for k in ("mpn", "manufacturer_part_number", "part number", "manufacturer part number",
+                                    "mfr part", "mfr. part #") if fl.get(k)), "")
+        maker = next((fl[k] for k in ("manufacturer", "mfr", "mfr.", "manufacturer_name") if fl.get(k)), "")
+        lcsc = next((fl[k] for k in ("lcsc", "lcsc part", "lcsc part #", "jlcpcb", "jlcpcb part #", "jlc") if fl.get(k)), "")
+        p = at.get(ref)
+        kw = {}
+        if p is not None and len(p) > 3:
+            kw["side"] = p[3]
+        b.place(ref, fp, None if p is None else (p[0], p[1]), p[2] if p is not None and len(p) > 2 else 0.0, value,
+                f"{maker} {mpn}".strip() if mpn else "", lcsc=lcsc, **kw)
+        have.add(ref)
+    for ns in _find(tree, "nets"):
+        for n in _find(ns, "net"):
+            nm = val(n, "name").lstrip("/")
+            pins = [(val(x, "ref"), val(x, "pin")) for x in _find(n, "node")]
+            pins = [(r, q) for r, q in pins if r in have]
+            if len(pins) < 2 or nm.lower().startswith("unconnected-"):
+                continue
+            b.net(nm, pins, amps=amps.get(nm, 0.1))
+    if pour == "auto":
+        pour = next((n for n in ("GND", "GNDD", "DGND", "0") if n in b.nets), None)
+    if pour:
+        b.pour(pour, "B", [tuple(q) for q in b.outline.exterior.coords[:-1]])
+    return b
+
+
 def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1.0, seed: int = 0,
               effort: float = 1.0, rotations: Sequence[int] = (0, 90, 180, 270)) -> List[str]:
     """place parts for you: a short total of wire (each net's half-perimeter, ground and other poured nets weighted
