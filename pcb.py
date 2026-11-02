@@ -3286,6 +3286,26 @@ def _pcbnew_python() -> str:
     return "python3"
 
 
+def kicad_version() -> Optional[str]:
+    """the installed KiCad's version (``kicad-cli version``; 9 or newer reads the exported board), or None when there is none"""
+    import shutil
+    import subprocess
+    exe = shutil.which("kicad-cli")
+    if not exe:
+        return None
+    try:
+        r = subprocess.run([exe, "version"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return r.stdout.strip() or None
+
+
+KICAD_INSTALL = {"linux": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad "
+                          "(or your distribution's kicad package, version 9 or newer)",
+                 "darwin": "brew install --cask kicad (kicad-cli is in KiCad.app/Contents/MacOS: put it on the PATH)",
+                 "win32": "the installer from kicad.org (kicad-cli.exe is in KiCad's bin folder: put it on the PATH)"}
+
+
 def kicad_drc(pcb_path: str, refill: bool = False) -> Dict[str, list]:
     """KiCad's own design-rule check of an exported board (``kicad-cli``), on a copy: as exported, or with every
     zone refilled by KiCad first (``pcbnew.ZONE_FILLER``; kicad-cli has no refill switch), so the harness's fills

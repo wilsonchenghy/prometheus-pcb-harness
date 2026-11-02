@@ -23,3 +23,19 @@ jobs:
       - run: pytest -q
       - run: python -m pcb_cli bench/blinker.py out/blinker
       - run: python -m pcb_cli examples/netlist/blinker_sch.net out/netlist --size 35x25 --at J1=4,12.5
+  kicad-drc:                              # KiCad's own DRC as a third judge of the exported boards
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: |
+          sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends kicad
+          kicad-cli version
+      - run: pip install -e .
+      - run: python -m pcb_cli bench/blinker.py out/blinker --kicad-drc require
+      - run: python -m pcb_cli bench/esp32_sensor.py out/esp32 --kicad-drc require
+      - run: python -m pcb_cli examples/netlist/blinker_sch.net out/netlist --size 35x25 --at J1=4,12.5 --kicad-drc require

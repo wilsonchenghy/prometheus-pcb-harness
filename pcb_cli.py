@@ -100,6 +100,9 @@ def main(argv=None) -> int:
     ap.add_argument("--at", action="append", metavar="REF=X,Y[,ROT[,SIDE]]",
                     help="a netlist's part fixed in place, e.g. --at J1=4,12.5,90 (repeat for each)")
     ap.add_argument("--amps", action="append", metavar="NET=A", help="a netlist's net current, e.g. --amps VBUS=2")
+    ap.add_argument("--kicad-drc", choices=("auto", "off", "require"), default="auto",
+                    help="KiCad's own DRC on the exported board: auto (when KiCad 9+ is installed; default), off, "
+                         "or require (fail when KiCad is missing)")
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
@@ -124,10 +127,26 @@ def main(argv=None) -> int:
     chk = b.check()
     fchk = fab.fab_check(b, a.rules)
     files = fab.order(b, a.out, boards=a.boards)
-    pcb.export_kicad(b, os.path.join(a.out, "kicad"))
+    kpaths = pcb.export_kicad(b, os.path.join(a.out, "kicad"))
+    kchk, kicad = [], {"run": False}
+    if a.kicad_drc != "off":                            # a third, independent judge: KiCad's own DRC
+        ver = pcb.kicad_version()
+        major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
+        if major >= 9:
+            d = pcb.kicad_drc(kpaths[0])
+            kchk = d["errors"] + d["unconnected"]
+            kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+        else:
+            why = f"KiCad {ver} is too old (9+ needed: the board is KiCad 9 format)" if ver else "KiCad (kicad-cli) is not installed"
+            how = pcb.KICAD_INSTALL.get(sys.platform, pcb.KICAD_INSTALL["linux"])
+            kicad = {"run": False, "skipped": why, "install": how}
+            print(f"KiCad DRC: skipped, {why}. To add it: {how}")
+            if a.kicad_drc == "require":
+                kchk = [f"KiCad DRC required but {why}"]
     if a.step:
         files["step"] = pcb.export_step(b, os.path.join(a.out, f"{b.name}.step"))
-    for name, ps in (("routing", probs), ("design check", chk), ("house check", fchk)):
+    for name, ps in (("routing", probs), ("design check", chk), ("house check", fchk)) + \
+            ((("KiCad DRC", kchk),) if kicad["run"] or kchk else ()):
         print(f"{name}: {'clean' if not ps else ''}")
         for p in ps[:20]:
             print("  ", p)
@@ -135,10 +154,11 @@ def main(argv=None) -> int:
             print(f"   ... and {len(ps) - 20} more")
     print(f"wrote {a.out}: review {files['report']}, parts {files['html']} ({time.perf_counter() - t0:.1f} s)")
     import json
-    result = {"board": b.name, "clean": not (probs or chk or fchk), "parts": len(b.comps), "nets": len(b.nets),
+    result = {"board": b.name, "clean": not (probs or chk or fchk or kchk), "kicad_drc": kicad, "parts": len(b.comps), "nets": len(b.nets),
               "layers": len(b.layers), "seconds": round(time.perf_counter() - t0, 1),
               "placement": {r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")] for r, c in b.comps.items()},
-              "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk))
+              "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),
+                                                          ("kicad", kchk))
                            for p in ps],
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:

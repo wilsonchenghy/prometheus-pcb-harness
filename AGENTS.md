@@ -23,6 +23,13 @@ read the findings, and edit the script until the run is clean.
 
 5. **Edit and run again.** Routes are cached per design, so a run after a small edit only re-routes what moved.
 
+## KiCad's DRC
+
+When KiCad 9+ is installed (`kicad-cli` on the PATH), every run also checks the exported board with KiCad's own
+DRC and its findings come back with `stage: "kicad"`. When it is not, `result.json` says
+`"kicad_drc": {"run": false, "skipped": ..., "install": ...}` with the install command for the system: tell the
+user, do not install system software unasked. `--kicad-drc require` makes a missing KiCad a failure.
+
 ## Rules for the agent
 
 - Never claim a board is done unless `clean` is true. Report the findings that remain, as they are.
