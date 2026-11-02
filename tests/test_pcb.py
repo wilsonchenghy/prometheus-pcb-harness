@@ -802,3 +802,15 @@ def test_gerbers_read_back_by_an_independent_parser(tmp_path):
         assert kind in names, names
     out = gerbonara.GerberFile.open(str(tmp_path / "g-Edge_Cuts.gm1")).bounding_box()
     assert abs(out[1][0] - 30.0) < 0.2 and abs(out[1][1] - 20.0) < 0.2
+
+
+def test_parts_take_their_footprints_3d_model_and_export_step(tmp_path):
+    """a part placed without a model gets the 3D model its KiCad footprint names; export_step writes the board"""
+    pytest.importorskip("build123d")
+    import os
+    import pcb
+    b = pcb.Board("s", [(0, 0), (20, 0), (20, 10), (0, 10)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10.0, 5.0), 0, "1k")
+    assert b.comps["R1"]["model"] == "Resistor_SMD.3dshapes/R_0603_1608Metric.step"
+    f = pcb.export_step(b, str(tmp_path / "s.step"), models=False)
+    assert os.path.getsize(f) > 1000

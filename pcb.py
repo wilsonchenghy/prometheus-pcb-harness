@@ -237,7 +237,12 @@ def footprint(name: str) -> Dict:
             silk += [(x1, y1, x2, y1, w), (x2, y1, x2, y2, w), (x2, y2, x1, y2, w), (x1, y2, x1, y1, w)]
         else:
             silk.append((x1, y1, x2, y2, w))
-    _FP[name] = {"pads": pads, "courtyard": crt, "ref": ref, "silk": silk}
+    mod = _find(tree, "model")                          # the 3D model KiCad's footprint names (its .step, by the
+    model = None                                         # library path vendor_parts.kicad() fetches)
+    if mod and isinstance(mod[0][1], str):
+        m_ = re.sub(r"^\$\{[^}]*\}/", "", mod[0][1])
+        model = re.sub(r"\.wrl$", ".step", m_) if "3dshapes/" in m_ else None
+    _FP[name] = {"pads": pads, "courtyard": crt, "ref": ref, "silk": silk, "model": model}
     return _FP[name]
 
 
@@ -328,8 +333,8 @@ class Board:
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
               overhang: bool = False, side: str = "F", lcsc: str = ""):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
-        KiCad 3D model path (vendor_parts.kicad) or ``body`` a build123d shape in the footprint frame for one KiCad
-        lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
+        KiCad 3D model path (vendor_parts.kicad; default: the one the footprint names) or ``body`` a build123d shape in
+        the footprint frame for one KiCad lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
         pads go to B.Cu, its model hangs under the board. ``lcsc``: the LCSC / JLCPCB part number (C-number) for
         assembly and the cart (``fab``)"""
         pads = footprint(fp)["pads"]
@@ -338,6 +343,8 @@ class Board:
             pads = {n: [{**p, "at": (-p["at"][0], p["at"][1]), "rot": -p["rot"], "layers": sw.get(p["layers"], p["layers"]),
                          "mirror": True}
                         for p in lst] for n, lst in pads.items()}
+        if model is None and body is None:               # the footprint's own 3D model, as KiCad would show it
+            model = footprint(fp).get("model")
         self.comps[ref] = {"fp": fp, "at": tuple(at), "rot": rot, "value": value, "mpn": mpn, "model": model,
                            "model_offset": model_offset, "body": body, "note": note, "overhang": overhang,
                            "pads": pads, "side": side, "lcsc": lcsc}
@@ -1915,6 +1922,26 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
         board.vias = [v for v in board.vias if v["net"] not in loose or v in have_v_list]
         board.tracks = keep_t
     return bad
+
+
+def export_step(board: Board, path: str, models: bool = True, z0: float = 0.0) -> str:
+    """the assembled board as one STEP file (the board with its drills, the copper, the pads and, with ``models``,
+    every part's KiCad 3D model), for checking the fit in an enclosure in any mechanical CAD. Needs build123d"""
+    import build123d as bd
+    import os
+    parts = board.parts(z0, models=models)
+    shapes = []
+    for name, sh in parts.items():
+        try:                                             # (an empty layer - no parts with models - is no shape)
+            if sh is None or sh.wrapped is None:
+                continue
+        except AssertionError:
+            continue
+        sh.label = name
+        shapes.append(sh)
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    bd.export_step(bd.Compound(label=board.name, children=shapes), path)
+    return path
 
 
 def export_gerbers(board: Board, out_dir: str) -> List[str]:
