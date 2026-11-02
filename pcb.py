@@ -1587,6 +1587,23 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     return _join_islands(board, net, probs, kw, only)
 
 
+def auto_grid(board: Board) -> float:
+    """the routing grid for a board: 0.25 mm, or 0.2 mm when a part's pins sit at a pitch the 0.25 grid misses and
+    0.2 hits (0.4 mm, 0.8 mm: an RP2040's QFN-56), so each pin's centre is a grid point"""
+    import numpy as np
+    pitches = []
+    for c in board.comps.values():
+        cs = [(sum(p["at"][0] for p in l) / len(l), sum(p["at"][1] for p in l) / len(l))
+              for n, l in c["pads"].items() if l and n]
+        if len(cs) >= 6:
+            a = np.asarray(cs)
+            d = np.hypot(*(a[:, None, :] - a[None, :, :]).transpose(2, 0, 1))
+            np.fill_diagonal(d, np.inf)
+            pitches.append(float(d.min()))
+    off = lambda p, g: abs(p / g - round(p / g))
+    return 0.2 if any(p < 0.8 and off(p, 0.25) > 0.05 and off(p, 0.2) < 0.05 for p in pitches) else 0.25
+
+
 def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[str]:
     """route the whole board in one call: fine-pitch fan-outs first, a via beside each surface pad of a poured net
     (``drop``: the ground pins of a two-layer board drop to its ground pour), then the signal nets (the most local first),
@@ -1604,6 +1621,8 @@ def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[st
             return 0.0
         xs, ys = [p.x for p in pts], [p.y for p in pts]
         return math.hypot(max(xs) - min(xs), max(ys) - min(ys))
+    if "grid" not in kw:                                 # a grid the finest pitch sits on: 0.4 mm pads on 0.2
+        kw["grid"] = auto_grid(board)
     nets = [n for n, d in board.nets.items() if len(d["pins"]) >= 2 or n in poured]
     sig = sorted([n for n in nets if n not in poured and board.nets[n]["amps"] <= 0.3], key=spread)
     pwr = sorted([n for n in nets if n not in poured and board.nets[n]["amps"] > 0.3],
@@ -1731,8 +1750,9 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             a_ = np.asarray(cs)
             d_ = np.hypot(*(a_[:, None, :] - a_[None, :, :]).transpose(2, 0, 1))
             np.fill_diagonal(d_, np.inf)
-            if d_.min() < 0.8:
-                x0, y0, x1, y1 = x0 - 0.75, y0 - 0.75, x1 + 0.75, y1 + 0.75
+            if d_.min() < 0.8:                           # (more pins, more tracks to fan out: a QFN-56 ~1.9 mm)
+                m_ = min(2.0, 0.75 + 0.02 * len(cs))
+                x0, y0, x1, y1 = x0 - m_, y0 - m_, x1 + m_, y1 + m_
         corners = np.array([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
         t = math.radians(rot)
         R = np.array([[math.cos(t), -math.sin(t)], [math.sin(t), math.cos(t)]])
@@ -1906,10 +1926,10 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
 
 
 def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 4, gap: float = 1.0,
-                    **kw) -> List[str]:
+                    route_kw: Optional[dict] = None, **kw) -> List[str]:
     """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed, a little more
     room between parts) and route again, up to ``tries`` times; keeps the placement and routing with the fewest
-    problems (``kw`` go to ``autoplace``). Returns that routing's problems (empty: placed, routed, and check()
+    problems (``kw`` go to ``autoplace``, ``route_kw`` to ``autoroute``, e.g. ``{"grid": 0.2}``). Returns that routing's problems (empty: placed, routed, and check()
     clean)"""
     move = list(move) if move is not None else None
     if move is None:
@@ -1919,8 +1939,8 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     best = None
     for k in range(max(1, tries)):
         board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try fans out afresh)
-        left = autoplace(board, move=move, gap=gap + 0.5 * k, seed=k, **kw)
-        probs = [f"{r}: no room to place it" for r in left] + autoroute(board)
+        left = autoplace(board, move=move, gap=gap + 0.25 * k, seed=k, **kw)
+        probs = [f"{r}: no room to place it" for r in left] + autoroute(board, **(route_kw or {}))
         probs += [p for p in board.check() if p not in probs]
         score = len(probs)
         if best is None or score < best[0]:
