@@ -21,6 +21,8 @@ import tempfile
 from typing import Dict, List, Optional, Sequence, Tuple
 
 UM = 1000.0                                              # .dsn units: micrometres (mm x 1000)
+FR_MARGIN = 0.0      # mm added to every clearance FreeRouting is given in route_kicad (0.06 tried: it then left
+#                      0.4 mm pitch pins unrouted and still fell short in places)
 PAD_EXTEND = 0.0     # mm a fine-pitch pin is lengthened outwards in the .dsn (off: FreeRouting then ends tracks on
 #                      the made-up part, off the real pad)
 
@@ -300,3 +302,107 @@ def route(board, passes: int = 100, finish: bool = True, keep: Optional[str] = N
             board.__dict__.pop("_cu_memo", None)
             break
     return probs
+
+
+_KICAD_ROUND_TRIP = r"""
+import sys, pcbnew
+mode, pcb, path = sys.argv[1:4]
+b = pcbnew.LoadBoard(pcb)
+if mode == "dsn":
+    ok = pcbnew.ExportSpecctraDSN(b, path)
+else:
+    ok = pcbnew.ImportSpecctraSES(b, path)
+    pcbnew.SaveBoard(sys.argv[4], b)
+sys.exit(0 if ok else 3)
+"""
+
+
+def kicad_available() -> bool:
+    """KiCad's Python API (pcbnew) can be loaded"""
+    import pcb
+    try:
+        return subprocess.run([pcb._pcbnew_python(), "-c", "import pcbnew"], capture_output=True,
+                              timeout=120).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _read_kicad_copper(path: str, board) -> Tuple[list, list]:
+    """the segments and vias of a .kicad_pcb, in the board's coordinates (the inverse of export_kicad's move)"""
+    import pcb
+    tree = pcb._sx_parse(open(path).read()) if hasattr(pcb, "_sx_parse") else _sexpr(open(path).read())
+    x0, y0, x1, y1 = board.outline.bounds
+    ox, oy = 150.0 - (x0 + x1) / 2, 100.0 + (y0 + y1) / 2
+    names = {}
+    for n in [c for c in tree if isinstance(c, list) and c and c[0] == "net"]:
+        names[str(n[1])] = str(n[2]) if len(n) > 2 else ""
+    back = {"F.Cu": "F", "B.Cu": "B", "In1.Cu": "1", "In2.Cu": "2"}
+    segs, vias = [], []
+
+    def val(node, key):
+        f = [c for c in node if isinstance(c, list) and c and c[0] == key]
+        return f[0] if f else None
+    for c in tree:
+        if not isinstance(c, list) or not c:
+            continue
+        if c[0] == "segment":
+            s_, e_, w, L, n = val(c, "start"), val(c, "end"), val(c, "width"), val(c, "layer"), val(c, "net")
+            net = names.get(str(n[1]), str(n[1])) if n else ""
+            if L and str(L[1]) in back and net:
+                segs.append((net, back[str(L[1])], [(round(float(s_[1]) - ox, 4), round(oy - float(s_[2]), 4)),
+                                                     (round(float(e_[1]) - ox, 4), round(oy - float(e_[2]), 4))],
+                             float(w[1])))
+        elif c[0] == "via":
+            at, size, drill, n = val(c, "at"), val(c, "size"), val(c, "drill"), val(c, "net")
+            net = names.get(str(n[1]), str(n[1])) if n else ""
+            if net:
+                vias.append((net, (round(float(at[1]) - ox, 4), round(oy - float(at[2]), 4)), float(drill[1]),
+                             float(size[1])))
+    return segs, vias
+
+
+def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[str] = None, **kw) -> List[str]:
+    """FreeRouting the way KiCad users run it: the board goes to KiCad (export_kicad), KiCad writes the Specctra
+    design (its own pads, net classes and rules), FreeRouting routes it, KiCad imports the session, and the
+    routed tracks and vias come back from KiCad's board. Needs KiCad's Python API besides Java and the jar.
+    Then, as ``route``, the harness's router finishes the poured nets and anything left. Returns the problems"""
+    import pcb
+    work = keep or tempfile.mkdtemp()
+    os.makedirs(work, exist_ok=True)
+    kpcb = pcb.export_kicad(board, os.path.join(work, "kicad"))[0]
+    script = os.path.join(work, "kicad_round_trip.py")
+    with open(script, "w") as f:
+        f.write(_KICAD_ROUND_TRIP)
+    py = pcb._pcbnew_python()
+    dsn, ses = os.path.join(work, f"{board.name}.dsn"), os.path.join(work, f"{board.name}.ses")
+    r = subprocess.run([py, script, "dsn", kpcb, dsn], capture_output=True, text=True, timeout=600)
+    if r.returncode != 0 or not os.path.exists(dsn):
+        raise RuntimeError("KiCad's Specctra export failed:\n" + (r.stdout + r.stderr)[-2000:])
+    txt = open(dsn).read()                               # FreeRouting falls short of a clearance by up to ~50 um
+    unit = re.search(r"\(unit (\w+)\)", txt)            # on its 45-degree segments: it is given a margin (what
+    k = {"um": 1.0, "mm": 0.001, "mil": 1 / 25.4, "inch": 1 / 25400.0}.get(unit.group(1) if unit else "um", 1.0)
+    txt = re.sub(r"\(clearance ([\d.]+)", lambda m: f"(clearance {float(m.group(1)) + FR_MARGIN * 1000 * k:.4f}",
+                 txt)                                    # KiCad users do by hand), the real rule judged after
+    with open(dsn, "w") as f:
+        f.write(txt)
+    log = run(dsn, ses, passes=passes)
+    with open(os.path.join(work, "freerouting.log"), "w") as f:
+        f.write(log)
+    routed = os.path.join(work, f"{board.name}_routed.kicad_pcb")
+    r = subprocess.run([py, script, "ses", kpcb, ses, routed], capture_output=True, text=True, timeout=600)
+    if r.returncode != 0 or not os.path.exists(routed):
+        raise RuntimeError("KiCad's Specctra import failed:\n" + (r.stdout + r.stderr)[-2000:])
+    segs, vias = _read_kicad_copper(routed, board)
+    have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"]))) for t in board.tracks}
+    have_v = {(v["net"], tuple(round(c, 3) for c in v["at"])) for v in board.vias}
+    for net, L, pts, w in segs:
+        if net in board.nets and (net, L, tuple(pts)) not in have_t and pts[0] != pts[1]:
+            board.track(net, L, pts, round(w, 4))
+    for net, at, drill, dia in vias:
+        if net in board.nets and (net, tuple(round(c, 3) for c in at)) not in have_v:
+            board.via(net, at, drill, dia)
+    board.__dict__.pop("_cu_memo", None)
+    if not finish:
+        return []
+    board._fan = set(getattr(board, "_fan", set())) | {("~freerouting", "")}
+    return pcb.autoroute(board, **kw)

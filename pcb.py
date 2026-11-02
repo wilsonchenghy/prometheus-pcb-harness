@@ -3581,6 +3581,16 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
                             "classes": [{"name": "Default", "clearance": board.clear, "track_width": round(w_min, 4),
                                          "via_diameter": v_min["dia"], "via_drill": v_min["drill"],
                                          "priority": 2147483647}]}}
+    # each net's routed width as a net class (KiCad's interactive router and FreeRouting, through KiCad's
+    # Specctra export, then route each net as wide as the harness does)
+    widths = {n: round(board.net_width(n), 4) for n in board.nets}
+    for k, w in enumerate(sorted(set(widths.values()))):
+        pro["net_settings"]["classes"].append({"name": f"W{w:.2f}mm", "clearance": board.clear, "track_width": w,
+                                               "via_diameter": v_min["dia"], "via_drill": v_min["drill"],
+                                               "priority": k})
+    pro["net_settings"]["netclass_patterns"] = [{"netclass": f"W{w:.2f}mm", "pattern": n}
+                                                for n, w in sorted(widths.items()) if "*" not in n and "?" not in n]
+    pro["net_settings"]["netclass_assignments"] = {n: f"W{w:.2f}mm" for n, w in sorted(widths.items())}
     ppath = os.path.join(out_dir, f"{board.name}.kicad_pro")
     with open(ppath, "w") as f:
         json.dump(pro, f, indent=2)
