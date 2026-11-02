@@ -40,7 +40,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
-ROUTER_VERSION = 4          # in route_jobs' checkpoint key: bump when the router changes what it would produce
+ROUTER_VERSION = 5          # in route_jobs' checkpoint key: bump when the router changes what it would produce
+HOLE_CLEAR = 0.25           # copper to a bare (non-plated) hole's wall, mm: KiCad's default hole clearance
 HOLE_GAP = 0.25             # mm between drill walls (a common fab minimum)
 EDGE = 0.25                 # mm from copper (tracks, vias) to the board edge
 MIN_FILL = 0.1              # mm: a pour's narrowest copper (KiCad's zone min_thickness)
@@ -478,7 +479,7 @@ class Board:
         # never in a pad (solder wicks down a via in an SMD pad) nor drilled into or beside a pad's or the board's hole
         pads = [g for _, _, _, g, _ in self.pad_shapes()]
         drills = [(g.centroid, d) for _, _, _, g, d in self.pad_shapes() if d] + \
-                 [(Point(x, y_), d) for x, y_, d in self.holes]
+                 [(Point(x, y_), d) for x, y_, d in self.all_holes()]
         # a via goes through every layer: clear of other nets' tracks, pads and vias on all of them, not only on
         # the layers it ties (an inner-layer track under a ground fill)
         # (and off other nets' outer-layer power pours: those are not to be perforated; a plane or a fill may be)
@@ -523,7 +524,7 @@ class Board:
         fixed = self.copper(pours=False)
         others = {L: unary_union([g for (n, l), g in fixed.items() if l == L and n != net] or [Point(0, 0).buffer(0)])
                   for L in self.layers}
-        drills = unary_union([Point(x, y).buffer(d / 2 + self.hole_gap + via[0] / 2, 12) for x, y, d in self.holes] +
+        drills = unary_union([Point(x, y).buffer(d / 2 + self.hole_gap + via[0] / 2, 12) for x, y, d in self.all_holes()] +
                              [g.centroid.buffer(d / 2 + self.hole_gap + via[0] / 2, 12)
                               for _, _, _, g, d in self.pad_shapes() if d] +
                              [Point(v["at"]).buffer(v["drill"] / 2 + self.hole_gap + via[0] / 2, 12) for v in self.vias]
@@ -577,6 +578,28 @@ class Board:
         self.holes.append((at[0], at[1], d))
         self._hole_ko = getattr(self, "_hole_ko", {})
         self._hole_ko[(at[0], at[1])] = keepout if keepout is not None else d / 2 + 0.6
+
+    def npth(self) -> List[Tuple[float, float, float]]:
+        """the non-plated holes the parts' footprints bring (a USB-C's locating pegs, a switch's posts): (x, y, d),
+        board mm. Routed copper, vias and pours keep clear of them like mounting holes; the drill file drills them"""
+        key = tuple((r, c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F"), id(c["pads"]))
+                    for r, c in self.comps.items())
+        memo = self.__dict__.get("_npth_memo")
+        if memo is not None and memo[0] == key:
+            return list(memo[1])
+        out = []
+        for ref, c in self.comps.items():
+            for lst in c["pads"].values():
+                for pad in lst:
+                    if pad["drill"] and (pad.get("kind") == "np_thru_hole" or not pad["layers"]):
+                        g = _pad_poly(pad, (c["at"][0], c["at"][1], c["rot"]))
+                        out.append((round(g.centroid.x, 4), round(g.centroid.y, 4), float(pad["drill"])))
+        self._npth_memo = (key, out)
+        return list(out)
+
+    def all_holes(self) -> List[Tuple[float, float, float]]:
+        """the mounting holes and the footprints' non-plated holes: every bare hole in the board"""
+        return list(self.holes) + self.npth()
 
     def keepout(self, poly: Sequence[Tuple[float, float]], layers: str = "FB", why: str = ""):
         """a copper-free zone (under an antenna, a high-voltage gap): pours are carved round it, the router stays out
@@ -723,7 +746,7 @@ class Board:
         # (what a pour keeps clear of, computed once per net and layer, not once per pour)
         hko = getattr(self, "_hole_ko", {})
         holes = unary_union([Point(x, y).buffer(max(hko.get((x, y), 0), d / 2 + self.clear + 0.3), 24)
-                             for x, y, d in self.holes] or [Polygon()])
+                             for x, y, d in self.all_holes()] or [Polygon()])
         inner = self.outline.buffer(-0.3)
         clear_of: Dict[tuple, object] = {}
         kz_of: Dict[str, object] = {}
@@ -1222,7 +1245,7 @@ class Board:
         from shapely.geometry import Point as _Pt
         holes_ = [(f"via {v['net']}", _Pt(v["at"]), v["drill"]) for v in self.vias] + \
                  [(f"{ref} pad {num}", g.centroid, d) for ref, num, L, g, d in pads if d and L == "F"] + \
-                 [("hole", _Pt(x, y), d) for x, y, d in self.holes]
+                 [("hole", _Pt(x, y), d) for x, y, d in self.all_holes()]
         tight = []
         from shapely.strtree import STRtree as _STRh       # (the pairs within reach only: every pair was 0.4 M
         _ht = _STRh([p for _, p, _ in holes_]) if holes_ else None    # distances on a 56-part board)
@@ -1237,6 +1260,20 @@ class Board:
                     tight.append(f"{na} and {nb} drills {gap:.2f} mm apart at ({pa.x:.1f}, {pa.y:.1f}) "
                                  f"(keep {self.hole_gap} mm)")
         probs += tight[:20] + ([f"... and {len(tight) - 20} more drills too close"] if len(tight) > 20 else [])
+        hc = max(self.clear, HOLE_CLEAR)                      # copper keeps clear of every bare hole (KiCad's "hole
+        bare = self.all_holes()                               # clearance"): a track over a peg hole is cut by the drill
+        if bare and (self.tracks or self.vias):
+            from shapely.strtree import STRtree as _STh
+            items_ = self.tracks + self.vias
+            shp = [self._item_shape(it) for it in items_]
+            th = _STh(shp)
+            for x, y, d in bare:
+                c = _Pt(x, y)
+                for i in th.query(c, predicate="dwithin", distance=d / 2 + hc - 1e-6):
+                    it = items_[int(i)]
+                    gap = shp[int(i)].distance(c) - d / 2
+                    probs.append(f"{'track' if 'pts' in it else 'via'} {it['net']} {max(gap, 0):.2f} mm from the bare "
+                                 f"hole at ({x:.1f}, {y:.1f}) (keep {hc:.2f} mm)")
         inner = self.outline.buffer(-self.edge)               # copper keeps the edge gap from the routed edge
         for ref, num, L, g, _ in pads:
             if not inner.contains(g):
@@ -2063,7 +2100,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
     XX, YY = np.meshgrid(xs, ys, indexing="ij")
     keepout = keepout or {}                               # {layer: [polygon]}: copper to keep off (vias too)
     track_keepout = track_keepout or {}                   # {layer: [polygon]}: no tracks there (a via may pass)
-    holes = unary_union([Point(x, y).buffer(d / 2 + 0.3, 16) for x, y, d in board.holes] or [Polygon()])
+    holes = unary_union([Point(x, y).buffer(d / 2 + 0.3, 16) for x, y, d in board.all_holes()] or [Polygon()])
     cu_fixed = board.copper(pours=False)
     pn = board.pad_net()
     pads = {(r, n_): (g, L) for r, n_, L, g, _ in board.pad_shapes()}
@@ -2579,7 +2616,7 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
     circles = [Point(x, y).buffer(r, 16) for x, y, r in rip]
     inner = board.outline.buffer(-board.edge)
     drills = [(g.centroid, d) for *_, g, d in board.pad_shapes() if d] + \
-             [(Point(x, y), d) for x, y, d in board.holes] + [(Point(v["at"]), v["drill"]) for v in board.vias]
+             [(Point(x, y), d) for x, y, d in board.all_holes()] + [(Point(v["at"]), v["drill"]) for v in board.vias]
     dtree = STRtree([c for c, _ in drills]) if drills else None
     for it in old_t + old_v:
         n = it["net"]
@@ -2712,7 +2749,7 @@ def silkscreen(board: Board, layer: str = "F"):
     if silk is None or silk.is_empty:
         return silk
     keep_off = unary_union([g.buffer(0.1) for _, _, L, g, d in board.pad_shapes() if L == layer or d] +
-                           [Point(x, y).buffer(d / 2 + 0.2) for x, y, d in board.holes] +
+                           [Point(x, y).buffer(d / 2 + 0.2) for x, y, d in board.all_holes()] +
                            [Point(v["at"]).buffer(v["dia"] / 2 + 0.05) for v in board.vias])
     return silk.difference(keep_off).intersection(board.outline.buffer(-0.1))
 
@@ -2806,7 +2843,7 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
             drills.setdefault(("PTH", d), []).append((g.centroid.x, g.centroid.y))
     for v in board.vias:
         drills.setdefault(("PTH", v["drill"]), []).append(v["at"])
-    for x, y, d in board.holes:
+    for x, y, d in board.all_holes():                     # (the footprints' own bare holes too: USB-C pegs)
         drills.setdefault(("NPTH", d), []).append((x, y))
     for kind in ("PTH", "NPTH"):
         tools = sorted(d for (k, d) in drills if k == kind)
@@ -3082,6 +3119,20 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
         elif v[0] == "fp_text" and v[1] == "value" and c["value"]:
             v[2] = _Q(c["value"])
         elif v[0] == "pad":
+            if c.get("pads_key"):                         # pads the board changed (thermal vias drilled to the
+                at_ = next((w for w in v if isinstance(w, list) and w and w[0] == "at"), None)   # fab's minimum):
+                if at_ is not None:                       # the file carries the board's drill and size, not the
+                    ax, ay = float(at_[1]), float(at_[2])  # library's
+                    for p_ in c["pads"].get(str(v[1]), []):
+                        px_, py_ = p_["at"]
+                        if p_["drill"] and min(abs(px_ - sx) + abs(py_ - sy) for sx in (ax, -ax) for sy in (ay, -ay)) < 1e-3:
+                            for w in v:
+                                if isinstance(w, list) and w and w[0] == "drill" and len(w) > 1 and \
+                                        w[1] != "oval":   # (a round drill; a slot is left as it is)
+                                    w[1] = p_["drill"]
+                                elif isinstance(w, list) and w and w[0] == "size":
+                                    w[1], w[2] = p_["size"][0], p_["size"][1]
+                            break
             n = pn.get((ref, str(v[1])))
             if n is not None:
                 v.insert(next(i for i, w in enumerate(v) if isinstance(w, list) and w[0] == "layers") + 1,

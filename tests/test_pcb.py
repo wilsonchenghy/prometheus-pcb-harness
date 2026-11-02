@@ -1007,3 +1007,24 @@ def test_freerouting_round_trip(tmp_path):
         b2.net("GND", [("R1", "1"), ("R2", "2")])
         b2.pour("GND", "B", out)
         assert freerouting.route(b2) == [] and b2.check() == []
+
+
+def test_footprint_bare_holes_are_obstacles_and_drilled():
+    """a USB-C's locating pegs (non-plated holes inside its footprint) are found, the check flags copper over them,
+    and the drill file drills them (KiCad's DRC caught a route across them before the harness knew of them)"""
+    import pcb
+    b = pcb.Board("peg", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (4.0, 10.0), 270,
+            "USB-C", overhang=True)
+    holes = b.npth()
+    assert len(holes) == 2 and all(abs(d - 0.65) < 1e-9 for _, _, d in holes)
+    x, y, _ = holes[0]
+    b.net("VBUS", [("J1", "A4"), ("J1", "A9")])
+    b.track("VBUS", "B", [(x - 2, y), (x + 2, y)], 0.3)
+    assert any("bare hole" in p for p in b.check())
+    import tempfile
+    out = tempfile.mkdtemp()
+    pcb.export_gerbers(b, out)
+    import glob
+    npth = open([f for f in glob.glob(out + "/*") if "NPTH" in f][0]).read()
+    assert "C0.650" in npth

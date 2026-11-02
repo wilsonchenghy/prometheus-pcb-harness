@@ -246,7 +246,7 @@ def fab_check(board, rules=None) -> List[str]:
                         out.append(f"{ref}.{num}: drill {p['drill']:.2f} < {r['pth_drill']:.2f} mm" +
                                    (" (a thermal via: Board(rules=...) or place(..., min_drill=...) enlarges it)"
                                     if any(q["kind"] == "smd" for q in lst) else ""))
-    for (x, y, d) in board.holes:
+    for (x, y, d) in board.all_holes():
         holes.append(((x, y), d, "mounting hole", None))
     if holes:                                            # drill wall to drill wall (vias and mounting holes):
         from shapely.strtree import STRtree              # only the pairs within reach, not every pair

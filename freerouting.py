@@ -73,7 +73,7 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
                 c = list(Polygon(k["poly"]).exterior.coords)
                 lines.append(f"    (keepout (polygon {_layer_name(L)} 0 {_pts(c)}))")
     hko = getattr(board, "_hole_ko", {})
-    for x, y, d in board.holes:
+    for x, y, d in board.all_holes():
         r = max(hko.get((x, y), 0.0), d / 2)
         lines.append(f"    (keepout (circle signal {2 * r * UM:.1f} {x * UM:.1f} {y * UM:.1f}))")
     vname = f"Via[0-{len(L_) - 1}]_{via[1] * UM:.0f}:{via[0] * UM:.0f}_um"
