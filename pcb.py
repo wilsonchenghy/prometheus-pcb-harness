@@ -2760,30 +2760,54 @@ def _uuid(*key) -> _Q:
 
 def _fractured(geom) -> List[List[Tuple[float, float]]]:
     """each polygon of ``geom`` as one ring, its holes joined to the outline by zero-width slits (KiCad stores zone
-    fills so): holes taken leftmost first, each bridged from its leftmost vertex straight left to the nearest edge"""
+    fills so): holes taken leftmost first, each bridged from its leftmost vertex straight left to the nearest edge
+    of the ring so far (the outline and the holes already joined). The ring is a linked list over numpy arrays, so
+    a fill with a thousand holes is joined in a moment"""
+    import numpy as np
     from shapely.geometry.polygon import orient
     out = []
     for p in (getattr(geom, "geoms", None) or [geom]):
         if p.is_empty or not hasattr(p, "exterior") or p.area < 1e-6:
             continue
         p = orient(p, 1.0)                                    # outline ccw, holes cw
-        ring = list(p.exterior.coords)[:-1]
-        holes = [list(h.coords)[:-1] for h in p.interiors]
-        for h in sorted(holes, key=lambda h: min(x for x, y in h)):
-            k = min(range(len(h)), key=lambda i: (h[i][0], h[i][1]))
+        ext = np.asarray(p.exterior.coords)[:-1]
+        holes = [np.asarray(h.coords)[:-1] for h in p.interiors]
+        cap = len(ext) + sum(len(h) + 3 for h in holes)
+        vx, vy = np.empty(cap), np.empty(cap)
+        nxt = np.empty(cap, dtype=np.int64)
+        n = len(ext)
+        vx[:n], vy[:n] = ext[:, 0], ext[:, 1]
+        nxt[:n] = np.roll(np.arange(n), -1)
+        for h in sorted(holes, key=lambda h: h[:, 0].min()):
+            k = int(np.lexsort((h[:, 1], h[:, 0]))[0])        # leftmost vertex (lowest y among equals)
             px, py = h[k]
-            best = None                                       # the nearest edge crossed going left from (px, py)
-            for i in range(len(ring)):
-                (x1, y1), (x2, y2) = ring[i], ring[(i + 1) % len(ring)]
-                if (y1 <= py < y2) or (y2 <= py < y1):
-                    x = x1 + (py - y1) * (x2 - x1) / (y2 - y1)
-                    if x <= px and (best is None or x > best[0]):
-                        best = (x, i)
-            if best is None:
+            x1, y1 = vx[:n], vy[:n]
+            x2, y2 = vx[nxt[:n]], vy[nxt[:n]]
+            cross = ((y1 <= py) & (py < y2)) | ((y2 <= py) & (py < y1))
+            if not cross.any():
                 continue
-            x, i = best
-            hole = h[k:] + h[:k] + [h[k]]
-            ring = ring[:i + 1] + [(x, py)] + hole + [(x, py)] + ring[i + 1:]
+            idx = np.nonzero(cross)[0]
+            xs = x1[idx] + (py - y1[idx]) * (x2[idx] - x1[idx]) / (y2[idx] - y1[idx])
+            left = xs <= px
+            if not left.any():
+                continue
+            idx, xs = idx[left], xs[left]
+            j = int(np.argmax(xs))
+            i, x = int(idx[j]), float(xs[j])
+            seq = [(x, py)] + [tuple(q) for q in np.roll(h, -k, axis=0)] + [(px, py), (x, py)]
+            m = len(seq)
+            vx[n:n + m] = [q[0] for q in seq]
+            vy[n:n + m] = [q[1] for q in seq]
+            nxt[n:n + m - 1] = np.arange(n + 1, n + m)
+            nxt[n + m - 1] = nxt[i]
+            nxt[i] = n
+            n += m
+        ring, v = [], 0
+        for _ in range(n):
+            ring.append((float(vx[v]), float(vy[v])))
+            v = int(nxt[v])
+            if v == 0:
+                break
         out.append(ring)
     return out
 
@@ -2805,7 +2829,19 @@ def place_refs(board: "Board", sizes: Sequence[float] = (1.0, 0.8), gap: float =
     """reference designators placed for the silkscreen as a fab expects them: each part's label next to its body,
     clear of every pad (silkscreen over exposed copper is clipped off by the fab), of the drills, of the board edge,
     of the other parts' bodies and of the other labels; 1.0 mm text, else 0.8 mm (the usual fab minimum), else
-    none (the label stays on the assembly layer, as on a dense board). {ref: (x, y, angle, size) or None}, board mm."""
+    none (the label stays on the assembly layer, as on a dense board). {ref: (x, y, angle, size) or None}, board mm.
+    Memoised on the board's state (the Gerbers and the KiCad export both ask)."""
+    key = (board._state_key(), tuple(sizes), gap,
+           tuple(sorted((r, c.get("value", "")) for r, c in board.comps.items())))
+    memo = board.__dict__.get("_refs_memo")
+    if memo is not None and memo[0] == key:
+        return dict(memo[1])
+    got = _place_refs(board, sizes, gap)
+    board._refs_memo = (key, got)
+    return dict(got)
+
+
+def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str, Optional[Tuple]]:
     from shapely.geometry import Point, box
     from shapely.ops import unary_union
     side = lambda r: board.comps[r].get("side", "F")
