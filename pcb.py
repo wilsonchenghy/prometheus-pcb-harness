@@ -1244,6 +1244,38 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
           keepout=None, via: Tuple[float, float] = (0.3, 0.6), only: Optional[Sequence[Tuple[str, str]]] = None,
           amps: Optional[float] = None, track_keepout=None,
           seed_pins: Optional[Sequence[Tuple[str, str]]] = None) -> List[str]:
+    """Connect the pads of ``net`` (see ``_route_once`` for how one attempt goes). When an attempt leaves a pad
+    unreached or the net split, the net is torn back to where it was and tried again growing from a different
+    root: from the net's pour (every pad joined to it), then from its biggest pad (not one boxed in by fine-pitch
+    neighbours); the attempt with the fewest problems is kept. Returns that attempt's problems."""
+    kw = dict(width=width, grid=grid, via_cost=via_cost, layers=layers, keepout=keepout, via=via, only=only, amps=amps,
+              track_keepout=track_keepout, seed_pins=seed_pins)
+    forced = [(a, getattr(board, a)) for a in ("root_big", "pour_root") if hasattr(board, a)]
+    if forced or only:                                   # (a caller's own choice, or a partial route: one attempt)
+        return _route_once(board, net, **kw)
+    t0, v0, f0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
+    best = None
+    for rb, pr in ((False, False), (False, True), (True, True)):
+        board.tracks, board.vias, board._fan = list(t0), list(v0), set(f0)
+        board.root_big, board.pour_root = rb, pr
+        try:
+            probs = _route_once(board, net, **kw)
+        finally:
+            del board.root_big, board.pour_root
+        split = len(board.islands(net)) - 1 if net in board.nets else 0
+        score = (len(probs) + split, len(board.vias) - len(v0))
+        if best is None or score < best[0]:
+            best = (score, probs, list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))
+        if score[0] == 0:
+            break
+    _, probs, board.tracks, board.vias, board._fan = best
+    return probs
+
+
+def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_cost: float = 8.0, layers: str = "FB",
+          keepout=None, via: Tuple[float, float] = (0.3, 0.6), only: Optional[Sequence[Tuple[str, str]]] = None,
+          amps: Optional[float] = None, track_keepout=None,
+          seed_pins: Optional[Sequence[Tuple[str, str]]] = None) -> List[str]:
     """Connect the pads of ``net`` as a tree: each pad in turn (or just the pads in ``only``) to the net's copper so
     far (its first pad, its pour, what is already routed), on a ``grid`` keeping ``width / 2 + clearance`` from other
     nets' fixed copper (their pours are carved round the track later) and out of ``keepout`` ({layer: [polygon]}:
@@ -1363,7 +1395,13 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
                 tree[L].append(Point(v["at"]).buffer(v["dia"] / 2))
     pins = [tuple(p) for p in board.nets[net]["pins"]]
     pins += [p for p in extra if (p[0], p[1].split("~")[0]) in pins]
+    if not only and getattr(board, "root_big", True):    # grow the net from its biggest pad (a regulator's tab, a
+        big = max((p_ for p_ in pins if p_ in pads),     # capacitor), not from a pad boxed in by fine-pitch
+                  key=lambda p_: (pads[p_][0].area, -pins.index(p_)), default=None)   # neighbours: everything
+        if big is not None:                              # else would have to reach into its box
+            pins = [big] + [p_ for p_ in pins if p_ != big]
     todo = [tuple(p) for p in only] if only else pins[1:]
+    first = pins[0] if pins else None
 
     fanned = getattr(board, "_fan", set())
 
@@ -1374,8 +1412,10 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
         if pin not in fanned:
             board.track(net, pads[pin][1], [e[0], e[1]], width, amps)
         return e[1]
-    if not only:
-        first = pins[0]
+    if not only and getattr(board, "pour_root", True) and any(tree[L] for L in LT):   # the net has a pour: the pour is the root, and every pad,
+        todo = [p_ for p_ in pins]                       # the first too, is joined to it (a first pad taken as
+        first = None                                     # already on the net may sit apart from the pour)
+    if not only and first is not None:
         g0, L0 = pads[first]
         tree[L0].append(g0)
         if first in fan_geo:
@@ -1460,10 +1500,17 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
         goal = {k: (_cxy(tg[L].buffer(grid * 0.6), XX, YY) & ~blk[L]) if not tg[L].is_empty else np.zeros_like(blk[L])
                 for k, L in enumerate(Ls)}
         found, path = _wavefront(blk, vblk, goal, [(ci, cj, Ls.index(L_pin))], Ls, via_cost)
+        if not found and len(Ls) > 1 and vblk is not None and not vblk[ci, cj] and \
+                all(not blk[L][ci, cj] or L == L_pin for L in Ls):
+            # boxed in on its own layer (a pad between fine-pitch neighbours): drop through a via where its way out
+            # ends and go on from the other layers, as a designer would
+            found, path = _wavefront(blk, vblk, goal, [(ci, cj, k) for k in range(len(Ls))], Ls, via_cost)
         if not found:
             probs.append(f"route {net}: could not reach {pin[0]}.{pin[1]} (blocked; move parts or widen a channel)")
             continue
         n_t, n_v = len(board.tracks), len(board.vias)
+        if Ls[path[0][2]] != L_pin and not own_tht.contains(Point(float(xs[ci]), float(ys[cj]))):
+            board.via(net, (round(float(xs[ci]), 4), round(float(ys[cj]), 4)), *via)   # (the escape via)
         if e:
             board.track(net, L_pin, ([e[1]] if pin in fanned else [e[0], e[1]]) + [(float(xs[ci]), float(ys[cj]))],
                         width, amps)
