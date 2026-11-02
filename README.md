@@ -24,13 +24,19 @@ What it does (`pcb.py`, its docstring has the details):
 - **Output**: Gerbers + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
   KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
 - **Schematics** (`schem.py`): sheets drawn from the board's netlist and checked against it (needs `schemdraw`).
+- **Fab and parts** (`fab.py`): design-rule presets for JLCPCB, PCBWay and OSH Park and a check against them
+  (`fab_check`); the pick-and-place file and the JLCPCB assembly BOM; a parts cart (BOM-upload CSVs for DigiKey,
+  Mouser and LCSC, and a `buy.html` with a search link per line at each shop); `fab.order()` writes it all.
+
+New here? `docs/getting-started.md` walks a board from nothing to an order. `python bench/run.py` builds and times
+every example board.
 
 ## Install
 
 ```
 pip install -e .                 # core: numpy, shapely, pillow
 pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypdf (schematics), pytest
-pytest -q                        # 26 tests
+pytest -q                        # the tests
 ```
 
 KiCad footprints and 3D models are downloaded on first use into `~/.cache/prometheus/parts` (override with

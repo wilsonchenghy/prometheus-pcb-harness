@@ -1,5 +1,6 @@
 """A USB-C to 3.3 V board: a USB-C receptacle (5.1 k CC pull-downs), an AMS1117-3.3 LDO with its caps, a power LED, a
-4-pin header out. 2 layers, 38 x 24 mm, ground poured on both sides. Exercises a fine-pitch connector's fan-out."""
+4-pin header out. 2 layers, 38 x 24 mm, ground poured on the bottom. Exercises a fine-pitch connector's fan-out.
+The LCSC numbers are JLCPCB basic parts as remembered: check them in LCSC's catalogue before ordering."""
 import os
 import sys
 
@@ -13,7 +14,7 @@ OUT = [(0.0, 0.0), (38.0, 0.0), (38.0, 24.0), (0.0, 24.0)]
 def build():
     b = Board("usb_ldo", OUT, thickness=1.6, copper_oz=1.0)
     b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (4.0, 12.0), 270,
-            "USB-C", "GCT USB4105-GF-A", lcsc="C3020560", overhang=True)
+            "USB-C", "GCT USB4105-GF-A", overhang=True)
     b.place("R1", R06, (12.0, 17.5), 0, "5.1k", lcsc="C23186")
     b.place("R2", R06, (12.0, 6.5), 0, "5.1k", lcsc="C23186")
     b.place("U1", "Package_TO_SOT_SMD:SOT-223-3_TabPin2", (22.0, 12.0), 0, "AMS1117-3.3", "AMS AMS1117-3.3",
@@ -22,7 +23,7 @@ def build():
     b.place("C2", C08, (28.5, 17.0), 90, "22u", lcsc="C45783")
     b.place("C3", C06, (28.5, 7.0), 90, "100n", lcsc="C14663")
     b.place("R3", R06, (20.0, 3.0), 0, "1k", lcsc="C21190")
-    b.place("D1", "LED_SMD:LED_0603_1608Metric", (24.0, 3.0), 0, "green", lcsc="C72043")
+    b.place("D1", "LED_SMD:LED_0603_1608Metric", (24.0, 3.0), 0, "green")
     b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (34.0, 16.0), 0, "out", "")
     b.net("VBUS", [("J1", "A4"), ("J1", "A9"), ("J1", "B4"), ("J1", "B9"), ("C1", "1"), ("U1", "3"), ("J2", "1")],
           amps=1.0)
