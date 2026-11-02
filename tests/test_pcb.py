@@ -720,3 +720,27 @@ def test_pcb_kicad_board_file(tmp_path):
     assert any(isinstance(f, list) and f[0] == "segment" for f in tree)
     import json
     assert json.load(open(pro_path))["net_settings"]["classes"][0]["clearance"] == b.clear
+
+
+def test_fab_order_cpl_bom_and_cart(tmp_path):
+    """fab: the pick-and-place file, the JLCPCB BOM and the cart (three shops' CSVs, buy.html) from one board"""
+    import csv as _csv
+    import fab
+    import pcb
+    b = pcb.Board("t", [(0, 0), (20, 0), (20, 10), (0, 10)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 5.0), 90, "10k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (9.0, 5.0), 0, "10k")
+    b.place("U1", "Package_TO_SOT_SMD:SOT-23", (15.0, 5.0), 0, "", "TI TLV431", side="B", lcsc="C125052")
+    files = fab.order(b, str(tmp_path / "order"), boards=3)
+    rows = list(_csv.DictReader(open(files["cpl"])))
+    assert [r["Designator"] for r in rows] == ["R1", "R2", "U1"]
+    assert rows[0]["Rotation"] == "90.0" and rows[2]["Layer"] == "Bottom" and rows[0]["Mid X"] == "5.000mm"
+    jlc = list(_csv.DictReader(open(files["bom_jlc"])))
+    assert {r["Designator"]: r["LCSC Part #"] for r in jlc} == {"R1,R2": "", "U1": "C125052"}
+    dk = list(_csv.DictReader(open(files["digikey"])))
+    by = {r["Customer Reference"]: r for r in dk}
+    assert by["U1"]["Manufacturer Part Number"] == "TLV431" and by["U1"]["Manufacturer"] == "TI"
+    assert int(by["R1,R2"]["Quantity"]) == 7                        # 2 x 3 boards + 10 % spare, rounded up
+    assert "10k 0603 resistor" in by["R1,R2"]["Manufacturer Part Number"]
+    page = open(files["html"]).read()
+    assert "digikey.com" in page and "lcsc.com/search?q=C125052" in page and files["gerbers"].endswith(".zip")

@@ -313,11 +313,12 @@ class Board:
     # declarations
     def place(self, ref: str, fp: str, at: Tuple[float, float], rot: float = 0.0, value: str = "", mpn: str = "",
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
-              overhang: bool = False, side: str = "F"):
+              overhang: bool = False, side: str = "F", lcsc: str = ""):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
         KiCad 3D model path (vendor_parts.kicad) or ``body`` a build123d shape in the footprint frame for one KiCad
         lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
-        pads go to B.Cu, its model hangs under the board"""
+        pads go to B.Cu, its model hangs under the board. ``lcsc``: the LCSC / JLCPCB part number (C-number) for
+        assembly and the cart (``fab``)"""
         pads = footprint(fp)["pads"]
         if side == "B":
             sw = {"F": "B", "B": "F", "FB": "FB", "": ""}
@@ -326,7 +327,7 @@ class Board:
                         for p in lst] for n, lst in pads.items()}
         self.comps[ref] = {"fp": fp, "at": tuple(at), "rot": rot, "value": value, "mpn": mpn, "model": model,
                            "model_offset": model_offset, "body": body, "note": note, "overhang": overhang,
-                           "pads": pads, "side": side}
+                           "pads": pads, "side": side, "lcsc": lcsc}
 
     def courtyard(self, ref: str):
         """a part's courtyard outline in board coordinates (flipped for a bottom-side part), or None"""
@@ -1066,7 +1067,9 @@ class Board:
         for ref, c in self.comps.items():
             rows.setdefault((c["value"], c["mpn"], c["fp"].split(":")[1]), []).append(ref)
         return [{"refs": sorted(v, key=lambda r: (re.sub(r"\d", "", r), int(re.sub(r"\D", "", r) or 0))), "qty": len(v),
-                 "value": k[0], "mpn": k[1], "footprint": k[2]} for k, v in sorted(rows.items(), key=lambda kv: kv[1][0])]
+                 "value": k[0], "mpn": k[1], "footprint": k[2],
+                 "lcsc": next((self.comps[r].get("lcsc", "") for r in v if self.comps[r].get("lcsc")), "")}
+                for k, v in sorted(rows.items(), key=lambda kv: kv[1][0])]
 
     def plot(self, png: str, scale: float = 8.0, layers: Sequence[str] = ("F", "B")):
         """top copper (red), bottom copper (blue), outline, holes, pads and reference designators; ``layers=("1",)``
@@ -1682,13 +1685,17 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
     def regions(geom, lines):
         # outermost first: a clear (hole) region erases everything drawn before it, so copper lying inside another
         # polygon's hole (a pad in a pour's clearance) must come after that polygon, i.e. by falling outline area
+        # (a polygon inside another's hole has the smaller outline, so this order always works for the disjoint
+        # polygons of a copper layer; PCB_GERBER_VERIFY=1 replays the layers to prove it, slowly on a big board)
         polys = [p for p in (getattr(geom, "geoms", None) or [geom]) if not p.is_empty and hasattr(p, "exterior")]
+        verify = os.environ.get("PCB_GERBER_VERIFY") == "1"
         drawn = None
         for p in sorted(polys, key=lambda q: -Polygon(q.exterior).area):
             p = orient(p, 1.0)
-            drawn = Polygon(p.exterior) if drawn is None else drawn.union(Polygon(p.exterior))
-            for r in p.interiors:
-                drawn = drawn.difference(Polygon(r))
+            if verify:
+                drawn = Polygon(p.exterior) if drawn is None else drawn.union(Polygon(p.exterior))
+                for r in p.interiors:
+                    drawn = drawn.difference(Polygon(r))
             for ring, pol in [(p.exterior, "D")] + [(r, "C") for r in p.interiors]:
                 lines.append(f"%LP{pol}*%")
                 pts = list(ring.coords)
@@ -1698,9 +1705,12 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
                     lines.append(f"X{fmt(x)}Y{fmt(y)}D01*")
                 lines.append("G37*")
             lines.append("%LPD*%")
-        if polys:                                   # replay the dark / clear layers: they must give back the copper
+        if polys and verify:                        # replay the dark / clear layers: they must give back the copper
             lost = unary_union(polys).symmetric_difference(drawn).area
             assert lost < 1e-6, f"Gerber regions do not reproduce the copper ({lost:.4f} mm2 differ)"
+        elif len(polys) > 1:                        # the cheap guard: the polygons are disjoint (areas add up)
+            whole = unary_union(polys).area
+            assert abs(sum(p.area for p in polys) - whole) < 1e-6 * max(1.0, whole), "copper polygons overlap"
 
     def write(name, func, body):
         head = ["%FSLAX46Y46*%", "%MOMM*%", f"%TF.FileFunction,{func}*%", "%TF.Part,Single*%", "%LPD*%", "G01*"]
