@@ -17,7 +17,7 @@ schematic = ["schemdraw", "cairosvg", "pypdf"]
 dev = ["pytest", "build123d", "schemdraw", "cairosvg", "pypdf", "gerbonara", "kiutils"]
 
 [tool.setuptools]
-py-modules = ["pcb", "schem", "vendor_parts", "fab"]
+py-modules = ["pcb", "schem", "vendor_parts", "fab", "pcb_cli"]
 packages = ["pcb_footprints"]
 
 [tool.setuptools.package-data]

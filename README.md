@@ -32,6 +32,13 @@ What it does (`pcb.py`, its docstring has the details):
   (`fab_check`); the pick-and-place file and the JLCPCB assembly BOM; a parts cart (BOM-upload CSVs for DigiKey,
   Mouser and LCSC, and a `buy.html` with a search link per line at each shop); `fab.order()` writes it all.
 
+From the command line, one script to an order folder (route if unrouted, check, house check, Gerbers zip, CPL, BOM,
+parts cart, KiCad project, report; `--step` adds the 3D board; exit 0 when everything is clean):
+
+```
+python -m pcb_cli bench/esp32_sensor.py out/ --boards 10 --rules jlcpcb-2
+```
+
 New here? `docs/getting-started.md` walks a board from nothing to an order. `python bench/run.py` builds and times
 every example board.
 

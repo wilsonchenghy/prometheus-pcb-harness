@@ -91,6 +91,10 @@ and a search link at each shop. Nothing is bought or logged into for you.
 With KiCad 8+ installed, `pcb.kicad_drc(path)` runs KiCad's own design-rule check on the exported board and
 `pcb.render_kicad` renders it in 3D.
 
+Or all of it in one command: `python -m pcb_cli bench/blinker.py out/` loads the board the script makes (its
+`build()`, or a module-level `board` / `b`), routes it if it has no tracks, runs both checks, writes every file
+above plus `report.html`, and exits 0 only when everything is clean - a natural CI step.
+
 ## 6. Schematics
 
 `schem.py` draws schematic sheets from the board's netlist and checks them against the board; see
