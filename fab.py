@@ -192,12 +192,14 @@ RULES = {
 }
 
 
-def fab_check(board, rules="jlcpcb-2") -> List[str]:
+def fab_check(board, rules=None) -> List[str]:
     """the board against a house's design rules (a preset name from RULES or a dict like one): track widths,
     the clearance it was checked at, vias (drill, pad, annular ring), plated and unplated drills, drill-to-drill
     gaps and copper to the board edge. Returns the problems, each saying where; [] = within the house's standard
-    process. Run with Board.check(): that one checks the design, this one the fab's limits"""
+    process. Run with Board.check(): that one checks the design, this one the fab's limits. Default: the rules the
+    board was made with (``Board(..., rules=)``), else JLCPCB 2-layer"""
     from shapely.geometry import LineString, Point
+    rules = rules if rules is not None else (getattr(board, "rules", None) or "jlcpcb-2")
     r = RULES[rules] if isinstance(rules, str) else rules
     out = []
     if len(board.layers) > r.get("max_layers", 99):
@@ -270,6 +272,7 @@ def report(board, out_dir: str, rules="jlcpcb-2", boards: int = 5) -> str:
         return "<ul>" + "".join(f"<li>{esc(p)}</li>" for p in ps) + "</ul>"
     rows = "".join(f"<tr><td>{esc(', '.join(l_['refs']))}</td><td>{esc(' '.join(x for x in (l_['maker'], l_['pn']) if x) or l_['query'])}</td>"
                    f"<td>{esc(l_['value'])}</td><td>{esc(l_['footprint'])}</td><td class=n>{l_['order']}</td></tr>" for l_ in ls)
+    rules = rules if rules is not None else (getattr(board, "rules", None) or "jlcpcb-2")
     r = RULES[rules] if isinstance(rules, str) else rules
     doc = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">

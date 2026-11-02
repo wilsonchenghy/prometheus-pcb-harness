@@ -44,6 +44,12 @@ def _usb_ldo():
     return [(b, g["do_route"](b), "jlcpcb-2")]
 
 
+def _esp32():
+    g = runpy.run_path(os.path.join(HERE, "esp32_sensor.py"), run_name="bench")
+    b = g["build"]()
+    return [(b, g["do_route"](b), "jlcpcb-2")]
+
+
 def _controller():
     g = _ex("game_controller/controller_pcb.py")
     j = json.load(open(os.path.join(ROOT, "examples", "game_controller", "controller_board.json")))
@@ -60,6 +66,7 @@ def _fpv():
 BOARDS = {
     "blinker": _blinker,
     "usb_ldo": _usb_ldo,
+    "esp32_sensor": _esp32,
     "arm_pdb": lambda: [(*(lambda g: (g["PCB"], g["PCB_ROUTE_PROBLEMS"]))(_ex("arm_pdb.py")), "jlcpcb-2")],
     "twilight": lambda: [(*(lambda g: (g["PCB"], g["PCB_ROUTE_PROBLEMS"]))(_ex("twilight_fc.py")), "jlcpcb-4")],
     "cube": lambda: [(*_ex("balancing_cube/cube_board.py")["routed"](

@@ -283,13 +283,26 @@ def ipc2221_width(amps: float, oz: float, rise_c: float = 20.0, external: bool =
 
 # ---- the board -------------------------------------------------------------------------------------------------------
 class Board:
+    hole_gap = HOLE_GAP                                  # drill wall to drill wall, mm
+    edge = EDGE                                          # copper to the board edge, mm
+
     def __init__(self, name: str, outline: Sequence[Tuple[float, float]], thickness: float = 1.6, copper_oz: float = 1.0,
                  clearance: float = 0.2, max_rise_c: float = 20.0, max_drop: float = 0.02, corner_r: float = 3.0,
-                 layers: int = 2, inner_oz: float = 1.0):
+                 layers: int = 2, inner_oz: float = 1.0, rules=None):
         """``layers`` 2 or 4: a 4-layer board has two inner layers ("1", "2": KiCad's In1.Cu / In2.Cu) for planes
-        (pours); tracks stay on the outer layers, vias and plated holes reach every layer"""
+        (pours); tracks stay on the outer layers, vias and plated holes reach every layer. ``rules``: a fab preset
+        (``fab.RULES`` name, e.g. "jlcpcb-2", or a dict like one) the router and the check then keep to: its
+        clearance (when larger), drill gap and copper-to-edge gap"""
         from shapely.geometry import Polygon
         self.name, self.t, self.oz, self.clear = name, thickness, copper_oz, clearance
+        self.rules = None
+        if rules is not None:
+            import fab
+            r = fab.RULES[rules] if isinstance(rules, str) else dict(rules)
+            self.rules = rules
+            self.clear = max(clearance, r.get("space", 0.0))
+            self.hole_gap = max(HOLE_GAP, r.get("hole_gap", HOLE_GAP))
+            self.edge = max(EDGE, r.get("edge", EDGE))
         if layers not in (2, 4):
             raise ValueError("layers: 2 or 4")
         self.layers = ("F", "B") if layers == 2 else ("F", "1", "2", "B")
@@ -393,9 +406,9 @@ class Board:
                    for p in self.pours if p["net"] != net and p["layer"] in "FB" and not p.get("fill")
                    and (p["net"], p["layer"]) in cu]
         avoid = unary_union([g.buffer(dia / 2 + 0.2, 8) for g in pads] + foreign +
-                            [c.buffer(d / 2 + drill / 2 + HOLE_GAP, 12) for c, d in drills] or [Polygon()])
+                            [c.buffer(d / 2 + drill / 2 + self.hole_gap, 12) for c, d in drills] or [Polygon()])
         shapely.prepare(avoid)
-        reg = Polygon(region).intersection(self.outline.buffer(-(dia / 2 + EDGE)))    # (off the board edge)
+        reg = Polygon(region).intersection(self.outline.buffer(-(dia / 2 + self.edge)))    # (off the board edge)
         shapely.prepare(reg)
         others = [Point(v["at"]) for v in self.vias]
         x0, y0, x1, y1 = reg.bounds
@@ -428,10 +441,10 @@ class Board:
         fixed = self.copper(pours=False)
         others = {L: unary_union([g for (n, l), g in fixed.items() if l == L and n != net] or [Point(0, 0).buffer(0)])
                   for L in self.layers}
-        drills = unary_union([Point(x, y).buffer(d / 2 + HOLE_GAP + via[0] / 2, 12) for x, y, d in self.holes] +
-                             [g.centroid.buffer(d / 2 + HOLE_GAP + via[0] / 2, 12)
+        drills = unary_union([Point(x, y).buffer(d / 2 + self.hole_gap + via[0] / 2, 12) for x, y, d in self.holes] +
+                             [g.centroid.buffer(d / 2 + self.hole_gap + via[0] / 2, 12)
                               for _, _, _, g, d in self.pad_shapes() if d] +
-                             [Point(v["at"]).buffer(v["drill"] / 2 + HOLE_GAP + via[0] / 2, 12) for v in self.vias]
+                             [Point(v["at"]).buffer(v["drill"] / 2 + self.hole_gap + via[0] / 2, 12) for v in self.vias]
                              or [Point(0, 0).buffer(0)])
         inside = self.outline.buffer(-(via[1] / 2 + 0.3))
         kz = unary_union([__import__("shapely.geometry", fromlist=["Polygon"]).Polygon(k["poly"])
@@ -473,7 +486,7 @@ class Board:
                                                                 (round(best.x, 4), round(best.y, 4))],
                                 "w": width, "amps": amps})
             self.vias.append({"net": net, "at": (round(best.x, 4), round(best.y, 4)), "drill": via[0], "dia": via[1]})
-            drills = drills.union(best.buffer(via[0] + HOLE_GAP, 12))
+            drills = drills.union(best.buffer(via[0] + self.hole_gap, 12))
             shapely.prepare(drills)
         return probs
 
@@ -534,7 +547,31 @@ class Board:
         return out
 
     def pad_net(self) -> Dict[Tuple[str, str], str]:
-        return {pin: n for n, d in self.nets.items() for pin in d["pins"]}
+        """{(ref, pad number): net}. A pad on no net that lies on a netted pad of the same part (a USB-C's A4 / B9,
+        two numbers for one piece of copper) takes that pad's net: it is the same copper, and left out it would read
+        as a foreign pad shorting the net"""
+        pn = {pin: n for n, d in self.nets.items() for pin in d["pins"]}
+        key = (tuple(sorted(pn.items())), self.__dict__.get("_pads_memo", (None,))[0])
+        memo = self.__dict__.get("_pn_memo")
+        if memo is not None and memo[0] == key and key[1] is not None:
+            return dict(memo[1])
+        by_ref: Dict[str, list] = {}
+        for ref, num, L, g, d in self.pad_shapes():
+            by_ref.setdefault(ref, []).append((num, L, g))
+        for ref, lst in by_ref.items():
+            netted = [(num, L, g) for num, L, g in lst if (ref, num) in pn]
+            if not netted:
+                continue
+            for num, L, g in lst:
+                if (ref, num) in pn or g.area <= 0:
+                    continue
+                for num2, L2, g2 in netted:
+                    if L2 == L and g.intersection(g2).area > 0.5 * min(g.area, g2.area):
+                        pn[(ref, num)] = pn[(ref, num2)]
+                        break
+        self._pn_memo = ((tuple(sorted({pin: n for n, d in self.nets.items() for pin in d["pins"]}.items())),
+                          self.__dict__.get("_pads_memo", (None,))[0]), pn)
+        return dict(pn)
 
     def pour_fill(self, net: str, layer: str, cu=None):
         """just the poured copper of ``net`` on ``layer`` (no pads, tracks or vias); ``cu`` a ``copper(only_net=
@@ -966,7 +1003,7 @@ class Board:
                 probs.append(f"pour {pz['net']} on {pz['layer']}.Cu near ({(p_.x + q_.x) / 2:.1f}, "
                              f"{(p_.y + q_.y) / 2:.1f}) has a neck narrower than {need:.1f} mm between its pads "
                              f"({amps} A, {self.oz_of(pz['layer'])} oz): widen it or add the other layer in parallel")
-        # drills keep HOLE_GAP apart, wall to wall (a via drilled into a pin's hole, or a web too thin to survive)
+        # drills keep the hole gap apart, wall to wall (a via drilled into a pin's hole, or a web too thin to survive)
         from shapely.geometry import Point as _Pt
         holes_ = [(f"via {v['net']}", _Pt(v["at"]), v["drill"]) for v in self.vias] + \
                  [(f"{ref} pad {num}", g.centroid, d) for ref, num, L, g, d in pads if d and L == "F"] + \
@@ -974,21 +1011,21 @@ class Board:
         tight = []
         from shapely.strtree import STRtree as _STRh       # (the pairs within reach only: every pair was 0.4 M
         _ht = _STRh([p for _, p, _ in holes_]) if holes_ else None    # distances on a 56-part board)
-        _reach = HOLE_GAP + max((d for _, _, d in holes_), default=0.0)
+        _reach = self.hole_gap + max((d for _, _, d in holes_), default=0.0)
         for i in range(len(holes_)):
             for j in sorted(int(j) for j in _ht.query(holes_[i][1], predicate="dwithin", distance=_reach)):
                 if j <= i:
                     continue
                 (na, pa, da), (nb, pb, db) = holes_[i], holes_[j]
                 gap = pa.distance(pb) - da / 2 - db / 2
-                if gap < HOLE_GAP - 1e-6 and not (na == nb and pa.distance(pb) < 1e-6):
+                if gap < self.hole_gap - 1e-6 and not (na == nb and pa.distance(pb) < 1e-6):
                     tight.append(f"{na} and {nb} drills {gap:.2f} mm apart at ({pa.x:.1f}, {pa.y:.1f}) "
-                                 f"(keep {HOLE_GAP} mm)")
+                                 f"(keep {self.hole_gap} mm)")
         probs += tight[:20] + ([f"... and {len(tight) - 20} more drills too close"] if len(tight) > 20 else [])
-        inner = self.outline.buffer(-EDGE)               # copper keeps EDGE from the routed edge
+        inner = self.outline.buffer(-self.edge)               # copper keeps the edge gap from the routed edge
         for ref, num, L, g, _ in pads:
             if not inner.contains(g):
-                probs.append(f"{ref} pad {num or '(mount)'} ({L}.Cu) reaches the board edge: copper keeps {EDGE} mm inside")
+                probs.append(f"{ref} pad {num or '(mount)'} ({L}.Cu) reaches the board edge: copper keeps {self.edge} mm inside")
                 break
         from shapely.geometry import LineString as _LS
         for it in self.tracks + self.vias:
@@ -996,7 +1033,7 @@ class Board:
             if not inner.contains(g):
                 xy = it["pts"][0] if "pts" in it else it["at"]
                 probs.append(f"{'track' if 'pts' in it else 'via'} {it['net']} near ({xy[0]:.1f}, {xy[1]:.1f}) comes "
-                             f"within {EDGE} mm of the board edge")
+                             f"within {self.edge} mm of the board edge")
         # every track end lands inside copper of its net (KiCad joins items by their end points)
         loose_ = [f"track {self.tracks[k]['net']} ({self.tracks[k]['layer']}.Cu) ends at ({e[0]:.2f}, {e[1]:.2f}) on "
                   f"nothing of its net (dangling, or only touching a pad's edge: KiCad reads it unconnected)"
@@ -1293,6 +1330,18 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
         if score[0] == 0:
             break
     _, probs, board.tracks, board.vias, board._fan = best
+    neck = max(0.15, board.width_for(amps if amps is not None else board.nets[net]["amps"], "F")) \
+        if net in board.nets else 0.15
+    left = [tuple(m.group(1).rsplit(".", 1)) for m in
+            (re.match(rf"route {re.escape(net)}: could not reach (.+) \(blocked", p_) for p_ in probs) if m]
+    if left and neck < width - 1e-9:                     # neck down: the pads still unreached (between fine-pitch
+        board.root_big = board.pour_root = False         # neighbours a full-width track cannot pass), each joined
+        try:                                             # to the net's copper so far by the narrowest track its
+            kw2 = dict(kw, width=neck, only=left)        # current allows
+            again = _route_once(board, net, **kw2)
+        finally:
+            del board.root_big, board.pour_root
+        probs = [p_ for p_ in probs if not re.match(rf"route {re.escape(net)}: could not reach", p_)] + again
     return probs
 
 
@@ -1365,7 +1414,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
                             [Polygon(k) for k in keepout.get(L, []) + track_keepout.get(L, []) +
                              board.keepout_zones(L)] +
                             [c_ for l_, c_ in corridors if l_ == L])
-        inside = _cxy(board.outline.buffer(-(width / 2 + max(0.3, EDGE + 0.04))), XX, YY)
+        inside = _cxy(board.outline.buffer(-(width / 2 + max(0.3, board.edge + 0.04))), XX, YY)
         blk0[L] = (_cxy(other.buffer(board.clear + 0.04 + width / 2, 8), XX, YY) if not other.is_empty
                    else np.zeros_like(inside)) | ~inside       # 0.04 mm over the rule: grid snapping stays legal
     vblk, own_tht = None, Polygon()
@@ -1377,16 +1426,16 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
                                 [c_ for l_, c_ in corridors if l_ == L])
             vb.append(_cxy(other.buffer(board.clear + 0.04 + via[1] / 2, 8), XX, YY) if not other.is_empty
                       else np.zeros_like(blk0[Ls[0]]))
-        vblk = vb[0] | ~_cxy(board.outline.buffer(-(via[1] / 2 + EDGE + 0.04)), XX, YY)    # (off the board edge)
+        vblk = vb[0] | ~_cxy(board.outline.buffer(-(via[1] / 2 + board.edge + 0.04)), XX, YY)    # (off the board edge)
         for v_ in vb[1:]:
             vblk = vblk | v_
-        # a via keeps HOLE_GAP from every drill, this net's own plated holes too, except that inside one of those
+        # a via keeps the hole gap from every drill, this net's own plated holes too, except that inside one of those
         # the layer change needs no via at all (the plated hole joins the layers)
         # (vias already on the board included: this net's own may be reused as they stand)
         drl = [(g.centroid, d) for r_, n_, L_, g, d in board.pad_shapes() if d and L_ == "F"] + \
               [(Point(v_["at"]), v_["drill"]) for v_ in board.vias]
         if drl:
-            vblk = vblk | _cxy(unary_union([c.buffer(d / 2 + HOLE_GAP + via[0] / 2 + 0.02, 12) for c, d in drl]), XX, YY)
+            vblk = vblk | _cxy(unary_union([c.buffer(d / 2 + board.hole_gap + via[0] / 2 + 0.02, 12) for c, d in drl]), XX, YY)
         own_tht = unary_union([g for r_, n_, L_, g, d in board.pad_shapes()
                                if d and L_ == "F" and pn.get((r_, n_)) == net] +
                               [Point(v_["at"]).buffer(v_["dia"] / 2) for v_ in board.vias if v_["net"] == net]
@@ -1547,7 +1596,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
                 _emit(board, net, Ls[seg[-1][2]], [q[:2] for q in seg], width, amps)
                 if not own_tht.contains(Point(pt)):          # (in a plated hole or via of this net: no new via)
                     board.via(net, pt, *via)
-                    vgap = Point(pt).buffer(via[0] + HOLE_GAP + 0.02, 12)    # the next via keeps its drill gap
+                    vgap = Point(pt).buffer(via[0] + board.hole_gap + 0.02, 12)    # the next via keeps its drill gap
                     vblk = vblk | (_cxy(vgap, XX, YY) & ~_cxy(Point(pt).buffer(via[1] / 2 - 0.05), XX, YY))
                     own_tht = own_tht.union(Point(pt).buffer(via[1] / 2))
                 seg = []
@@ -1733,7 +1782,9 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
                                          for r, c in sorted(board.comps.items())},
                       "nets": board.nets, "pours": board.pours, "holes": board.holes, "clear": board.clear,
                       "oz": board.oz, "tracks": board.tracks, "vias": board.vias,
-                      "keepouts": getattr(board, "keepouts", [])}, sort_keys=True, default=str)
+                      "keepouts": getattr(board, "keepouts", []),
+                      **({"gaps": [board.hole_gap, board.edge]} if (board.hole_gap, board.edge) != (HOLE_GAP, EDGE)
+                         else {})}, sort_keys=True, default=str)
     h = hashlib.sha1(key.encode()).hexdigest()[:16]
     board._route_key = h
     f = CACHE / "pcb_routes" / f"{board.name}_{h}.pkl"
@@ -1800,7 +1851,7 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
            [(L, it["net"], g, 0) for it in board.tracks + board.vias for L, g in [shape(it)]]
     tree = STRtree([g for _, _, g, _ in obst])
     circles = [Point(x, y).buffer(r, 16) for x, y, r in rip]
-    inner = board.outline.buffer(-EDGE)
+    inner = board.outline.buffer(-board.edge)
     for it in old_t + old_v:
         n = it["net"]
         if n in bad:
@@ -2233,7 +2284,14 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
     import pickle
     from vendor_parts import CACHE
     kw = kw or (lambda net: {})
-    ckpt = CACHE / "pcb_routes" / f"{board.name}_{getattr(board, '_route_key', 'x')}_signals.pkl"
+    # (keyed by the design: cached_route's key, else a hash of the board as it stands - placement, nets, the copper
+    # drawn so far - and the jobs, so a changed design never loads another design's routing)
+    if getattr(board, "_route_key", None):
+        rkey = board._route_key
+    else:
+        import hashlib
+        rkey = hashlib.sha1((board._state_key() + repr(list(jobs))).encode()).hexdigest()[:16]
+    ckpt = CACHE / "pcb_routes" / f"{board.name}_{rkey}_signals.pkl"
     latest = CACHE / "pcb_routes" / f"{board.name}_signals_latest.pkl"
     jobs = list(jobs)
     best = pickle.loads(ckpt.read_bytes()) if ckpt.exists() else None
@@ -2509,7 +2567,7 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     pro = {"meta": {"filename": f"{board.name}.kicad_pro", "version": 3},
            "board": {"design_settings": {"rules": {"min_clearance": board.clear, "min_track_width": round(w_min, 4),
                                                    "min_via_diameter": v_min["dia"], "min_through_hole_diameter": d_min,
-                                                   "min_copper_edge_clearance": EDGE}}},
+                                                   "min_copper_edge_clearance": board.edge}}},
            "net_settings": {"meta": {"version": 4},
                             "classes": [{"name": "Default", "clearance": board.clear, "track_width": round(w_min, 4),
                                          "via_diameter": v_min["dia"], "via_drill": v_min["drill"],
