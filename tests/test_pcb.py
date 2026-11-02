@@ -918,3 +918,28 @@ def test_kicad_netlist_to_a_clean_board():
     assert b.comps["U1"]["mpn"] == "TI NE555DR" and b.comps["R1"]["lcsc"] == "C21190"
     assert [p["net"] for p in b.pours] == ["GND"]
     assert pcb.place_and_route(b) == [] and b.check() == [] and fab.fab_check(b) == []
+
+
+def test_clearance_between_pours_tracks_and_pads():
+    """the clearance check finds a track too near another net's pad, two pours of different nets overlapping, and
+    two pours too close (the pour outlines are measured as segments, so each case is worth a test)"""
+    import pcb
+    out = [(0, 0), (30, 0), (30, 20), (0, 20)]
+    b = pcb.Board("c1", out)
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10, 10), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (20, 10), 0, "1k")
+    b.net("A", [("R1", "1"), ("R2", "1")])
+    b.net("B", [("R1", "2"), ("R2", "2")])
+    x, y = b.pad("R1", "2")
+    b.track("A", "F", [(x - 1.5, y + 0.75), (x + 3, y + 0.75)], 0.2)
+    assert any(p.startswith("F.Cu: A and B 0.18 mm apart") for p in b.check())
+    b = pcb.Board("c2", out)
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10, 10), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (20, 10), 0, "1k")
+    b.net("A", [("R1", "1")])
+    b.net("B", [("R2", "2")])
+    b.pour("A", "F", [(0, 0), (16, 0), (16, 20), (0, 20)])
+    b.pour("B", "F", [(15, 0), (30, 0), (30, 20), (15, 20)])
+    assert any(p.startswith("F.Cu: A and B short") for p in b.check())
+    b.pours[1]["poly"] = [(16.1, 0), (30, 0), (30, 20), (16.1, 20)]
+    assert any(p.startswith("F.Cu: A and B 0.10 mm apart") for p in b.check())

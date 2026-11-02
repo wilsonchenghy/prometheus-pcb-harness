@@ -643,6 +643,19 @@ class Board:
         zones = unary_union([Polygon(p["poly"], p.get("holes") or None) for p in self.pours if p["net"] == net and p["layer"] == layer] or [Polygon()])
         return g.intersection(zones)
 
+    def _item_shape(self, it):
+        """a track's or via's copper outline, cached on its geometry (the check asks for each on every layer)"""
+        from shapely.geometry import LineString as _LS, Point as _Pt
+        key = (tuple(map(tuple, it["pts"])), it["w"]) if "pts" in it else (tuple(it["at"]), it["dia"])
+        cache = self.__dict__.setdefault("_shape_cache", {})
+        g = cache.get(key)
+        if g is None:
+            g = _LS(it["pts"]).buffer(it["w"] / 2, 8) if "pts" in it else _Pt(it["at"]).buffer(it["dia"] / 2, 12)
+            if len(cache) > 200000:
+                cache.clear()
+            cache[key] = g
+        return g
+
     def _state_key(self) -> str:
         """a hash of everything copper() reads: an edit anywhere (a track moved, a via, a pour, a part) changes it"""
         import hashlib
@@ -688,20 +701,32 @@ class Board:
         holes = unary_union([Point(x, y).buffer(max(hko.get((x, y), 0), d / 2 + self.clear + 0.3), 24)
                              for x, y, d in self.holes] or [Polygon()])
         inner = self.outline.buffer(-0.3)
-        clear_of: Dict[Tuple[str, str], object] = {}
+        clear_of: Dict[tuple, object] = {}
         kz_of: Dict[str, object] = {}
+        import numpy as np
+        import shapely
+        from shapely.strtree import STRtree
+        grown: Dict[str, tuple] = {}
+        grown_tree: Dict[str, object] = {}
         for pz in (self.pours if pours else []):
             if only_net is not None and pz["net"] != only_net:
                 continue
             L = pz["layer"]
-            if (pz["net"], L) not in clear_of:
-                clear_of[(pz["net"], L)] = unary_union(
-                    [g for (n, l), g in fixed.items() if l == L and n != pz["net"]] or [Polygon()]
-                ).buffer(self.clear + 0.05, 8)
+            if L not in grown:                           # every item on the layer grown by the clearance, once
+                its = [(n, g) for (n, l), lst in raw.items() if l == L for g in lst]
+                ga = np.array([g for _, g in its], dtype=object)
+                grown[L] = (np.array([n for n, _ in its], dtype=object), shapely.buffer(ga, self.clear + 0.05, quad_segs=8)
+                            if len(ga) else ga)
+                grown_tree[L] = STRtree(grown[L][1]) if len(ga) else None
             if L not in kz_of:
                 kz_of[L] = unary_union([Polygon(k) for k in self.keepout_zones(L)] or [Polygon()])
-            area = Polygon(pz["poly"], pz.get("holes") or None).intersection(inner).difference(
-                clear_of[(pz["net"], L)]).difference(holes).difference(kz_of[L])
+            zone = Polygon(pz["poly"], pz.get("holes") or None).intersection(inner)
+            if (pz["net"], L, zone.wkb) not in clear_of:  # (only the other nets' items reaching into this zone)
+                nm, gg = grown[L]
+                ci = grown_tree[L].query(zone, predicate="intersects") if grown_tree[L] is not None else []
+                ci = [int(i) for i in ci if nm[int(i)] != pz["net"]]
+                clear_of[(pz["net"], L, zone.wkb)] = shapely.union_all(gg[ci]) if ci else Polygon()
+            area = zone.difference(clear_of[(pz["net"], L, zone.wkb)]).difference(holes).difference(kz_of[L])
             area = area.buffer(-MIN_FILL / 2, 8).buffer(MIN_FILL / 2, 8)   # (no sliver narrower than a fab etches)
             key = (pz["net"], L)
             cu[key] = unary_union([cu.get(key, Polygon()), area])
@@ -726,25 +751,39 @@ class Board:
         cu = self.copper() if cu is None else cu
         pads = self.pad_shapes() if pads is None else pads
         pn = self.pad_net() if pn is None else pn
+        import numpy as np
+        import shapely
         items = [(L, pn.get((r, n)), g, i) for i, (r, n, L, g, d) in enumerate(pads)] + \
                 [(L, v["net"], Point(v["at"]).buffer(v["dia"] / 2, 16), ("v", k))
                  for k, v in enumerate(self.vias) for L in self.layers] + \
-                [(t["layer"], t["net"], LineString(t["pts"]).buffer(t["w"] / 2, 12), ("t", k))
-                 for k, t in enumerate(self.tracks)] + \
-                [(L, n, g, ("p", n, L)) for (n, L), g in cu.items()
-                 if any(pz["net"] == n and pz["layer"] == L for pz in self.pours)]
+                [(t["layer"], t["net"], self._item_shape(t), ("t", k)) for k, t in enumerate(self.tracks)]
+        poured = {(pz["net"], pz["layer"]) for pz in self.pours}
+        zones = {key: g for key, g in cu.items() if key in poured and g is not None and not g.is_empty}
         thru = {i for i, (r, n, L, g, d) in enumerate(pads) if d}
-        st = STRtree([g for _, _, g, _ in items])
-        out = []
-        for k in (range(len(self.tracks)) if only is None else only):
-            t = self.tracks[k]
-            for end in (t["pts"][0], t["pts"][-1]):
-                pt = Point(end)
-                if not any(n == t["net"] and tag != ("t", k) and (L == t["layer"] or tag in thru)
-                           for L, n, g, tag in (items[int(j)] for j in
-                                                st.query(pt, predicate="dwithin", distance=0.005))):
-                    out.append((k, tuple(end)))
-        return out
+        ks = list(range(len(self.tracks)) if only is None else only)
+        ends = [(k, e) for k in ks for e in (self.tracks[k]["pts"][0], self.tracks[k]["pts"][-1])]
+        if not ends:
+            return []
+        good = np.zeros(len(ends), bool)
+        pts = shapely.points(np.array([e for _, e in ends], float))
+        if items:                                        # pads, vias, other tracks: one query for every end
+            st = STRtree([g for _, _, g, _ in items])
+            ia, ib = st.query(pts, predicate="dwithin", distance=0.005)
+            for a, b in zip(ia.tolist(), ib.tolist()):
+                if good[a]:
+                    continue
+                k = ends[a][0]
+                t = self.tracks[k]
+                L, n, _, tag = items[b]
+                if n == t["net"] and tag != ("t", k) and (L == t["layer"] or tag in thru):
+                    good[a] = True
+        for (n, L), g in zones.items():                  # its pour (prepared: a big polygon, many ends)
+            sel = np.array([not good[i] and self.tracks[k]["net"] == n and self.tracks[k]["layer"] == L
+                            for i, (k, _) in enumerate(ends)])
+            if sel.any():
+                shapely.prepare(g)
+                good[sel] |= shapely.dwithin(g, pts[sel], 0.005)
+        return [(k, tuple(e)) for (k, e), ok in zip(ends, good) if not ok]
 
     def prune_spurs(self, tracks: Optional[Sequence[int]] = None, rounds: int = 4) -> int:
         """trim the dangling ends of ``tracks`` (default: all) back to where they last lie inside other copper of
@@ -832,6 +871,8 @@ class Board:
         for (n, L), g in cu.items():
             if n == net and any(pz["net"] == n and pz["layer"] == L for pz in self.pours):
                 for q in (getattr(g, "geoms", None) or [g]):
+                    import shapely as _shp
+                    _shp.prepare(q)                      # (a big polygon, asked about many small things)
                     nodes.append(("zone", {L}, q, None))
         par = list(range(len(nodes)))
 
@@ -849,6 +890,12 @@ class Board:
 
         def inside(j, pt):                               # (on the edge counts, as in KiCad: 5 um over the polygon
             return shapely.dwithin(nodes[j][2], pt, 0.005)   # that stands for a round end)
+        def _overlap(big, g):                            # the area they share (a zone clipped to the pad first)
+            if not shapely.intersects(big, g):
+                return 0.0
+            if shapely.contains(big, g):
+                return g.area
+            return shapely.clip_by_rect(big, *g.bounds).intersection(g).area
         for i, (kind, Ls, g, key) in enumerate(nodes):
             if kind == "track":
                 pts_ = [Point(tr[key]["pts"][0]), Point(tr[key]["pts"][-1])]
@@ -866,8 +913,7 @@ class Board:
             if kind == "pad":                            # a pad joins a track or zone of its net it overlaps
                 for j in st.query(g):
                     j = int(j)
-                    if nodes[j][0] in ("zone", "track") and nodes[j][1] & Ls and \
-                            nodes[j][2].intersection(g).area > 1e-4:
+                    if nodes[j][0] in ("zone", "track") and nodes[j][1] & Ls and _overlap(nodes[j][2], g) > 1e-4:
                         join(i, j)
         groups = {}
         for i, (kind, _, _, key) in enumerate(nodes):
@@ -956,56 +1002,105 @@ class Board:
         for L in self.layers:
             routed: Dict[str, list] = {}
             padg: Dict[str, Dict[str, list]] = {}
+            pourg: Dict[str, list] = {}
             for t in self.tracks:
                 if t["layer"] == L:
-                    routed.setdefault(t["net"], []).append(_LS(t["pts"]).buffer(t["w"] / 2, 8))
+                    routed.setdefault(t["net"], []).append(self._item_shape(t))
             for v in self.vias:
-                routed.setdefault(v["net"], []).append(Point(v["at"]).buffer(v["dia"] / 2, 12))
+                routed.setdefault(v["net"], []).append(self._item_shape(v))
             pcu = cu
             for pz in self.pours:
                 if pz["layer"] == L:
                     g = pcu.get((pz["net"], L))
                     if g is not None:
-                        routed.setdefault(pz["net"], []).append(g.intersection(Polygon(pz["poly"], pz.get("holes") or None)))
+                        pourg.setdefault(pz["net"], []).append(g.intersection(Polygon(pz["poly"], pz.get("holes") or None)))
             for ref, num, l, g, _ in pads:
                 if l == L:
                     padg.setdefault(pn.get((ref, num), f"~{ref}.{num}"), {}).setdefault(ref, []).append(g)
-            nets_ = sorted(set(routed) | set(padg))
-            R_ = {n: unary_union(routed.get(n, [])) if routed.get(n) else None for n in nets_}
-            A_ = {n: unary_union([g for lst in padg.get(n, {}).values() for g in lst] + ([R_[n]] if R_[n] is not None else []))
-                  for n in nets_}
-            P_ = {n: {r: unary_union(lst) for r, lst in padg.get(n, {}).items()} for n in nets_}
-            # only the pairs whose extents come within the clearance (an STR tree over the nets' bounding boxes)
+            # every pair of copper items of different nets within the clearance, by bulk queries of STR trees (pad to
+            # pad of one part exempt; a pour enters as its outline's segments, cheap to measure, plus a test for an
+            # item lying wholly inside it); then each net pair's nearest offence is reported
             from shapely.strtree import STRtree
-            from shapely.geometry import box as _box
-            env = [_box(*A_[n].bounds).buffer(self.clear, join_style=2) if not A_[n].is_empty else _box(0, 0, 0, 0)
-                   for n in nets_]
-            near = STRtree(env)
-            cand = sorted({(min(i, int(j)), max(i, int(j))) for i, e in enumerate(env) for j in near.query(e)
-                           if int(j) != i})
-            for i, j in cand:
-                na, nb = nets_[i], nets_[j]
-                if na.startswith("~") and nb.startswith("~"):
-                    continue
-                if not shapely.dwithin(A_[na], A_[nb], self.clear - 2e-3):     # (stops at the first close pair:
-                    continue                                                # a full distance is far dearer)
-                ds = []
-                if R_[na] is not None:
-                    ds.append((R_[na].distance(A_[nb]), R_[na], A_[nb]))
-                if R_[nb] is not None:
-                    ds.append((R_[nb].distance(A_[na]), R_[nb], A_[na]))
-                for ra, ga in P_[na].items():
-                    for rb, gb in P_[nb].items():
-                        if ra != rb:
-                            ds.append((ga.distance(gb), ga, gb))
-                bad = [d_ for d_ in ds if d_[0] < self.clear - 2e-3]
-                if bad:
-                    dist, ga, gb = min(bad, key=lambda d_: d_[0])
-                    from shapely.ops import nearest_points as _np2
-                    pa_, pb_ = _np2(ga, gb)                           # (where they come nearest)
-                    at = __import__("shapely.geometry", fromlist=["Point"]).Point((pa_.x + pb_.x) / 2, (pa_.y + pb_.y) / 2)
-                    what = "short" if dist < 1e-6 else f"{dist:.2f} mm apart (clearance {self.clear})"
-                    probs.append(f"{L}.Cu: {na} and {nb} {what} at ({at.x:.1f}, {at.y:.1f})")
+            import numpy as _npc
+            el_g, el_n, el_r = [], [], []
+            for n, lst in routed.items():
+                for g in lst:
+                    el_g.append(g), el_n.append(n), el_r.append(None)
+            for n, by in padg.items():
+                for ref, lst in by.items():
+                    for g in lst:
+                        el_g.append(g), el_n.append(n), el_r.append(ref)
+            pieces = [(n, q) for n, lst in pourg.items() for g in lst for q in (getattr(g, "geoms", None) or [g])
+                      if not q.is_empty and q.geom_type == "Polygon"]
+            names = sorted(set(el_n) | {n for n, _ in pieces})
+            ids = {n: i for i, n in enumerate(names)}
+            unn = _npc.array([n.startswith("~") for n in names] or [False])
+            g_s = _npc.array(el_g, dtype=object)
+            n_s = _npc.array([ids[n] for n in el_n], dtype=int)
+            rmap = {r: i for i, r in enumerate(sorted({r for r in el_r if r is not None}))}
+            r_s = _npc.array([rmap[r] if r is not None else -1 for r in el_r], dtype=int)
+            segs, n_seg = [], []
+            for n, q in pieces:
+                for ring in [q.exterior, *q.interiors]:
+                    c = _npc.asarray(ring.coords)
+                    if len(c) >= 2:
+                        segs.append(shapely.linestrings(_npc.stack([c[:-1], c[1:]], axis=1)))
+                        n_seg.append(_npc.full(len(c) - 1, ids[n]))
+            g_p = _npc.concatenate(segs) if segs else _npc.array([], dtype=object)
+            n_p = _npc.concatenate(n_seg) if n_seg else _npc.array([], dtype=int)
+            worst: Dict[Tuple[str, str], Tuple[float, object, object]] = {}
+
+            def note(ga_, gb_, na_, nb_):
+                ok = (na_ != nb_) & ~(unn[na_] & unn[nb_])
+                if not ok.any():
+                    return
+                ga_, gb_, na_, nb_ = ga_[ok], gb_[ok], na_[ok], nb_[ok]
+                dd = shapely.distance(ga_, gb_)
+                for k in _npc.argsort(dd).tolist():
+                    key = (min(names[na_[k]], names[nb_[k]]), max(names[na_[k]], names[nb_[k]]))
+                    if key not in worst:
+                        worst[key] = (float(dd[k]), ga_[k], gb_[k])
+                    elif dd[k] < worst[key][0]:
+                        worst[key] = (float(dd[k]), ga_[k], gb_[k])
+            reach = self.clear - 2e-3
+            if len(g_s) >= 2:                            # item to item
+                ia, ib = STRtree(g_s).query(g_s, predicate="dwithin", distance=reach)
+                k_ = (ia < ib) & ~((r_s[ia] >= 0) & (r_s[ia] == r_s[ib]))
+                note(g_s[ia[k_]], g_s[ib[k_]], n_s[ia[k_]], n_s[ib[k_]])
+            if len(g_s) and len(g_p):                    # item to a pour's outline
+                ia, ib = STRtree(g_p).query(g_s, predicate="dwithin", distance=reach)
+                note(g_s[ia], g_p[ib], n_s[ia], n_p[ib])
+                stree = STRtree(g_s)                      # item wholly inside another net's pour
+                for n, q in pieces:
+                    cand = stree.query(q, predicate="intersects")
+                    cand = cand[(n_s[cand] != ids[n])] if len(cand) else cand
+                    if len(cand):
+                        note(_npc.array([q] * len(cand), dtype=object), g_s[cand],
+                             _npc.full(len(cand), ids[n]), n_s[cand])
+            box_ = [q.bounds for _, q in pieces]          # pour to pour of another net, where they come near
+            for a in range(len(pieces)):
+                for b2 in range(a + 1, len(pieces)):
+                    (na, qa), (nb, qb) = pieces[a], pieces[b2]
+                    ba, bb = box_[a], box_[b2]
+                    if na == nb or ba[0] > bb[2] + reach or bb[0] > ba[2] + reach or ba[1] > bb[3] + reach or \
+                            bb[1] > ba[3] + reach:
+                        continue
+                    if qa.intersects(qb):
+                        note(_npc.array([qa], dtype=object), _npc.array([qb], dtype=object),
+                             _npc.array([ids[na]]), _npc.array([ids[nb]]))
+                    elif shapely.dwithin(qa, qb, reach):
+                        note(_npc.array([qa], dtype=object), _npc.array([qb], dtype=object),
+                             _npc.array([ids[na]]), _npc.array([ids[nb]]))
+            from shapely.ops import nearest_points as _np2
+            for (na, nb), (dist, ga, gb) in sorted(worst.items(), key=lambda kv: kv[0]):
+                if dist < 1e-6:
+                    x_, y_ = _np2(ga, gb)[0].coords[0] if not ga.intersects(gb) else \
+                        ga.intersection(gb).representative_point().coords[0]
+                else:
+                    pa_, pb_ = _np2(ga, gb)              # (where they come nearest)
+                    x_, y_ = (pa_.x + pb_.x) / 2, (pa_.y + pb_.y) / 2
+                what = "short" if dist < 1e-6 else f"{dist:.2f} mm apart (clearance {self.clear})"
+                probs.append(f"{L}.Cu: {na} and {nb} {what} at ({x_:.1f}, {y_:.1f})")
         for p_, n_, skew in getattr(self, "pairs", []):       # differential pairs kept matched in length
             lp, ln = self.net_length(p_), self.net_length(n_)
             if abs(lp - ln) > skew:
@@ -1051,10 +1146,15 @@ class Board:
                 return i
             touched = set()
             import numpy as _np_
-            cs_arr = _np_.array(cs_, dtype=object)
-            live = _np_.array([not part.is_empty for part in cs_])
-            for pg in pins:                              # (within reach, by distance: no buffer per piece per pin)
-                hit = [int(i) for i in _np_.nonzero(live & shapely.dwithin(cs_arr, pg, need / 2 + 0.5))[0]]
+            live = [k for k, part in enumerate(cs_) if not part.is_empty]
+            hits_ = {}
+            if live and pins:                            # (within reach, by distance: one query for every pin)
+                from shapely.strtree import STRtree as _STn
+                pi_, ci_ = _STn([cs_[k] for k in live]).query(pins, predicate="dwithin", distance=need / 2 + 0.5)
+                for a_i, c_i in zip(pi_, ci_):
+                    hits_.setdefault(int(a_i), []).append(live[int(c_i)])
+            for ip_ in range(len(pins)):
+                hit = sorted(hits_.get(ip_, []))
                 for i in hit[1:]:
                     par_[_rt(i)] = _rt(hit[0])
                 touched |= set(hit)
@@ -1094,9 +1194,15 @@ class Board:
                 probs.append(f"{ref} pad {num or '(mount)'} ({L}.Cu) reaches the board edge: copper keeps {self.edge} mm inside")
                 break
         from shapely.geometry import LineString as _LS
-        for it in self.tracks + self.vias:
-            g = _LS(it["pts"]).buffer(it["w"] / 2, 8) if "pts" in it else _Pt(it["at"]).buffer(it["dia"] / 2, 8)
-            if not inner.contains(g):
+        items = self.tracks + self.vias                  # (by distance to the edge, not a buffer per item)
+        if items:
+            import numpy as _npe
+            axes = _npe.array([_LS(it["pts"]) if "pts" in it else _Pt(it["at"]) for it in items], dtype=object)
+            rad = _npe.array([it["w"] / 2 if "pts" in it else it["dia"] / 2 for it in items])
+            ok_ = shapely.contains(self.outline, axes) & ~shapely.dwithin(axes, self.outline.exterior,
+                                                                          rad + self.edge - 1e-6)
+        for it, ok1 in zip(items, ok_ if items else []):
+            if not ok1:
                 xy = it["pts"][0] if "pts" in it else it["at"]
                 probs.append(f"{'track' if 'pts' in it else 'via'} {it['net']} near ({xy[0]:.1f}, {xy[1]:.1f}) comes "
                              f"within {self.edge} mm of the board edge")
