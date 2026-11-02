@@ -35,6 +35,9 @@ b.pour("GND", "B", OUT)                                         # a ground plane
 Pins are `(ref, pad number)` as the footprint numbers them. `amps` sets how wide copper must be for the net (IPC-2221
 at `max_rise_c`, default 20 C); `volts` sets what its voltage drop is measured against.
 
+Before routing, `b.check_placement()` says in a moment whether every courtyard is on the board and clear of the
+others, and whether every pin a net names exists - routing a misplaced board only wastes minutes.
+
 ## 3. Routing
 
 ```python

@@ -1061,7 +1061,20 @@ class Board:
                   f"nothing of its net (dangling, or only touching a pad's edge: KiCad reads it unconnected)"
                   for k, e in self.loose_ends(cu, pads, pn)]
         probs += loose_[:20] + ([f"... and {len(loose_) - 20} more loose track ends"] if len(loose_) > 20 else [])
-        # courtyards on the board, not overlapping
+        return probs + self.check_placement()
+
+    def check_placement(self) -> List[str]:
+        """the placement alone, in a moment, before routing: every courtyard on the board (unless the part is
+        placed to overhang, like a USB connector at the edge), no two courtyards on one side overlapping, and every
+        pin a net names on a part that exists with that pad. check() includes it"""
+        from shapely.strtree import STRtree
+        probs: List[str] = []
+        for n, d in self.nets.items():
+            for ref, num in d["pins"]:
+                if ref not in self.comps:
+                    probs.append(f"net {n}: no part {ref}")
+                elif num not in self.comps[ref]["pads"]:
+                    probs.append(f"net {n}: {ref} ({self.comps[ref]['fp'].split(':')[1]}) has no pad {num}")
         cy = {}
         for ref, c in self.comps.items():
             g = self.courtyard(ref)
@@ -1071,8 +1084,11 @@ class Board:
             if not self.outline.contains(g) and not c["overhang"]:
                 probs.append(f"{ref} ({c['fp'].split(':')[1]}) hangs off the board outline")
         refs = list(cy)
+        tree = STRtree([cy[r] for r in refs]) if refs else None
         for i in range(len(refs)):
-            for j in range(i + 1, len(refs)):
+            for j in sorted(int(j) for j in tree.query(cy[refs[i]])):
+                if j <= i:
+                    continue
                 if self.comps[refs[i]].get("side", "F") != self.comps[refs[j]].get("side", "F"):
                     continue                                 # top and bottom parts may overlap in plan
                 if cy[refs[i]].intersection(cy[refs[j]]).area > 0.05:
