@@ -40,7 +40,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
-ROUTER_VERSION = 5          # in route_jobs' checkpoint key: bump when the router changes what it would produce
+ROUTER_VERSION = 7          # in route_jobs' checkpoint key: bump when the router changes what it would produce
 HOLE_CLEAR = 0.25           # copper to a bare (non-plated) hole's wall, mm: KiCad's default hole clearance
 HOLE_GAP = 0.25             # mm between drill walls (a common fab minimum)
 EDGE = 0.25                 # mm from copper (tracks, vias) to the board edge
@@ -2053,8 +2053,10 @@ def _join_islands(board: Board, net: str, probs: List[str], kw: dict, only=None)
     if net not in board.nets or any(re.match(rf"route {re.escape(net)}: could not reach", p_) for p_ in probs):
         return probs
     groups = board.islands(net)
-    if len(groups) < 2:
-        return probs
+    if len(groups) < 2:                                  # whole as copper; KiCad may still read it split, joining
+        groups = board.anchor_groups(net)                # items only where a track END lands (a paired pin)
+        if len(groups) < 2:
+            return probs
     want = set(map(tuple, only)) if only else None
     main = [tuple(p_) for p_ in groups[0]]
     for g in groups[1:]:
@@ -2100,7 +2102,11 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
     XX, YY = np.meshgrid(xs, ys, indexing="ij")
     keepout = keepout or {}                               # {layer: [polygon]}: copper to keep off (vias too)
     track_keepout = track_keepout or {}                   # {layer: [polygon]}: no tracks there (a via may pass)
-    holes = unary_union([Point(x, y).buffer(d / 2 + 0.3, 16) for x, y, d in board.all_holes()] or [Polygon()])
+    # bare holes as obstacles, sized so that, grown by the clearance like all copper, a track keeps the hole
+    # clearance (KiCad's) from a peg's wall and a mounting hole's copper-free radius (its screw head)
+    hko_ = getattr(board, "_hole_ko", {})
+    holes = unary_union([Point(x, y).buffer(max(d / 2, max(hko_.get((x, y), 0.0), d / 2 + HOLE_CLEAR) - board.clear)
+                                            + 0.02, 16) for x, y, d in board.all_holes()] or [Polygon()])
     cu_fixed = board.copper(pours=False)
     pn = board.pad_net()
     pads = {(r, n_): (g, L) for r, n_, L, g, _ in board.pad_shapes()}
@@ -2563,7 +2569,11 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_bytes(pickle.dumps(d))
     board.tracks, board.vias, board._fan = d["tracks"], d["vias"], d.get("fan", set())
-    if kept is not None and not kept.exists() and not d["probs"]:      # (only clean routing goes into git)
+    clean = not d["probs"] and not any(("split" in p_ or re.match(r"\S+\.Cu: .+ (short|mm apart)", p_) or
+                                        "bare hole" in p_) for p_ in board.check()) \
+        if kept is not None and not kept.exists() else False
+    if clean:                                            # (only clean routing goes into git: joined by KiCad's rule,
+        # no shorts, clearance kept; a check finding about the design itself, a hole spacing, does not hold it back)
         kept.parent.mkdir(parents=True, exist_ok=True)
         for old in kept.parent.glob(f"{board.name}_*.json.gz"):
             os.remove(old)
@@ -3246,7 +3256,8 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
             net, w = job[0], job[1]                       # routed after it, now that failures go first) joined back
             if (job[3] if len(job) > 3 else {}).get("rejoin", True) is False:
                 continue                                  # (a net joined later by the caller: stitching vias)
-            if net in board.nets and job not in failed and len(board.islands(net)) > 1:
+            if net in board.nets and job not in failed and (len(board.islands(net)) > 1 or
+                                                            len(board.anchor_groups(net)) > 1):
                 ex = {k: v for k, v in {**kw(net), **(job[3] if len(job) > 3 else {})}.items() if k != "rejoin"}
                 more = repair(board, width=w, nets=[net], **{k: v for k, v in ex.items() if k != "only"})
                 got += more

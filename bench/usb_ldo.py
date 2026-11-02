@@ -42,7 +42,7 @@ def build():
 def do_route(b):
     probs = []
     b.fanout(width=0.2)
-    for n, w in (("CC1", 0.2), ("CC2", 0.2), ("DP", 0.2), ("VBUS", 0.3), ("3V3", 0.4), ("LED", 0.25), ("CCG", 0.25)):
+    for n, w in (("VBUS", 0.3), ("CC1", 0.2), ("CC2", 0.2), ("DP", 0.2), ("3V3", 0.4), ("LED", 0.25), ("CCG", 0.25)):
         probs += route(b, n, width=w)
     probs += route(b, "GND", width=0.4)
     return probs
