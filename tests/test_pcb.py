@@ -782,3 +782,23 @@ def test_pair_skew_and_paste_layer(tmp_path):
     assert any("pair DP / DN" in p and "5.00 mm apart" in p for p in probs), probs
     files = [os.path.basename(f) for f in pcb.export_gerbers(b, str(tmp_path))]
     assert "t-F_Paste.gtp" in files and "t-B_Paste.gbp" not in files
+
+
+def test_gerbers_read_back_by_an_independent_parser(tmp_path):
+    """gerbonara (an independent Gerber / Excellon reader) recognises every layer we write and their extents
+    match the board"""
+    gerbonara = pytest.importorskip("gerbonara")
+    import pcb
+    b = pcb.Board("g", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (20.0, 10.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    assert not pcb.route(b, "A", width=0.25)
+    b.via("A", (15.0, 15.0))
+    pcb.export_gerbers(b, str(tmp_path))
+    st = gerbonara.LayerStack.open(str(tmp_path))
+    names = str(st)
+    for kind in ("top copper", "top mask", "top paste", "bottom copper", "mechanical outline"):
+        assert kind in names, names
+    out = gerbonara.GerberFile.open(str(tmp_path / "g-Edge_Cuts.gm1")).bounding_box()
+    assert abs(out[1][0] - 30.0) < 0.2 and abs(out[1][1] - 20.0) < 0.2
