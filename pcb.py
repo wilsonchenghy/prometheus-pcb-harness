@@ -3219,6 +3219,8 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
                 ex = {k: v for k, v in (job[3] if len(job) > 3 else {}).items() if k != "rejoin"}
                 got += route(board, job[0], width=job[1], only=job[2], **{**kw(job[0]), **ex})
             got = [m for m in best[0] if m.split(":")[0].split()[-1] not in redo] + got
+            got += [f"route {n}: split after the rip-up" for n in sorted(redo)          # (a net left in pieces counts)
+                    if n in board.nets and len(board.islands(n)) > 1 and not any(f"route {n}:" in m for m in got)]
             print(f"rip-up within {rr} mm of {len(circles)} pads ({len(torn)} nets torn up): "
                   f"{len(best[0])} problems before, {len(got)} after", flush=True)
             if len(got) < len(best[0]):
