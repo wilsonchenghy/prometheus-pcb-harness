@@ -1960,9 +1960,70 @@ def export_step(board: Board, path: str, models: bool = True, z0: float = 0.0) -
     return path
 
 
+def _text_poly(txt: str, x: float, y: float, size: float, angle: float = 0.0):
+    """``txt`` as filled outline polygons (a sans font from matplotlib), ``size`` mm cap height, centred on (x, y),
+    turned ``angle`` degrees: silkscreen text a fab can print"""
+    from matplotlib.font_manager import FontProperties
+    from matplotlib.textpath import TextPath
+    from shapely import affinity
+    from shapely.geometry import Polygon
+    from shapely.ops import unary_union
+    tp = TextPath((0, 0), txt, size=size * 1.38, prop=FontProperties(family="DejaVu Sans", weight="bold"))
+    shape = None
+    for ring in tp.to_polygons():                        # rings alternate outline / hole: even-odd fill
+        if len(ring) < 3:
+            continue
+        p_ = Polygon(ring).buffer(0)
+        shape = p_ if shape is None else shape.symmetric_difference(p_)
+    if shape is None or shape.is_empty:
+        return Polygon()
+    c = shape.envelope.centroid
+    shape = affinity.translate(shape, x - c.x, y - c.y)
+    return affinity.rotate(shape, angle, origin=(x, y)) if angle else shape
+
+
+def silkscreen(board: Board, layer: str = "F"):
+    """the silkscreen of one side as shapely geometry: each part's footprint silk lines (as KiCad draws them) and its
+    reference designator where ``place_refs`` finds room, the board's own ``silk_text``; clipped clear of the pads
+    and the drills (a fab clips silk off exposed copper)"""
+    import math
+    from shapely.geometry import LineString, Point
+    from shapely.ops import unary_union
+    geoms = []
+    for ref, c in board.comps.items():
+        side = c.get("side", "F")
+        if side != layer:
+            continue
+        ax, ay = c["at"]
+        a = math.radians(c["rot"])
+        ca, sa = math.cos(a), math.sin(a)
+        mx = -1.0 if side == "B" else 1.0
+
+        def tf(px, py):
+            px *= mx
+            return (ax + px * ca - py * sa, ay + px * sa + py * ca)
+        for x1, y1, x2, y2, w in footprint(c["fp"]).get("silk", []):
+            geoms.append(LineString([tf(x1, y1), tf(x2, y2)]).buffer(max(w, 0.1) / 2, 4))
+    for ref, at in place_refs(board).items():
+        if at and board.comps[ref].get("side", "F") == layer:
+            x, y, ang, size = at
+            geoms.append(_text_poly(ref, x, y, size, ang))
+    if layer == "F":
+        for txt, (x, y), size, ang in getattr(board, "silk_text", []):
+            geoms.append(_text_poly(txt, x, y, size, ang))
+    silk = unary_union([g for g in geoms if not g.is_empty]) if geoms else None
+    if silk is None or silk.is_empty:
+        return silk
+    keep_off = unary_union([g.buffer(0.1) for _, _, L, g, d in board.pad_shapes() if L == layer or d] +
+                           [Point(x, y).buffer(d / 2 + 0.2) for x, y, d in board.holes] +
+                           [Point(v["at"]).buffer(v["dia"] / 2 + 0.05) for v in board.vias])
+    return silk.difference(keep_off).intersection(board.outline.buffer(-0.1))
+
+
 def export_gerbers(board: Board, out_dir: str) -> List[str]:
     """RS-274X Gerbers (top / bottom copper as filled regions, top / bottom solder mask openings at the pads, top /
-    bottom paste (the stencil: SMD pads) where a side has SMD parts, the board outline) and an Excellon drill file (plated: pads and vias; non-plated: mounting holes) for a fab.
+    bottom paste (the stencil: SMD pads) where a side has SMD parts, the silkscreen (footprint outlines and
+    reference designators, clipped off the pads), the board outline) and an Excellon drill file (plated: pads and vias; non-plated: mounting holes) for a fab.
     Coordinates in mm, format 4.6. Review in a Gerber viewer before ordering."""
     import os
     from shapely.geometry import Polygon
@@ -2022,6 +2083,15 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
         pads = unary_union([g.buffer(0.05) for r, n, l, g, d in board.pad_shapes() if l == L] or [])
         regions(pads, body)
         files.append(write(nm, ff, body))
+    for L, nm, ff in (("F", "F_Silkscreen.gto", "Legend,Top"), ("B", "B_Silkscreen.gbo", "Legend,Bot")):
+        try:
+            sk = silkscreen(board, L)
+        except ImportError:                              # (no matplotlib for the text: no legend layer)
+            sk = None
+        if sk is not None and not sk.is_empty:
+            body = []
+            regions(sk, body)
+            files.append(write(nm, ff, body))
     for L, nm, ff in (("F", "F_Paste.gtp", "Paste,Top"), ("B", "B_Paste.gbp", "Paste,Bot")):
         smd = [g for r, n, l, g, d in board.pad_shapes() if l == L and not d]      # the stencil: SMD pads only
         if smd:

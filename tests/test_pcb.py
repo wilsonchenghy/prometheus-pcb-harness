@@ -798,7 +798,7 @@ def test_gerbers_read_back_by_an_independent_parser(tmp_path):
     pcb.export_gerbers(b, str(tmp_path))
     st = gerbonara.LayerStack.open(str(tmp_path))
     names = str(st)
-    for kind in ("top copper", "top mask", "top paste", "bottom copper", "mechanical outline"):
+    for kind in ("top copper", "top mask", "top paste", "top silk", "bottom copper", "mechanical outline"):
         assert kind in names, names
     out = gerbonara.GerberFile.open(str(tmp_path / "g-Edge_Cuts.gm1")).bounding_box()
     assert abs(out[1][0] - 30.0) < 0.2 and abs(out[1][1] - 20.0) < 0.2

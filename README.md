@@ -24,7 +24,7 @@ What it does (`pcb.py`, its docstring has the details):
 - **Fab rules**: `Board(..., rules="jlcpcb-2")` makes the router and the check keep a house's clearance, drill gap
   and edge gap; `b.pair("D+", "D-", max_skew=0.15)` keeps a differential pair matched in length.
 - **Output**: a STEP of the assembled board (`export_step`, every part's KiCad 3D model by default) for the
-  enclosure; Gerbers (copper, mask, paste for the stencil, outline) + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
+  enclosure; Gerbers (copper, mask, paste for the stencil, silkscreen with the reference designators, outline) + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
   KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
 - **Schematics** (`schem.py`): sheets drawn from the board's netlist and checked against it (needs `schemdraw`).
 - **Fab and parts** (`fab.py`): design-rule presets for JLCPCB, PCBWay and OSH Park and a check against them
