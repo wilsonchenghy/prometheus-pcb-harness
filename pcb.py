@@ -1610,12 +1610,12 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         blk[L_pin][ci, cj] = False
         goal = {k: (_cxy(tg[L].buffer(grid * 0.6), XX, YY) & ~blk[L]) if not tg[L].is_empty else np.zeros_like(blk[L])
                 for k, L in enumerate(Ls)}
-        found, path = _wavefront(blk, vblk, goal, [(ci, cj, Ls.index(L_pin))], Ls, via_cost)
+        found, path = _wavefront_windowed(blk, vblk, goal, [(ci, cj, Ls.index(L_pin))], Ls, via_cost)
         if not found and len(Ls) > 1 and vblk is not None and not vblk[ci, cj] and \
                 all(not blk[L][ci, cj] or L == L_pin for L in Ls):
             # boxed in on its own layer (a pad between fine-pitch neighbours): drop through a via where its way out
             # ends and go on from the other layers, as a designer would
-            found, path = _wavefront(blk, vblk, goal, [(ci, cj, k) for k in range(len(Ls))], Ls, via_cost)
+            found, path = _wavefront_windowed(blk, vblk, goal, [(ci, cj, k) for k in range(len(Ls))], Ls, via_cost)
         if not found:
             probs.append(f"route {net}: could not reach {pin[0]}.{pin[1]} (blocked; move parts or widen a channel)")
             continue
@@ -1696,6 +1696,30 @@ def _shift(a, di, dj):
     n, m = a.shape
     out[max(di, 0):n + min(di, 0), max(dj, 0):m + min(dj, 0)] = a[max(-di, 0):n + min(-di, 0), max(-dj, 0):m + min(-dj, 0)]
     return out
+
+
+def _wavefront_windowed(blk, vblk, goal, starts, Ls, via_cost, margin: int = 48):
+    """_wavefront in a window round the start and the nearest goal cell (``margin`` cells past both), and on the
+    whole grid only when the window holds no way through: most connections are local, and the search costs grow
+    with the area it floods"""
+    import numpy as np
+    k_any = [np.argwhere(goal[k]) for k in range(len(Ls))]
+    pts = np.concatenate([g for g in k_any if len(g)] or [np.zeros((0, 2), int)])
+    if not len(pts):
+        return _wavefront(blk, vblk, goal, starts, Ls, via_cost)
+    si, sj = starts[0][0], starts[0][1]
+    near = pts[np.argmin((pts[:, 0] - si) ** 2 + (pts[:, 1] - sj) ** 2)]
+    n, m = goal[0].shape
+    i0, i1 = max(0, min(si, near[0]) - margin), min(n, max(si, near[0]) + margin + 1)
+    j0, j1 = max(0, min(sj, near[1]) - margin), min(m, max(sj, near[1]) + margin + 1)
+    if (i1 - i0) * (j1 - j0) >= 0.6 * n * m:             # (nearly the whole board anyway)
+        return _wavefront(blk, vblk, goal, starts, Ls, via_cost)
+    w = (slice(i0, i1), slice(j0, j1))
+    hit, path = _wavefront({L: blk[L][w] for L in Ls}, vblk[w] if vblk is not None else None,
+                           {k: g[w] for k, g in goal.items()}, [(i - i0, j - j0, k) for i, j, k in starts], Ls, via_cost)
+    if hit:
+        return (hit[0] + i0, hit[1] + j0, hit[2]), [(i + i0, j + j0, k) for i, j, k in path]
+    return _wavefront(blk, vblk, goal, starts, Ls, via_cost)
 
 
 def _wavefront(blk, vblk, goal, starts, Ls, via_cost):
