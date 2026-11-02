@@ -21,7 +21,8 @@ import tempfile
 from typing import Dict, List, Optional, Sequence, Tuple
 
 UM = 1000.0                                              # .dsn units: micrometres (mm x 1000)
-PAD_GROW = 0.0                                           # mm each pad is grown by in the .dsn
+PAD_EXTEND = 0.0     # mm a fine-pitch pin is lengthened outwards in the .dsn (off: FreeRouting then ends tracks on
+#                      the made-up part, off the real pad)
 
 
 def find_jar() -> Optional[str]:
@@ -91,8 +92,16 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
     stacks: Dict[str, str] = {}
     images, place = [], []
     pin_of: Dict[Tuple[str, str], List[str]] = {}
+    import numpy as np
+    from shapely import affinity
     for ref, lst in by_ref.items():
         ox, oy = board.comps[ref]["at"]
+        cs = np.array([(g.centroid.x, g.centroid.y) for num, L, g, d in lst if num])
+        fine = False
+        if len(cs) >= 6:                                  # a fine-pitch part (pins closer than 0.8 mm)
+            dd = np.hypot(*(cs[:, None, :] - cs[None, :, :]).transpose(2, 0, 1))
+            np.fill_diagonal(dd, np.inf)
+            fine = bool(dd.min() < 0.8)
         groups: Dict[Tuple[str, Tuple[float, float]], dict] = {}
         for num, L, g, d in lst:                         # one pin per pad: its layers' shapes together
             c = g.centroid
@@ -105,8 +114,11 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
             shapes = []
             for L, g in sorted(p["layers"].items()):
                 q = g if g.geom_type == "Polygon" else max(getattr(g, "geoms", [g]), key=lambda h: h.area)
-                q = q.buffer(PAD_GROW, join_style=2).simplify(0.002)   # (FreeRouting's own pad geometry is not
-                # quite the harness's: a little more room keeps its routes clear by the harness's measure too)
+                if PAD_EXTEND and fine and num and not p["drill"]:   # a fine-pitch pin lengthened outwards: FreeRouting turns
+                    dx, dy = cx - ox, cy - oy             # 45 degrees right off a pin's end and clips the next
+                    step = (PAD_EXTEND * (1 if dx > 0 else -1), 0.0) if abs(dx) > abs(dy) else \
+                        (0.0, PAD_EXTEND * (1 if dy > 0 else -1))         # pin's corner; from further out it
+                    q = q.union(affinity.translate(q, *step)).convex_hull  # clears it (the pin gaps unchanged)
                 shapes.append(f"(shape (polygon {_layer_name(L)} 0 {_pts(list(q.exterior.coords)[:-1], cx, cy)}))")
             sname = f"P{len(stacks)}"
             body = " ".join(shapes)
@@ -213,6 +225,7 @@ def import_ses(board, path: str, via: Tuple[float, float] = (0.3, 0.6)) -> Tuple
                 if (name, L, tuple(pts)) in have_t:
                     continue
                 board.track(name, L, pts, round(wd, 4))
+                board.tracks[-1]["fr"] = True            # (FreeRouting's: torn up again if it breaks a clearance)
                 nt += 1
         for v in [c for c in net if isinstance(c, list) and c and c[0] == "via"]:
             x, y = float(v[2]) * scale, float(v[3]) * scale
@@ -220,6 +233,7 @@ def import_ses(board, path: str, via: Tuple[float, float] = (0.3, 0.6)) -> Tuple
             if key in have_v:
                 continue
             board.via(name, (round(x, 4), round(y, 4)), via[0], via[1])
+            board.vias[-1]["fr"] = True
             nv += 1
     return nt, nv
 
@@ -251,10 +265,38 @@ def route(board, passes: int = 100, finish: bool = True, keep: Optional[str] = N
     log = run(dsn, ses, passes=passes)
     with open(os.path.join(work, "freerouting.log"), "w") as f:
         f.write(log)
+    t0, v0 = len(board.tracks), len(board.vias)
     import_ses(board, ses, via=via)
+    fr_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"]))) for t in board.tracks[t0:]}
+    fr_v = {(v["net"], tuple(v["at"])) for v in board.vias[v0:]}
     board.__dict__.pop("_cu_memo", None)
     if not finish:
         return []
     board._fan = set(getattr(board, "_fan", set())) | {("~freerouting", "")}   # (no fan-out stubs: FreeRouting
-    return pcb.autoroute(board, **kw)                                         # already left every pad its way):
-    # the harness's router then does the poured nets and anything FreeRouting left open
+    probs = pcb.autoroute(board, **kw)                                        # already left every pad its way):
+    # the harness's router then does the poured nets and anything FreeRouting left open. FreeRouting's own
+    # clearance test misses a 45-degree turn just off a fine-pitch pin clipping the next pin's corner (by ~0.04
+    # mm); measured exactly here, the FreeRouting copper of each net in such a pair is torn up and the harness's
+    # router, which measures the real shapes, routes those few nets again (what a KiCad user does by hand
+    # after FreeRouting, at KiCad's DRC)
+    score = lambda ps: len(ps) + len(board.check())
+    for _ in range(3):
+        before = (list(board.tracks), list(board.vias), probs, score(probs))
+        bad = set()
+        for msg in board.check():
+            m = re.match(r"\S+\.Cu: (.+?) and (.+?) (short|[\d.]+ mm apart)", msg)
+            if m:
+                bad |= {n for n in (m.group(1), m.group(2)) if n in board.nets}
+        is_fr = lambda t: (t["net"], t["layer"], tuple(map(tuple, t["pts"]))) in fr_t   # (by shape: a cached
+        torn = {n for n in bad if any(is_fr(t) and t["net"] == n for t in board.tracks)}  # routing drops flags)
+        if not torn:
+            break
+        board.tracks = [t for t in board.tracks if not (is_fr(t) and t["net"] in torn)]
+        board.vias = [v for v in board.vias if not ((v["net"], tuple(v["at"])) in fr_v and v["net"] in torn)]
+        board.__dict__.pop("_cu_memo", None)
+        probs = pcb.autoroute(board, **kw)
+        if score(probs) >= before[3]:                   # (kept only when it does better)
+            board.tracks, board.vias, probs = before[0], before[1], before[2]
+            board.__dict__.pop("_cu_memo", None)
+            break
+    return probs
