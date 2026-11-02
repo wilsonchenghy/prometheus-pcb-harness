@@ -50,13 +50,38 @@ the parts are placed, routed to the fab's rules and written out for ordering (`p
 python -m pcb_cli examples/netlist/blinker_sch.net out/ --size 35x25 --at J1=4,12.5
 ```
 
-New here? `docs/getting-started.md` walks a board from nothing to an order. `python bench/run.py` builds and times
+New here? `docs/getting-started.md` walks a board from nothing to an order; `docs/ordering.md` says which file
+goes where when you order. `python bench/run.py` builds and times
 every example board.
+
+## Status
+
+What a clean run means: the board's own design check and the fab house's rules both pass. Measured on this
+repository's boards (`python bench/run.py`; `PCB_REROUTE=1` routes from scratch instead of loading the committed
+routes):
+
+| Board | Parts | Layers | From scratch | Result |
+|---|---|---|---|---|
+| blinker (555 + LED) | 8 | 2 | under 1 s, also placed automatically | clean (JLCPCB) |
+| usb_ldo (USB-C to 3.3 V) | 10 | 2 | about 1 s, also placed automatically | clean (JLCPCB) |
+| esp32_sensor | 21 | 2 | 4 s; 8 s placed automatically | clean (JLCPCB) |
+| arm_pdb (60 A power) | 56 | 2 | about 80 s | clean (JLCPCB) |
+| cube_main | 25 | 2 | about 60 s | clean (JLCPCB) |
+| ripple_main | 67 | 2 | about 50 s | clean (JLCPCB) |
+| qdd_main | 70 | 2 | about 55 s | clean (JLCPCB) |
+| controller_main | 47 | 2 | about 26 s | routed clean; two mounting holes sit 0.3 mm from the shell's 7.2 mm cut-outs (the shell's geometry) |
+| fpv_fc (STM32F405) | 42 | 2 | about 60 s | clean (PCBWay: 0.1 mm tracks) |
+| fpv_esc (4-in-1) | 104 | 2 | about 80 s | one ground pad unreached: a layout fix, not yet made |
+| twilight_fc | 199 | 4 | committed routes | routed and checked clean; its regulators' 0.2 mm thermal vias need a house's small-via option |
+
+Not yet: KiCad's own DRC is not run by the tests (run it on the exported project if you have KiCad), CPL rotations
+are KiCad's (check them in the house's placement preview), and placement is for small boards: place big or dense
+boards yourself.
 
 ## Install
 
 ```
-pip install -e .                 # core: numpy, shapely, pillow
+pip install -e .                 # core: numpy, shapely, pillow, matplotlib
 pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypdf (schematics), pytest
 pytest -q                        # the tests
 ```
