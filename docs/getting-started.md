@@ -61,7 +61,10 @@ import fab
 problems += fab.fab_check(b, "jlcpcb-2")   # the house's process: track width, vias, drills, gaps, edge
 ```
 
-Both return a list of plain sentences that say what and where; empty is clean. The presets in `fab.RULES` are the
+Both return a list of plain sentences that say what and where; empty is clean. Better still, make the board
+with the house's rules from the start, `Board("blinker", OUT, rules="jlcpcb-2")`: the router then keeps its
+clearance, drill gap and edge gap, and `fab_check` uses them by default. For USB or CAN, `b.pair("DP", "DN",
+max_skew=0.15)` has the check compare the pair's track lengths. The presets in `fab.RULES` are the
 houses' standard capabilities, set conservatively; check the house's own page for your order.
 
 ## 5. Outputs

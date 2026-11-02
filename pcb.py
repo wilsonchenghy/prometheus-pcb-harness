@@ -357,6 +357,16 @@ class Board:
     def net(self, name: str, pins: Sequence[Tuple[str, str]], amps: float = 0.1, volts: float = 5.0):
         self.nets[name] = {"pins": [(r, str(p)) for r, p in pins], "amps": amps, "volts": volts}
 
+    def net_length(self, net: str) -> float:
+        """the total length of ``net``'s tracks, mm (a branched net's branches all count)"""
+        import math
+        return sum(math.dist(a, b) for t in self.tracks if t["net"] == net for a, b in zip(t["pts"], t["pts"][1:]))
+
+    def pair(self, p: str, n: str, max_skew: float = 0.5):
+        """mark ``p`` / ``n`` as a differential pair (USB D+ / D-, CAN H / L): check() reports when their track
+        lengths differ by more than ``max_skew`` mm (USB 2.0 full speed tolerates mm; high speed wants ~0.15)"""
+        self.__dict__.setdefault("pairs", []).append((p, n, max_skew))
+
     def track(self, net: str, layer: str, pts: Sequence[Tuple[float, float]], width: float, amps: Optional[float] = None):
         """a track; ``amps`` when this branch carries less than the whole net (a regulator's feed off a bus)"""
         self.tracks.append({"net": net, "layer": layer, "pts": [tuple(p) for p in pts], "w": width, "amps": amps})
@@ -947,6 +957,11 @@ class Board:
                     at = __import__("shapely.geometry", fromlist=["Point"]).Point((pa_.x + pb_.x) / 2, (pa_.y + pb_.y) / 2)
                     what = "short" if dist < 1e-6 else f"{dist:.2f} mm apart (clearance {self.clear})"
                     probs.append(f"{L}.Cu: {na} and {nb} {what} at ({at.x:.1f}, {at.y:.1f})")
+        for p_, n_, skew in getattr(self, "pairs", []):       # differential pairs kept matched in length
+            lp, ln = self.net_length(p_), self.net_length(n_)
+            if abs(lp - ln) > skew:
+                probs.append(f"pair {p_} / {n_}: tracks {lp:.2f} and {ln:.2f} mm long, {abs(lp - ln):.2f} mm apart "
+                             f"(keep within {skew} mm: lengthen the shorter, or route them side by side)")
         # current: tracks and pour necks
         for t in self.tracks:
             d = self.nets.get(t["net"])
@@ -1903,8 +1918,8 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
 
 
 def export_gerbers(board: Board, out_dir: str) -> List[str]:
-    """RS-274X Gerbers (top / bottom copper as filled regions, top / bottom solder mask openings at the pads, the
-    board outline) and an Excellon drill file (plated: pads and vias; non-plated: mounting holes) for a fab.
+    """RS-274X Gerbers (top / bottom copper as filled regions, top / bottom solder mask openings at the pads, top /
+    bottom paste (the stencil: SMD pads) where a side has SMD parts, the board outline) and an Excellon drill file (plated: pads and vias; non-plated: mounting holes) for a fab.
     Coordinates in mm, format 4.6. Review in a Gerber viewer before ordering."""
     import os
     from shapely.geometry import Polygon
@@ -1964,6 +1979,12 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
         pads = unary_union([g.buffer(0.05) for r, n, l, g, d in board.pad_shapes() if l == L] or [])
         regions(pads, body)
         files.append(write(nm, ff, body))
+    for L, nm, ff in (("F", "F_Paste.gtp", "Paste,Top"), ("B", "B_Paste.gbp", "Paste,Bot")):
+        smd = [g for r, n, l, g, d in board.pad_shapes() if l == L and not d]      # the stencil: SMD pads only
+        if smd:
+            body = []
+            regions(unary_union(smd), body)
+            files.append(write(nm, ff, body))
     body = ["%ADD10C,0.100000*%", "D10*"]
     pts = list(board.outline.exterior.coords)
     body.append(f"X{fmt(pts[0][0])}Y{fmt(pts[0][1])}D02*")

@@ -21,7 +21,9 @@ What it does (`pcb.py`, its docstring has the details):
   routes cached by board hash (`cached_route`, optionally stored in git).
 - **Checks**: every net connected, no shorts, track and pour widths for the current (IPC-2221, external and internal),
   clearance, voltage drop, drill spacing, courtyards, dead copper.
-- **Output**: Gerbers + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
+- **Fab rules**: `Board(..., rules="jlcpcb-2")` makes the router and the check keep a house's clearance, drill gap
+  and edge gap; `b.pair("D+", "D-", max_skew=0.15)` keeps a differential pair matched in length.
+- **Output**: Gerbers (copper, mask, paste for the stencil, outline) + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
   KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
 - **Schematics** (`schem.py`): sheets drawn from the board's netlist and checked against it (needs `schemdraw`).
 - **Fab and parts** (`fab.py`): design-rule presets for JLCPCB, PCBWay and OSH Park and a check against them

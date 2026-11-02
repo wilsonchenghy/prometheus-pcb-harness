@@ -766,3 +766,19 @@ def test_fab_check_against_a_house_preset():
     assert "closer than 0.30 mm to the edge" in txt and "drills 0.10 mm apart" in txt
     assert not [p for p in fab.fab_check(b, dict(fab.RULES["pcbway-std"], track=0.1, space=0.1, drill=0.2, via_dia=0.4,
                                                  annular=0.1, hole_gap=0.0, edge=0.0)) if "wide" in p]
+
+
+def test_pair_skew_and_paste_layer(tmp_path):
+    """a differential pair whose tracks differ in length is reported; Gerbers carry a paste layer for SMD pads"""
+    import os
+    import pcb
+    b = pcb.Board("t", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 10.0), 0, "1k")
+    b.track("DP", "F", [(5.0, 5.0), (25.0, 5.0)], 0.2)
+    b.track("DN", "F", [(5.0, 6.0), (20.0, 6.0)], 0.2)
+    b.pair("DP", "DN", max_skew=0.5)
+    assert abs(b.net_length("DP") - 20.0) < 1e-9
+    probs = b.check()
+    assert any("pair DP / DN" in p and "5.00 mm apart" in p for p in probs), probs
+    files = [os.path.basename(f) for f in pcb.export_gerbers(b, str(tmp_path))]
+    assert "t-F_Paste.gtp" in files and "t-B_Paste.gbp" not in files
