@@ -64,7 +64,7 @@ def _xt30_mated():
 XT30_BODY = _xt30_mated()                          # XT30 pair, mated
 
 def power_board():
-    b = Board("main", [(-90.0, PCB_Y[0]), (90.0, PCB_Y[0]), (90.0, PCB_Y[1]), (-90.0, PCB_Y[1])],
+    b = Board("qdd_main", [(-90.0, PCB_Y[0]), (90.0, PCB_Y[0]), (90.0, PCB_Y[1]), (-90.0, PCB_Y[1])],
               thickness=1.6, copper_oz=2.0, clearance=0.15, max_rise_c=20.0, corner_r=5.0)
     for p in POSTS:
         b.hole(p, 2.7, keepout=4.6)                       # M2.5 on the chassis posts (R4)
@@ -261,7 +261,8 @@ def board_route(b, top_pours, vbus):
 def build():
     b, tp, vb = power_board()
     board_pours(b, tp, vb)
-    return b, cached_route(b, lambda b_: board_route(b_, tp, vb), tag="qdd-main-r6")
+    store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "routes")    # routed copper, kept in git
+    return b, cached_route(b, lambda b_: board_route(b_, tp, vb), tag="qdd-main-r7", store=store)
 
 
 if __name__ == "__main__":

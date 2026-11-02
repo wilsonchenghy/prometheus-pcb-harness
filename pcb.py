@@ -1880,8 +1880,8 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
     """run ``do_route(board)`` (which adds tracks and vias and returns problems) once per design: the routed copper
     is cached by a hash of the placement, nets, pours and holes, so a program re-run per MOTION pose does not re-route.
     ``store``: a folder kept in git where the routed copper is also written (``<board>_<hash>.json.gz``, the board's
-    older ones removed), so a fresh clone loads the committed routing instead of re-routing, which is slow and need
-    not give the same copper with other library versions"""
+    older ones removed; only a routing with no problems), so a fresh clone loads the committed routing instead of
+    re-routing, which is slow and need not give the same copper with other library versions"""
     import hashlib
     import json
     import os
@@ -1910,7 +1910,7 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_bytes(pickle.dumps(d))
     board.tracks, board.vias, board._fan = d["tracks"], d["vias"], d.get("fan", set())
-    if kept is not None and not kept.exists():
+    if kept is not None and not kept.exists() and not d["probs"]:      # (only clean routing goes into git)
         kept.parent.mkdir(parents=True, exist_ok=True)
         for old in kept.parent.glob(f"{board.name}_*.json.gz"):
             os.remove(old)
