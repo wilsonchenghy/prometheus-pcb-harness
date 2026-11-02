@@ -40,6 +40,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
+ROUTER_VERSION = 3          # in route_jobs' checkpoint key: bump when the router changes what it would produce
 HOLE_GAP = 0.25             # mm between drill walls (a common fab minimum)
 EDGE = 0.25                 # mm from copper (tracks, vias) to the board edge
 MIN_FILL = 0.1              # mm: a pour's narrowest copper (KiCad's zone min_thickness)
@@ -789,15 +790,21 @@ class Board:
         """trim the dangling ends of ``tracks`` (default: all) back to where they last lie inside other copper of
         their net, and drop tracks that reach nothing past their other end: a fine-pitch pad's way-out stub that the
         route joined part-way along, or a closing segment that overshot, otherwise leaves a spur KiCad reads as
-        unconnected. Never splits a net (only the dead end is cut). Returns how many track ends it changed"""
+        unconnected. Never splits a net: a net whose copper would end up in more pieces keeps its tracks as they were.
+        Returns how many track ends it changed"""
         from shapely.geometry import LineString, Point
         from shapely.ops import substring, unary_union
         changed = 0
         idx = set(range(len(self.tracks)) if tracks is None else tracks)
+        orig, before = None, {}
         for _ in range(rounds):
             loose = [(k, e) for k, e in self.loose_ends(only=sorted(i for i in idx if i < len(self.tracks)))]
             if not loose:
                 break
+            if orig is None:                             # (to put a net back if trimming it cut it in two: a scrap
+                orig = [dict(t) for t in self.tracks]    # of pour can hang on a stub that looks loose)
+                before = {n: len(self.islands(n)) for n in {self.tracks[k]["net"] for k, _ in loose}
+                          if n in self.nets}
             pads = self.pad_shapes()
             pn = self.pad_net()
             drop = set()
@@ -844,6 +851,11 @@ class Board:
                         remap[j] = len(remap)
                 self.tracks = keep
                 idx = {remap[j] for j in idx if j in remap}
+        if changed and before:
+            worse = {n for n, k0 in before.items() if len(self.islands(n)) > k0}
+            if worse:
+                self.tracks = [t for t in self.tracks if t["net"] not in worse] + \
+                              [t for t in orig if t["net"] in worse]
         return changed
 
     def anchor_groups(self, net: str, cu=None, pads=None, pn=None) -> List[List[Tuple[str, str]]]:
@@ -1503,7 +1515,7 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     kw = dict(width=width, grid=grid, via_cost=via_cost, layers=layers, keepout=keepout, via=via, only=only, amps=amps,
               track_keepout=track_keepout, seed_pins=seed_pins)
     forced = [(a, getattr(board, a)) for a in ("root_big", "pour_root") if hasattr(board, a)]
-    if forced or only:                                   # (a caller's own choice, or a partial route: one attempt)
+    if forced:                                           # (a caller's own choice: one attempt)
         return _join_islands(board, net, _route_once(board, net, **kw), kw, only)
     t0, v0, f0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
     best = None
@@ -1515,7 +1527,9 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
         finally:
             del board.root_big, board.pour_root
         split = len(board.islands(net)) - 1 if net in board.nets else 0
-        score = (len(probs) + split, len(board.vias) - len(v0))
+        # (a partial route, ``only``: the pads it names reached first; the net may be split until the rest is)
+        score = (len(probs) + split, len(board.vias) - len(v0)) if not only else \
+            (len(probs), split, len(board.vias) - len(v0))
         if best is None or score < best[0]:
             best = (score, probs, list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))
         if score[0] == 0:
@@ -1528,7 +1542,7 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     if left and neck < width - 1e-9:                     # neck down: the pads still unreached (between fine-pitch
         board.root_big = board.pour_root = False         # neighbours a full-width track cannot pass), each joined
         try:                                             # to the net's copper so far by the narrowest track its
-            kw2 = dict(kw, width=neck, only=left)        # current allows
+            kw2 = dict(kw, width=neck, only=left, seed_pins=None)   # current allows
             again = _route_once(board, net, **kw2)
         finally:
             del board.root_big, board.pour_root
@@ -2380,7 +2394,8 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
     is cached by a hash of the placement, nets, pours and holes, so a program re-run per MOTION pose does not re-route.
     ``store``: a folder kept in git where the routed copper is also written (``<board>_<hash>.json.gz``, the board's
     older ones removed; only a routing with no problems), so a fresh clone loads the committed routing instead of
-    re-routing, which is slow and need not give the same copper with other library versions"""
+    re-routing, which is slow and need not give the same copper with other library versions. With the environment
+    variable ``PCB_REROUTE=1`` every cache and the store are ignored (and nothing is written): routing from scratch"""
     import hashlib
     import json
     import os
@@ -2397,7 +2412,10 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
     board._route_key = h
     f = CACHE / "pcb_routes" / f"{board.name}_{h}.pkl"
     kept = Path(store) / f"{board.name}_{h}.json.gz" if store else None
-    if f.exists():
+    fresh = bool(os.environ.get("PCB_REROUTE"))         # (route from scratch: a router change measured honestly)
+    if fresh:
+        d, kept = None, None
+    elif f.exists():
         d = pickle.loads(f.read_bytes())
     elif kept is not None and kept.exists():
         d = _routes_load(kept.read_bytes())
@@ -2406,8 +2424,9 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
     if d is None:
         probs = do_route(board)
         d = {"tracks": board.tracks, "vias": board.vias, "fan": getattr(board, "_fan", set()), "probs": probs}
-        f.parent.mkdir(parents=True, exist_ok=True)
-        f.write_bytes(pickle.dumps(d))
+        if not fresh:
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_bytes(pickle.dumps(d))
     board.tracks, board.vias, board._fan = d["tracks"], d["vias"], d.get("fan", set())
     if kept is not None and not kept.exists() and not d["probs"]:      # (only clean routing goes into git)
         kept.parent.mkdir(parents=True, exist_ok=True)
@@ -3022,7 +3041,9 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
                passes: int = 3, rip: float = 2.5) -> List[str]:
     """route a board's signal nets the way a big board needs, in one call: ``jobs`` [(net, width, only-pins or
     None)] in order (local nets first), ``kw(net)`` the rest of ``route()``'s arguments for that net (grid, layers,
-    keep-outs, ...).
+    keep-outs, ...); a job may add a fourth item, a dict of ``route()`` arguments for that job alone (e.g.
+    ``{"amps": 0.01}`` for a sense line off a power net; ``"rejoin": False`` leaves a net that later nets split to
+    the caller, e.g. a ground joined afterwards by stitching vias).
     - Negotiated passes: a net that fails is routed first on the next pass; the best of ``passes`` is kept.
     - Checkpoints: the result is saved per design (``<name>_<route key>_signals.pkl``, so a failure in the steps
       after routing costs nothing) and as ``<name>_signals_latest.pkl``.
@@ -3040,12 +3061,14 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
         rkey = board._route_key
     else:
         import hashlib
-        rkey = hashlib.sha1((board._state_key() + repr(list(jobs))).encode()).hexdigest()[:16]
+        rkey = hashlib.sha1((board._state_key() + repr(list(jobs)) + f"r{ROUTER_VERSION}").encode()).hexdigest()[:16]
     ckpt = CACHE / "pcb_routes" / f"{board.name}_{rkey}_signals.pkl"
-    latest = CACHE / "pcb_routes" / f"{board.name}_signals_latest.pkl"
+    latest = CACHE / "pcb_routes" / f"{board.name}_signals_latest_r{ROUTER_VERSION}.pkl"
     jobs = list(jobs)
-    best = pickle.loads(ckpt.read_bytes()) if ckpt.exists() else None
-    if best is None and latest.exists():
+    import os
+    fresh = bool(os.environ.get("PCB_REROUTE"))
+    best = pickle.loads(ckpt.read_bytes()) if ckpt.exists() and not fresh else None
+    if best is None and latest.exists() and not fresh:
         old = pickle.loads(latest.read_bytes())
         failed0 = {m.split()[1].rstrip(":") for m in old["got"] if m.startswith("route ")}
         circles = []
@@ -3055,17 +3078,30 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
                 if ref in board.comps and num in board.comps[ref]["pads"]:
                     circles.append(board.pad(ref, num) + (rip,))
         redo = reuse_routes(board, old, rip=circles) | failed0
+        redo |= {j[0] for j in jobs if j[0] in board.nets and len(board.islands(j[0])) > 1}   # (left split last time)
         jobs = [j for j in jobs if j[0] in failed0] + [j for j in jobs if j[0] in redo and j[0] not in failed0]
         print(f"reusing the last routing: {len(jobs)} nets to route again", flush=True)
     base = (list(board.tracks), list(board.vias))
     for _ in range(0 if best else passes):
         board.tracks, board.vias = list(base[0]), list(base[1])
         got, failed = [], []
-        for net, w, pins in jobs:
-            p = route(board, net, width=w, only=pins, **kw(net))
+        for job in jobs:
+            net, w, pins = job[:3]
+            ex = {k: v for k, v in (job[3] if len(job) > 3 else {}).items() if k != "rejoin"}
+            p = route(board, net, width=w, only=pins, **{**kw(net), **ex})
             got += p
             if p:
-                failed.append((net, w, pins))
+                failed.append(job)
+        for job in {j[0]: j for j in jobs}.values():     # a net a later one split (a pour cut in two by the nets
+            net, w = job[0], job[1]                       # routed after it, now that failures go first) joined back
+            if (job[3] if len(job) > 3 else {}).get("rejoin", True) is False:
+                continue                                  # (a net joined later by the caller: stitching vias)
+            if net in board.nets and job not in failed and len(board.islands(net)) > 1:
+                ex = {k: v for k, v in {**kw(net), **(job[3] if len(job) > 3 else {})}.items() if k != "rejoin"}
+                more = repair(board, width=w, nets=[net], **{k: v for k, v in ex.items() if k != "only"})
+                got += more
+                if more:
+                    failed.append(job)
         if best is None or len(got) < len(best[0]):
             best = (got, list(board.tracks), list(board.vias))
         if not failed:
