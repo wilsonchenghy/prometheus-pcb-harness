@@ -338,7 +338,7 @@ class Board:
         return ipc2221_width(amps, self.oz_of(layer), self.max_rise, external=layer in ("F", "B"))
 
     # declarations
-    def place(self, ref: str, fp: str, at: Tuple[float, float], rot: float = 0.0, value: str = "", mpn: str = "",
+    def place(self, ref: str, fp: str, at: Optional[Tuple[float, float]] = None, rot: float = 0.0, value: str = "", mpn: str = "",
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
               overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
@@ -372,10 +372,12 @@ class Board:
                         for p in lst] for n, lst in pads.items()}
         if model is None and body is None:               # the footprint's own 3D model, as KiCad would show it
             model = footprint(fp).get("model")
-        self.comps[ref] = {"fp": fp, "at": tuple(at), "rot": rot, "value": value, "mpn": mpn, "model": model,
+        self.comps[ref] = {"fp": fp, "at": tuple(at) if at is not None else (0.0, 0.0), "rot": rot, "value": value, "mpn": mpn, "model": model,
                            "model_offset": model_offset, "body": body, "note": note, "overhang": overhang,
                            "pads": pads, "side": side, "lcsc": lcsc,
                            "pads_key": f"{min_drill}" if min_drill else ""}    # (the pads differ from the footprint's)
+        if at is None:                                   # (autoplace() puts it somewhere)
+            self.comps[ref].update(at=(0.0, 0.0), unplaced=True)
 
     def courtyard(self, ref: str):
         """a part's courtyard outline in board coordinates (flipped for a bottom-side part), or None"""
@@ -1119,6 +1121,9 @@ class Board:
                     probs.append(f"net {n}: {ref} ({self.comps[ref]['fp'].split(':')[1]}) has no pad {num}")
         cy = {}
         for ref, c in self.comps.items():
+            if c.get("unplaced"):
+                probs.append(f"{ref} has no position yet (autoplace(board) or place_and_route(board) places it)")
+                continue
             g = self.courtyard(ref)
             if g is None:
                 continue
@@ -1460,6 +1465,248 @@ def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[st
     jobs = [(n, board.net_width(n), None) for n in sig + pwr + last]
     probs = route_jobs(board, jobs, kw=(lambda net: dict(kw)) if kw else None, passes=passes)
     return probs + repair(board, **kw)
+
+
+def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1.0, seed: int = 0,
+              effort: float = 1.0, rotations: Sequence[int] = (0, 90, 180, 270)) -> List[str]:
+    """place parts for you: a short total of wire (each net's half-perimeter, ground and other poured nets weighted
+    low, high-current nets high) with every courtyard on the board, ``gap`` mm clear of the others on its side, the
+    mounting holes and the keep-outs. ``move``: the parts to place (default: every part placed without a position,
+    ``at=None``; if there are none, every part not placed to overhang the edge). The rest stay where they are:
+    put connectors, buttons and mounting holes where the enclosure needs them first, then call this. It places the
+    parts one at a time, most connected first, each where it adds the least wire, then improves the whole by
+    annealing (moves, turns, swaps; ``effort`` scales the time spent). Returns the parts it found no room for.
+    Then route: ``autoroute(board)``."""
+    import numpy as np
+    import shapely
+    from shapely.geometry import box
+    rng = np.random.default_rng(seed)
+    if move is None:
+        move = [r for r, c in board.comps.items() if c.get("unplaced")] or \
+               [r for r, c in board.comps.items() if not c["overhang"]]
+    move = [r for r in move if r in board.comps]
+    mset = set(move)
+    rots = [int(r) % 360 for r in rotations] or [0]
+    inner = board.outline.buffer(-0.05)
+    shapely.prepare(inner)
+
+    def rect(ref, rot):                                  # courtyard box (footprint frame, side applied), turned
+        c = board.comps[ref]
+        crt = footprint(c["fp"])["courtyard"]
+        if not crt:
+            xs = [p["at"][0] for l in c["pads"].values() for p in l] or [0.0]
+            ys = [p["at"][1] for l in c["pads"].values() for p in l] or [0.0]
+            crt = (min(xs) - 0.5, min(ys) - 0.5, max(xs) + 0.5, max(ys) + 0.5)
+        if c.get("side", "F") == "B":
+            crt = (-crt[2], crt[1], -crt[0], crt[3])
+        x0, y0, x1, y1 = crt
+        cs = [(sum(p["at"][0] for p in l) / len(l), sum(p["at"][1] for p in l) / len(l)) for l in c["pads"].values() if l]
+        if len(cs) >= 6:                                 # a fine-pitch part: room round it to fan out
+            a_ = np.asarray(cs)
+            d_ = np.hypot(*(a_[:, None, :] - a_[None, :, :]).transpose(2, 0, 1))
+            np.fill_diagonal(d_, np.inf)
+            if d_.min() < 0.8:
+                x0, y0, x1, y1 = x0 - 0.75, y0 - 0.75, x1 + 0.75, y1 + 0.75
+        corners = np.array([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+        t = math.radians(rot)
+        R = np.array([[math.cos(t), -math.sin(t)], [math.sin(t), math.cos(t)]])
+        q = corners @ R.T
+        return q[:, 0].min(), q[:, 1].min(), q[:, 0].max(), q[:, 1].max()
+
+    def pads_at(ref, rot):                               # {pad number: centre offset} turned
+        t = math.radians(rot)
+        ct, st = math.cos(t), math.sin(t)
+        return {n: (sum(p["at"][0] for p in l) / len(l) * ct - sum(p["at"][1] for p in l) / len(l) * st,
+                    sum(p["at"][0] for p in l) / len(l) * st + sum(p["at"][1] for p in l) / len(l) * ct)
+                for n, l in board.comps[ref]["pads"].items() if l}
+    R_ = {(r, a): rect(r, a) for r in move for a in rots}
+    P_ = {(r, a): pads_at(r, a) for r in board.comps for a in (rots if r in move else [board.comps[r]["rot"] % 360])}
+    poured = {p["net"] for p in board.pours}
+    wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in board.nets.items()}
+    nets_of: Dict[str, List[str]] = {}
+    for n, d in board.nets.items():
+        for r, _ in d["pins"]:
+            nets_of.setdefault(r, [])
+            if n not in nets_of[r]:
+                nets_of[r].append(n)
+    pos = {r: (c["at"][0], c["at"][1], c["rot"] % 360) for r, c in board.comps.items()}
+    placed = {r for r in board.comps if r not in move}
+    side = {r: board.comps[r].get("side", "F") for r in board.comps}
+    # what a moved part keeps clear of: the fixed parts' courtyards, the holes, the keep-outs
+    fixed_obs = {"F": [], "B": []}
+    for r in placed:
+        g = board.courtyard(r)
+        if g is not None:
+            fixed_obs[side[r]].append(g.bounds)
+    for x, y, d in board.holes:
+        k = getattr(board, "_hole_ko", {}).get((x, y), d / 2 + 0.6)
+        for L in "FB":
+            fixed_obs[L].append((x - k, y - k, x + k, y + k))
+    for k in getattr(board, "keepouts", []):
+        bx = shapely.geometry.Polygon(k["poly"]).bounds
+        for L in "FB":
+            if L in k["layers"]:
+                fixed_obs[L].append(bx)
+
+    def box_of(r, x, y, a):
+        x0, y0, x1, y1 = R_[(r, a)]
+        return x + x0, y + y0, x + x1, y + y1
+
+    def clear(r, b_, others):
+        g = gap - 1e-6
+        for o in others:
+            if b_[0] < o[2] + g and o[0] < b_[2] + g and b_[1] < o[3] + g and o[1] < b_[3] + g:
+                return False
+        return True
+
+    def legal(r, x, y, a, skip=()):
+        b_ = box_of(r, x, y, a)
+        if not inner.contains(box(*b_)):
+            return False
+        others = fixed_obs[side[r]] + [box_of(o, *pos[o]) for o in placed if o in mset and o != r and o not in skip
+                                         and side[o] == side[r]]
+        return clear(r, b_, others)
+
+    def pin_xy(r, num):
+        x, y, a = pos[r]
+        dx, dy = P_[(r, a)].get(num, (0.0, 0.0))
+        return x + dx, y + dy
+
+    def net_cost(n, only_placed=True):
+        pts = [pin_xy(r, num) for r, num in board.nets[n]["pins"] if r in board.comps and (r in placed or not only_placed)]
+        if len(pts) < 2:
+            return 0.0
+        a = np.asarray(pts)
+        hp = a[:, 0].max() - a[:, 0].min() + a[:, 1].max() - a[:, 1].min()
+        if len(a) <= 40:                                 # + each pin's way to its nearest pin: a decoupling cap
+            d = np.abs(a[:, None, :] - a[None, :, :]).sum(-1)    # sits by a pin, not just inside the net's box
+            np.fill_diagonal(d, np.inf)
+            hp += 0.5 * d.min(1).sum()
+        return wt[n] * hp
+
+    # 1. one at a time, most connected first, each where it adds the least wire
+    minx, miny, maxx, maxy = board.outline.bounds
+    step = max(0.25, min(maxx - minx, maxy - miny) / 60)
+    gx, gy = np.meshgrid(np.arange(minx, maxx + 1e-9, step), np.arange(miny, maxy + 1e-9, step))
+    gx, gy = gx.ravel(), gy.ravel()
+    cx, cy = board.outline.centroid.x, board.outline.centroid.y
+    order = sorted(move, key=lambda r: -sum(len(board.nets[n]["pins"]) * wt[n] for n in nets_of.get(r, []))
+                   - 0.5 * len(board.comps[r]["pads"]))
+    failed = []
+    for r in order:
+        best = None
+        for a in rots:
+            x0, y0, x1, y1 = R_[(r, a)]
+            bxs = np.stack([gx + x0, gy + y0, gx + x1, gy + y1], axis=1)
+            ok = shapely.contains(inner, shapely.box(bxs[:, 0], bxs[:, 1], bxs[:, 2], bxs[:, 3]))
+            others = np.array(fixed_obs[side[r]] + [box_of(o, *pos[o]) for o in placed if o in mset and side[o] == side[r]])
+            if len(others):
+                g = gap - 1e-6
+                hit = ((bxs[:, None, 0] < others[None, :, 2] + g) & (others[None, :, 0] < bxs[:, None, 2] + g) &
+                       (bxs[:, None, 1] < others[None, :, 3] + g) & (others[None, :, 1] < bxs[:, None, 3] + g)).any(1)
+                ok &= ~hit
+            if not ok.any():
+                continue
+            cost = 0.002 * (np.abs(gx - cx) + np.abs(gy - cy))     # (with nothing to pull it, the middle)
+            for n in nets_of.get(r, []):
+                mine = [P_[(r, a)][num] for rr, num in board.nets[n]["pins"] if rr == r and num in P_[(r, a)]]
+                oth = [pin_xy(rr, num) for rr, num in board.nets[n]["pins"] if rr != r and rr in placed]
+                if not mine:
+                    continue
+                mx = np.array([m[0] for m in mine])
+                my = np.array([m[1] for m in mine])
+                lo_x = gx + mx.min()
+                hi_x = gx + mx.max()
+                lo_y = gy + my.min()
+                hi_y = gy + my.max()
+                if oth:
+                    ox, oy = [o[0] for o in oth], [o[1] for o in oth]
+                    lo_x, hi_x = np.minimum(lo_x, min(ox)), np.maximum(hi_x, max(ox))
+                    lo_y, hi_y = np.minimum(lo_y, min(oy)), np.maximum(hi_y, max(oy))
+                cost = cost + wt[n] * (hi_x - lo_x + hi_y - lo_y)
+            cost = np.where(ok, cost, np.inf)
+            i = int(np.argmin(cost))
+            if best is None or cost[i] < best[0]:
+                best = (cost[i], gx[i], gy[i], a)
+        if best is None:
+            failed.append(r)
+            continue
+        pos[r] = (float(best[1]), float(best[2]), best[3])
+        placed.add(r)
+    # 2. anneal: move, turn or swap a part; keep what shortens the wire (and, early on, some of what does not)
+    mov = [r for r in move if r in placed]
+    if len(mov) >= 1:
+        total = sum(net_cost(n) for n in board.nets)
+        iters = int(effort * 400 * len(mov) * max(1, len(rots)))
+        T0 = max(total / max(len(board.nets), 1) * 0.3, 0.1)
+        span = max(maxx - minx, maxy - miny)
+        for k in range(iters):
+            frac = k / max(iters, 1)
+            T = T0 * (1 - frac) ** 2 + 1e-4
+            r = mov[int(rng.integers(len(mov)))]
+            kind = rng.random()
+            old = {r: pos[r]}
+            if kind < 0.15 and len(mov) > 1:              # swap with a part of a like size
+                o = mov[int(rng.integers(len(mov)))]
+                if o == r or side[o] != side[r]:
+                    continue
+                old[o] = pos[o]
+                pos[r], pos[o] = (old[o][0], old[o][1], old[r][2]), (old[r][0], old[r][1], old[o][2])
+            elif kind < 0.3:                              # turn
+                pos[r] = (old[r][0], old[r][1], rots[int(rng.integers(len(rots)))])
+            else:                                         # move, less far as it cools
+                sc = span * (0.3 * (1 - frac) + 0.02)
+                pos[r] = (round((old[r][0] + rng.normal(0, sc)) / 0.05) * 0.05,
+                          round((old[r][1] + rng.normal(0, sc)) / 0.05) * 0.05, old[r][2])
+            if not all(legal(q, *pos[q], skip=()) for q in old):
+                pos.update(old)
+                continue
+            touched = {n for q in old for n in nets_of.get(q, [])}
+            new_c = sum(net_cost(n) for n in touched)
+            saved = dict(pos)
+            pos.update(old)
+            old_c = sum(net_cost(n) for n in touched)
+            pos.update(saved)
+            d = new_c - old_c
+            if d > 0 and rng.random() >= math.exp(-d / T):
+                pos.update(old)
+    for r in move:
+        if r in placed:
+            c = board.comps[r]
+            c["at"], c["rot"] = (round(pos[r][0], 3), round(pos[r][1], 3)), pos[r][2]
+            c.pop("unplaced", None)
+    board.__dict__.pop("_pads_memo", None)
+    return failed
+
+
+def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 4, gap: float = 1.0,
+                    **kw) -> List[str]:
+    """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed, a little more
+    room between parts) and route again, up to ``tries`` times; keeps the placement and routing with the fewest
+    problems (``kw`` go to ``autoplace``). Returns that routing's problems (empty: placed, routed, and check()
+    clean)"""
+    move = list(move) if move is not None else None
+    if move is None:
+        move = [r for r, c in board.comps.items() if c.get("unplaced")] or \
+               [r for r, c in board.comps.items() if not c["overhang"]]
+    tracks0, vias0 = list(board.tracks), list(board.vias)
+    best = None
+    for k in range(max(1, tries)):
+        board.tracks, board.vias = list(tracks0), list(vias0)
+        left = autoplace(board, move=move, gap=gap + 0.5 * k, seed=k, **kw)
+        probs = [f"{r}: no room to place it" for r in left] + autoroute(board)
+        probs += [p for p in board.check() if p not in probs]
+        score = len(probs)
+        if best is None or score < best[0]:
+            best = (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
+                    list(board.tracks), list(board.vias))
+        if not probs:
+            break
+    for r, (at, rot) in best[2].items():
+        board.comps[r]["at"], board.comps[r]["rot"] = at, rot
+    board.tracks, board.vias = best[3], best[4]
+    board.__dict__.pop("_pads_memo", None)
+    return best[1]
 
 
 def repair(board: Board, width: float = 0.25, nets: Optional[Sequence[str]] = None, **kw) -> List[str]:
@@ -2613,6 +2860,10 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
         if not failed:
             break
         jobs = failed + [j for j in jobs if j not in failed]
+    if best is not None and not best[0]:                 # every net whole: trim way-out stubs a route ran past
+        board.tracks, board.vias = list(best[1]), list(best[2])
+        if board.prune_spurs():
+            best = (best[0], list(board.tracks), list(board.vias))
     ckpt.parent.mkdir(parents=True, exist_ok=True)
     ckpt.write_bytes(pickle.dumps(best))
     board.tracks, board.vias = best[1], best[2]

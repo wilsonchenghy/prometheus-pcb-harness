@@ -38,7 +38,7 @@ PAD = {"GND": ["15", "33", "30"], "VDD": "2",
 def build(outline, at, holes, keepouts=()):
     """the board. ``at``: positions of the parts the mechanics fix (switch centres, stick axes, the USB mouth,
     the bumper switches, the hall sensors, the connectors); ``holes``: (x, y, d) mounting holes"""
-    b = Board("controller_main", outline, thickness=1.6, copper_oz=1.0, clearance=0.15)
+    b = Board("controller_main", outline, thickness=1.6, copper_oz=1.0, clearance=0.15, rules="jlcpcb-2")
     for h in holes:
         x, y, d = h[:3]
         b.hole((x, y), d, keepout=h[3] if len(h) > 3 else d / 2 + 0.6)
@@ -183,7 +183,7 @@ def do_route(b):
 def routed(outline, at, holes, keepouts=()):
     b = build(outline, at, holes, keepouts)
     store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "routes")    # routed copper, kept in git
-    probs = cached_route(b, do_route, tag="ctl_v4", store=store)   # (bump the tag when do_route changes: the cache
+    probs = cached_route(b, do_route, tag="ctl_v5", store=store)   # (bump the tag when do_route changes: the cache
     return b, probs                                                 # keys the placement, not this code)
 
 

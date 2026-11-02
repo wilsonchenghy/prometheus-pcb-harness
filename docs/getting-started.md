@@ -24,6 +24,13 @@ A footprint is KiCad's library name, `"Library:Footprint"`, exactly as KiCad sho
 rotation, value, mpn, lcsc=...)`: the manufacturer part number (`"Maker PART"`) and the LCSC number are what the
 assembly BOM and the parts cart use. `side="B"` puts a part on the bottom.
 
+Don't want to pick coordinates? Give a part no position, `b.place("R1", R06, None, 0, "1k")`, place what the
+enclosure fixes (connectors, buttons, mounting holes) yourself, and after the nets call
+`pcb.place_and_route(b)`: it places the rest (short wire, every courtyard on the board and apart, fine-pitch parts
+given room to fan out), routes, and if the routing is not clean places again with more room, keeping the best. The
+blinker from a bare parts list places and routes in about a second; the ESP32 board's 16 loose parts in under
+ten seconds.
+
 ## 2. Nets
 
 ```python

@@ -870,3 +870,34 @@ def test_thermal_vias_meet_the_fab_drill_and_stale_routes_are_not_reused():
     plain.place("U1", "RF_Module:ESP32-WROOM-32E", (20.0, 22.0), 0, "ESP32")
     assert any(p["drill"] == 0.2 for p in plain.comps["U1"]["pads"]["39"])
     assert pcb.placement(plain) == old["placement"]                # (no preset: footprint as KiCad has it)
+
+
+def test_autoplace_then_route_a_parts_list():
+    """parts given no position (at=None) are placed on the board, courtyards apart and clear of a fixed connector
+    and a mounting hole, and the board then routes clean and passes the fab preset"""
+    import uuid
+    import fab
+    import pcb
+    out = [(0, 0), (35, 0), (35, 25), (0, 25)]
+    b = pcb.Board(f"ap{uuid.uuid4().hex[:8]}", out, rules="jlcpcb-2")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (4.0, 11.0), 0, "5V in")
+    b.hole((30.0, 20.0), 3.2)
+    b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", None, 0, "NE555")
+    for r in ("R1", "R2", "R3"):
+        b.place(r, "Resistor_SMD:R_0603_1608Metric", None, 0, "1k")
+    for r in ("C1", "C2"):
+        b.place(r, "Capacitor_SMD:C_0603_1608Metric", None, 0, "100n")
+    b.place("D1", "LED_SMD:LED_0603_1608Metric", None, 0, "red")
+    assert any("no position" in p for p in b.check_placement())
+    b.net("VCC", [("J1", "1"), ("U1", "8"), ("U1", "4"), ("R1", "1"), ("C2", "1")])
+    b.net("GND", [("J1", "2"), ("U1", "1"), ("C1", "2"), ("C2", "2"), ("D1", "1")])
+    b.net("DIS", [("U1", "7"), ("R1", "2"), ("R2", "1")])
+    b.net("THR", [("U1", "6"), ("U1", "2"), ("R2", "2"), ("C1", "1")])
+    b.net("OUT", [("U1", "3"), ("R3", "1")])
+    b.net("LED", [("R3", "2"), ("D1", "2")])
+    b.pour("GND", "B", out)
+    assert pcb.place_and_route(b) == []
+    assert b.comps["J1"]["at"] == (4.0, 11.0) and b.check_placement() == []
+    from shapely.geometry import Point
+    assert all(not b.courtyard(r).intersects(Point(30, 20).buffer(1.6)) for r in b.comps)
+    assert b.check() == [] and fab.fab_check(b) == []

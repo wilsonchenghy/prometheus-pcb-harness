@@ -5,7 +5,8 @@ everything to order it.
     python -m pcb_cli my_board.py out/ --boards 10 --rules jlcpcb-4 --step
 
 The script makes the board: it defines ``build()`` returning a Board (or a (Board, problems) pair, routed), or a
-module-level ``board`` / ``b`` / ``PCB``. A board with nets but no tracks is routed with ``pcb.autoroute``.
+module-level ``board`` / ``b`` / ``PCB``. Parts placed without a position (``at=None``) are placed and the board
+routed with ``pcb.place_and_route``; a placed board with nets but no tracks is routed with ``pcb.autoroute``.
 Exit status 0 when routing, the design check and the house check are all clean, 1 otherwise.
 """
 from __future__ import annotations
@@ -47,6 +48,10 @@ def main(argv=None) -> int:
     t0 = time.perf_counter()
     b, probs = load(a.script)
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers")
+    if any(c.get("unplaced") for c in b.comps.values()) and not a.no_route:
+        t = time.perf_counter()
+        probs = pcb.place_and_route(b)
+        print(f"placed and routed: {'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
     place = b.check_placement()
     if place:
         print("placement:", *place, sep="\n  ")
