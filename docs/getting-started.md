@@ -45,6 +45,11 @@ for n in ("VCC", "DIS", "THR", "OUT", "LED", "GND"):
     problems += route(b, n, width=0.3)
 ```
 
+Or route the whole board in one call: `problems = pcb.autoroute(b)` fans out the fine-pitch pads, routes the
+signal nets (most local first), then power, then the poured nets, each at its width (`b.net(..., width=0.4)`, else
+what its current needs), in negotiated passes, and joins back any net a later one split. Route nets yourself when
+you want control:
+
 `route` connects a net's pads with tracks and vias on a grid (0.25 mm by default), keeping the clearance to every
 other net. Route the nets with the least room first (fine-pitch signals), power next, ground last. A pad it cannot
 reach is reported, never faked; a net that fails is retried from another starting point (the pour, the biggest pad),

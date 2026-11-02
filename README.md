@@ -17,7 +17,8 @@ b.plot("layers.png"); b.bom()
 What it does (`pcb.py`, its docstring has the details):
 
 - **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `pcb_footprints/`.
-- **Copper**: tracks, pours, vias, stitching, 2 or 4 layers (inner planes), an autorouter (`route`, `route_jobs`) with
+- **Copper**: tracks, pours, vias, stitching, 2 or 4 layers (inner planes), an autorouter (`autoroute(board)` for the
+  whole board in one call; `route`, `route_jobs` per net) with
   routes cached by board hash (`cached_route`, optionally stored in git).
 - **Checks**: every net connected, no shorts, track and pour widths for the current (IPC-2221, external and internal),
   clearance, voltage drop, drill spacing, courtyards, dead copper.

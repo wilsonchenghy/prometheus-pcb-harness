@@ -361,8 +361,19 @@ class Board:
             crt = (-crt[2], crt[1], -crt[0], crt[3])
         return affinity.translate(affinity.rotate(box(*crt), c["rot"], origin=(0, 0)), *c["at"])
 
-    def net(self, name: str, pins: Sequence[Tuple[str, str]], amps: float = 0.1, volts: float = 5.0):
+    def net(self, name: str, pins: Sequence[Tuple[str, str]], amps: float = 0.1, volts: float = 5.0,
+            width: Optional[float] = None):
+        """a net: its pins (ref, pad number), the current it carries (sets how wide its copper must be) and its
+        voltage (what its drop is measured against); ``width``: its track width when routed (default: as wide as
+        its current needs, at least 0.2 mm)"""
         self.nets[name] = {"pins": [(r, str(p)) for r, p in pins], "amps": amps, "volts": volts}
+        if width is not None:
+            self.nets[name]["width"] = width
+
+    def net_width(self, name: str) -> float:
+        """the width ``name`` is routed at: its own, else what its current needs on the outer layers (min 0.2 mm)"""
+        d = self.nets[name]
+        return d.get("width") or max(0.2, round(self.width_for(d["amps"], "F") + 0.005, 2))
 
     def net_length(self, net: str) -> float:
         """the total length of ``net``'s tracks, mm (a branched net's branches all count)"""
@@ -1383,6 +1394,34 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
             del board.root_big, board.pour_root
         probs = [p_ for p_ in probs if not re.match(rf"route {re.escape(net)}: could not reach", p_)] + again
     return _join_islands(board, net, probs, kw, only)
+
+
+def autoroute(board: Board, passes: int = 3, **kw) -> List[str]:
+    """route the whole board in one call: fine-pitch fan-outs first, then the signal nets (the most local first),
+    then the power nets (the least current first), the nets with a pour last, each at ``Board.net_width`` (a net's
+    own width, else what its current needs), in negotiated passes (``route_jobs``: a net that fails is routed
+    first on the next pass), and finally ``repair`` (a net a later one split joined back). ``kw`` goes to every
+    ``route`` call (layers, grid, keepout, via...). Returns the problems ([] = every pad reached)"""
+    import math
+    poured = {p["net"] for p in board.pours}
+    pads = {(r, n): g for r, n, L, g, d in board.pad_shapes()}
+
+    def spread(net):
+        pts = [pads[tuple(p)].centroid for p in board.nets[net]["pins"] if tuple(p) in pads]
+        if len(pts) < 2:
+            return 0.0
+        xs, ys = [p.x for p in pts], [p.y for p in pts]
+        return math.hypot(max(xs) - min(xs), max(ys) - min(ys))
+    nets = [n for n, d in board.nets.items() if len(d["pins"]) >= 2 or n in poured]
+    sig = sorted([n for n in nets if n not in poured and board.nets[n]["amps"] <= 0.3], key=spread)
+    pwr = sorted([n for n in nets if n not in poured and board.nets[n]["amps"] > 0.3],
+                 key=lambda n: (board.nets[n]["amps"], spread(n)))
+    last = sorted([n for n in nets if n in poured], key=lambda n: board.nets[n]["amps"])
+    if not getattr(board, "_fan", None):
+        board.fanout(width=0.2)
+    jobs = [(n, board.net_width(n), None) for n in sig + pwr + last]
+    probs = route_jobs(board, jobs, kw=(lambda net: dict(kw)) if kw else None, passes=passes)
+    return probs + repair(board, **kw)
 
 
 def repair(board: Board, width: float = 0.25, nets: Optional[Sequence[str]] = None, **kw) -> List[str]:

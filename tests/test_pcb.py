@@ -816,3 +816,22 @@ def test_parts_take_their_footprints_3d_model_and_export_step(tmp_path):
     assert b.comps["R1"]["model"] == "Resistor_SMD.3dshapes/R_0603_1608Metric.step"
     f = pcb.export_step(b, str(tmp_path / "s.step"), models=False)
     assert os.path.getsize(f) > 1000
+
+
+def test_autoroute_routes_a_board_in_one_call(tmp_path, monkeypatch):
+    """pcb.autoroute: every net of a small board routed (signals, then power, then the poured ground) with no
+    per-net tuning; a net's own width is used"""
+    import pathlib
+    import pcb
+    import vendor_parts
+    monkeypatch.setattr(vendor_parts, "CACHE", pathlib.Path(tmp_path))    # (no route checkpoints from other runs)
+    out = [(0, 0), (30, 0), (30, 20), (0, 20)]
+    b = pcb.Board("a", out)
+    for k, x in enumerate((6, 14, 22)):
+        b.place(f"R{k + 1}", "Resistor_SMD:R_0603_1608Metric", (x, 10.0), 90, "1k")
+    b.net("VCC", [("R1", "2"), ("R2", "2"), ("R3", "2")], amps=0.5, width=0.4)
+    b.net("S", [("R1", "1"), ("R2", "1")])
+    b.net("GND", [("R3", "1")])
+    b.pour("GND", "B", out)
+    assert pcb.autoroute(b) == [] and b.check() == []
+    assert {t["w"] for t in b.tracks if t["net"] == "VCC"} == {0.4}
