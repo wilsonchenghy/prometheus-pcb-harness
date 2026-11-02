@@ -223,14 +223,21 @@ def fab_check(board, rules="jlcpcb-2") -> List[str]:
                         out.append(f"{ref}.{num}: drill {p['drill']:.2f} < {r['pth_drill']:.2f} mm")
     for (x, y, d) in board.holes:
         holes.append(((x, y), d, "mounting hole"))
-    for i in range(len(holes)):                          # drill wall to drill wall (vias and mounting holes)
-        (a, da, na) = holes[i]
-        for j in range(i + 1, len(holes)):
-            (b, db, nb) = holes[j]
-            gap = Point(a).distance(Point(b)) - (da + db) / 2
-            if Point(a).distance(Point(b)) > 1e-6 and gap < r["hole_gap"] - 1e-6:
-                out.append(f"{na} at {tuple(round(c, 2) for c in a)} and {nb} at {tuple(round(c, 2) for c in b)}: drills "
-                           f"{gap:.2f} mm apart (min {r['hole_gap']:.2f})")
+    if holes:                                            # drill wall to drill wall (vias and mounting holes):
+        from shapely.strtree import STRtree              # only the pairs within reach, not every pair
+        pts = [Point(a) for a, _, _ in holes]
+        big = max(d for _, d, _ in holes)
+        tree = STRtree(pts)
+        for i, (a, da, na) in enumerate(holes):
+            for j in sorted(int(j) for j in tree.query(pts[i], predicate="dwithin", distance=r["hole_gap"] + big)):
+                if j <= i:
+                    continue
+                (b, db, nb) = holes[j]
+                dist = pts[i].distance(pts[j])
+                gap = dist - (da + db) / 2
+                if dist > 1e-6 and gap < r["hole_gap"] - 1e-6:
+                    out.append(f"{na} at {tuple(round(c, 2) for c in a)} and {nb} at {tuple(round(c, 2) for c in b)}: "
+                               f"drills {gap:.2f} mm apart (min {r['hole_gap']:.2f})")
     return out
 
 

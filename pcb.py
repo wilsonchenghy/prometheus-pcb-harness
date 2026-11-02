@@ -537,9 +537,32 @@ class Board:
         zones = unary_union([Polygon(p["poly"], p.get("holes") or None) for p in self.pours if p["net"] == net and p["layer"] == layer] or [Polygon()])
         return g.intersection(zones)
 
+    def _state_key(self) -> str:
+        """a hash of everything copper() reads: an edit anywhere (a track moved, a via, a pour, a part) changes it"""
+        import hashlib
+        import pickle
+        comps = sorted((r, c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F")) for r, c in self.comps.items())
+        state = (comps, sorted((n, tuple(map(tuple, v["pins"]))) for n, v in self.nets.items()),
+                 [(t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) for t in self.tracks],
+                 [(v["net"], tuple(v["at"]), v["dia"]) for v in self.vias],
+                 [(p["net"], p["layer"], repr(p["poly"]), repr(p.get("holes"))) for p in self.pours],
+                 tuple(self.holes), self.clear, self.layers, repr(getattr(self, "keepouts", [])),
+                 repr(getattr(self, "_hole_ko", {})), self.outline.wkb)
+        return hashlib.sha1(pickle.dumps(state)).hexdigest()
+
     def copper(self, pours: bool = True, only_net: Optional[str] = None, prune: bool = True) -> Dict[Tuple[str, str], object]:
         """{(net, layer): shapely geometry} with pours carved round other nets' copper; ``prune`` cuts away a pour
-        island that touches nothing of its net (off for stitching: the vias are what will join it)"""
+        island that touches nothing of its net (off for stitching: the vias are what will join it). Memoised on the
+        board's state: the check, the plot and the Gerbers of an unchanged board share one computation"""
+        memo = self.__dict__.setdefault("_cu_memo", {})
+        k = (self._state_key(), pours, only_net, prune)
+        if k not in memo:
+            if len(memo) > 8:
+                memo.clear()
+            memo[k] = self._copper(pours, only_net, prune)
+        return dict(memo[k])
+
+    def _copper(self, pours: bool = True, only_net: Optional[str] = None, prune: bool = True) -> Dict[Tuple[str, str], object]:
         from shapely.geometry import LineString, Point, Polygon
         from shapely.ops import unary_union
         pn = self.pad_net()
@@ -937,8 +960,13 @@ class Board:
                  [(f"{ref} pad {num}", g.centroid, d) for ref, num, L, g, d in pads if d and L == "F"] + \
                  [("hole", _Pt(x, y), d) for x, y, d in self.holes]
         tight = []
+        from shapely.strtree import STRtree as _STRh       # (the pairs within reach only: every pair was 0.4 M
+        _ht = _STRh([p for _, p, _ in holes_]) if holes_ else None    # distances on a 56-part board)
+        _reach = HOLE_GAP + max((d for _, _, d in holes_), default=0.0)
         for i in range(len(holes_)):
-            for j in range(i + 1, len(holes_)):
+            for j in sorted(int(j) for j in _ht.query(holes_[i][1], predicate="dwithin", distance=_reach)):
+                if j <= i:
+                    continue
                 (na, pa, da), (nb, pb, db) = holes_[i], holes_[j]
                 gap = pa.distance(pb) - da / 2 - db / 2
                 if gap < HOLE_GAP - 1e-6 and not (na == nb and pa.distance(pb) < 1e-6):
@@ -2357,10 +2385,11 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
                      ["layers", _Q("F.Cu"), _Q("B.Cu")], ["net", netnum[v["net"]]], ["uuid", _uuid(board.name, "via", i)]])
     fills = {}
     ring = lambda r: ["polygon", ["pts"] + [["xy", tx(x), ty(y)] for x, y in list(r.coords)[:-1]]]
-    for i, pz in enumerate(board.pours):                 # each pour a zone (its holes the zone's) holding its fill
-        key = (pz["net"], pz["layer"])
+    cu_all = board.copper() if board.pours else None    # (one pass for every pour: a net's pour is carved only round
+    for i, pz in enumerate(board.pours):                 # other nets' fixed copper, so it is the same as copper(only_
+        key = (pz["net"], pz["layer"])                   # net=...) gives, without a pass per net)
         if key not in fills:
-            fills[key] = board.pour_fill(*key)
+            fills[key] = board.pour_fill(*key, cu=cu_all)
         zp = Polygon(pz["poly"], pz.get("holes") or None)
         fill = _fractured(fills[key].intersection(zp))
         pcb_.append(["zone", ["net", netnum[pz["net"]]], ["net_name", _Q(pz["net"])], ["layer", LN[pz["layer"]]],
