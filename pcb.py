@@ -961,9 +961,23 @@ class Board:
         """the pins of ``net`` grouped by the copper that joins them (each layer's pieces, joined at vias and plated
         holes), largest group first: one group when the net is whole"""
         from shapely.geometry import Point
-        cu = self.copper() if cu is None else cu
         pads = self.pad_shapes() if pads is None else pads
         pn = self.pad_net() if pn is None else pn
+        if cu is None and not any(pz["net"] == net for pz in self.pours):
+            from shapely.ops import unary_union         # (no pour: its own copper is all there is, no need to carve
+            own: Dict[str, list] = {}                    # the whole board's pours: the router asks after every net)
+            for ref, num, L, g, _ in pads:
+                if pn.get((ref, num)) == net:
+                    own.setdefault(L, []).append(g)
+            for t in self.tracks:
+                if t["net"] == net:
+                    own.setdefault(t["layer"], []).append(self._item_shape(t))
+            for v in self.vias:
+                if v["net"] == net:
+                    for L in self.layers:
+                        own.setdefault(L, []).append(self._item_shape(v))
+            cu = {(net, L): unary_union(gs) for L, gs in own.items()}
+        cu = self.copper() if cu is None else cu
         comps = []                                       # (layer, geometry) islands
         for L in self.layers:
             g = cu.get((net, L))
