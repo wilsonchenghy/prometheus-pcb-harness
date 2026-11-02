@@ -1,0 +1,13 @@
+refs,qty,value,mpn,footprint
+C1,1,470u 25V,Panasonic EEU-FR1E471,CP_Radial_D10.0mm_P5.00mm
+DXH DYH DZH,3,Mini 2x6,SimpleFOC Mini v2.3 input header,PinHeader_2x06_P2.54mm_Vertical
+DXM DYM DZM,3,Mini M,SimpleFOC Mini v2.3 M1/M2/M3,PinHeader_1x03_P2.54mm_Vertical
+DXP1 DYP1 DZP1,3,VM-,SimpleFOC Mini v2.3 VM- (pin in its supply hole),PinHeader_1x01_P2.54mm_Vertical
+DXP2 DYP2 DZP2,3,VM+,SimpleFOC Mini v2.3 VM+ (pin in its supply hole),PinHeader_1x01_P2.54mm_Vertical
+F1,1,15 A ATM,Keystone 3568 + 15 A mini blade fuse,Fuseholder_Blade_Mini_Keystone_3568
+H1 H2,2,socket 1x15,Samtec SSW-115-01-T-S,PinSocket_1x15_P2.54mm_Vertical
+J1,1,XT30-M,AMASS XT30UPB-M,AMASS_XT30UPB-M_1x02_P5.0mm_Vertical
+JEX JEY JEZ,3,S6B-XH-A,JST S6B-XH-A,JST_XH_S6B-XH-A_1x06_P2.50mm_Horizontal
+JMX JMY JMZ,3,MR30-M,AMASS MR30PW-M,AMASS_MR30PW-M_1x03_P3.50mm_Horizontal
+U1,1,D24V10F5,Pololu D24V10F5 (#2831),PinHeader_1x05_P2.54mm_Vertical
+U2,1,GY-521,GY-521 MPU-6050 breakout (its 8-pin header),PinHeader_1x08_P2.54mm_Vertical

@@ -1,1 +1,64 @@
 # pcb-harness
+
+Design printed circuit boards in Python, the way you would design them by hand: parts on real KiCad footprints, nets,
+routed copper and pours, then a first-order design review against IPC-2221 before anything goes to the fab.
+
+```python
+from pcb import Board
+b = Board("power", [(0, 0), (60, 0), (60, 40), (0, 40)], thickness=1.6, copper_oz=2.0)
+b.place("U1", "Package_SO:MSOP-10_3x3mm_P0.5mm", (40, 20), rot=90, value="LM5069", mpn="LM5069MM-2/NOPB")
+b.net("VBUS", [("Q1", "5"), ("J2", "1")], amps=20)
+b.track("VBUS", "F", [(10, 10), (40, 10)], width=3.0)
+b.pour("GND", "B", [(0, 0), (60, 0), (60, 40), (0, 40)])
+problems = b.check()        # connectivity, IPC-2221 current width, clearance, IR drop, drill spacing
+b.plot("layers.png"); b.bom()
+```
+
+What it does (`pcb.py`, its docstring has the details):
+
+- **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `footprints/`.
+- **Copper**: tracks, pours, vias, stitching, 2 or 4 layers (inner planes), an autorouter (`route`, `route_jobs`) with
+  routes cached by board hash (`cached_route`, optionally stored in git).
+- **Checks**: every net connected, no shorts, track and pour widths for the current (IPC-2221, external and internal),
+  clearance, voltage drop, drill spacing, courtyards, dead copper.
+- **Output**: Gerbers + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
+  KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
+- **Schematics** (`schem.py`): sheets drawn from the board's netlist and checked against it (needs `schemdraw`).
+
+## Install
+
+```
+pip install -e .                 # core: numpy, shapely, pillow
+pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypdf (schematics), pytest
+pytest -q                        # 26 tests
+```
+
+Install from a checkout (`-e`): the project footprints in `footprints/` are read from beside `pcb.py`. KiCad
+footprints and 3D models are downloaded on first use into `~/.cache/prometheus/parts` (override with
+`PROMETHEUS_PARTS_CACHE`).
+
+## Example boards
+
+Each writes its fabrication set (layer plot, BOM, Gerbers, KiCad project, zips) to `boards/<name>/` by default, or to
+the directory given as its argument. The KiCad DRC and renders at the end need KiCad 8+ (`kicad-cli` on the path). The results are in `boards/`.
+
+| Board | Script | |
+|---|---|---|
+| `arm_pdb` | `examples/arm_pdb.py` (+ `arm_pdb_sheet.py` schematic) | a robot arm's power distribution board, 60 A, hot-swap |
+| `twilight_fc` | `examples/twilight_fc.py` (+ `twilight_fc_sheet.py`) | a 4-layer flight controller around a Teensy 4.1 |
+| `cube_main` | `examples/balancing_cube/cube_board.py` (+ sheet) | a balancing cube's main board: three motor channels, encoders |
+| `ripple_main` | `examples/social_wheelbot/ripple_pcb.py` | a wheeled robot's power / CAN board, six motors |
+| `qdd_main` | `examples/quadruped/qdd_power_board.py` | a quadruped's power / CAN board, twelve motors |
+| `fpv_esc`, `fpv_fc` | `examples/fpv_quad/fpv_boards.py` | a 5-inch quadcopter's 4-in-1 ESC and STM32F405 flight controller |
+| `controller_main` | `examples/game_controller/controller_pcb.py` | a game controller's board in its shell's outline (`controller_board.json`) |
+
+Routed copper for some boards is kept in `examples/routes/` so they rebuild without re-routing. Pinouts marked
+ASSUMED in the scripts are from datasheets as remembered: verify before you order boards.
+
+`viewer/PCB.tsx` is a React component for showing a board's layers in a web app (kept for reference; it expects the
+host app's API).
+
+## Licence
+
+Apache-2.0 (`LICENSE`). KiCad's footprint and 3D-model libraries, which this downloads, are CC-BY-SA 4.0 with the
+KiCad library exception: designs that use them are not bound by the share-alike terms.
