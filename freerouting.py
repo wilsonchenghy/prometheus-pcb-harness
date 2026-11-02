@@ -21,7 +21,7 @@ import tempfile
 from typing import Dict, List, Optional, Sequence, Tuple
 
 UM = 1000.0                                              # .dsn units: micrometres (mm x 1000)
-PAD_GROW = 0.04                                          # mm each pad is grown by in the .dsn
+PAD_GROW = 0.0                                           # mm each pad is grown by in the .dsn
 
 
 def find_jar() -> Optional[str]:
@@ -77,9 +77,10 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
         lines.append(f"    (keepout (circle signal {2 * r * UM:.1f} {x * UM:.1f} {y * UM:.1f}))")
     vname = f"Via[0-{len(L_) - 1}]_{via[1] * UM:.0f}:{via[0] * UM:.0f}_um"
     lines.append(f"    (via {_q(vname)})")
-    clr = board.clear * UM + 10.0                        # (+10 um: FreeRouting's arcs are polygons too)
-    lines.append(f"    (rule (width 200) (clearance {clr:.1f}) (clearance {clr:.1f} (type default_smd)) "
-                 f"(clearance {clr:.1f} (type smd_smd)))")
+    clr = board.clear * UM + 10.0                        # (+10 um: FreeRouting's arcs are polygons too; a track
+    smd = board.clear * UM + 40.0                        # keeps 40 um more from a pad, whose shape FreeRouting
+    lines.append(f"    (rule (width 200) (clearance {clr:.1f}) (clearance {smd:.1f} (type default_smd)) "  # reads
+                 f"(clearance {board.clear * UM:.1f} (type smd_smd)))")                                 # coarser)
     lines.append("  )")
     # parts: one image per part, its pads in board orientation round the part's origin, placed unturned (so a
     # bottom part's pads keep the layer the harness gave them)
