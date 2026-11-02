@@ -833,3 +833,22 @@ def test_autoroute_routes_a_board_in_one_call():
     b.pour("GND", "B", out)
     assert pcb.autoroute(b) == [] and b.check() == []
     assert {t["w"] for t in b.tracks if t["net"] == "VCC"} == {0.4}
+
+
+def test_kicad_board_reads_back_with_kiutils(tmp_path):
+    """the exported .kicad_pcb parses with an independent KiCad file reader (kiutils): every part, every net,
+    every segment and via, the zone"""
+    kiutils_board = pytest.importorskip("kiutils.board")
+    import pcb
+    b = pcb.Board("k", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (8.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (22.0, 10.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    b.net("GND", [("R1", "1"), ("R2", "2")])
+    b.pour("GND", "B", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    assert not pcb.route(b, "A", width=0.25) and not pcb.route(b, "GND", width=0.3)
+    path = pcb.export_kicad(b, str(tmp_path))[0]
+    kb = kiutils_board.Board.from_file(path)
+    assert len(kb.footprints) == 2 and len(kb.zones) == 1
+    assert {n.name for n in kb.nets} >= {"A", "GND"}
+    assert len(kb.traceItems) == sum(len(t["pts"]) - 1 for t in b.tracks) + len(b.vias)
