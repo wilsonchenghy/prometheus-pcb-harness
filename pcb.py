@@ -508,7 +508,18 @@ class Board:
 
     # geometry
     def pad_shapes(self):
-        """[(ref, pad number, layer 'F'/'B', polygon, drill)] for every copper pad"""
+        """[(ref, pad number, layer 'F'/'B', polygon, drill)] for every copper pad (memoised on the placement: the
+        router asks for them on every net)"""
+        key = (self.layers, tuple((r, c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F"), id(c["pads"]))
+                                  for r, c in self.comps.items()))
+        memo = self.__dict__.get("_pads_memo")
+        if memo is not None and memo[0] == key:
+            return list(memo[1])
+        out = self._pad_shapes()
+        self._pads_memo = (key, out)
+        return list(out)
+
+    def _pad_shapes(self):
         out = []
         for ref, c in self.comps.items():
             place = (c["at"][0], c["at"][1], c["rot"])
@@ -1212,10 +1223,23 @@ class Board:
 
 
 def _cxy(geom, X, Y):
-    """vectorised point-in-geometry on a prepared geometry (orders of magnitude faster on big unions)"""
+    """vectorised point-in-geometry on a prepared geometry (orders of magnitude faster on big unions); on the
+    router's grid (X, Y from meshgrid(..., indexing="ij")) only the points inside the geometry's bounds are tested"""
+    import numpy as np
     import shapely
     shapely.prepare(geom)
-    return shapely.contains_xy(geom, X, Y)
+    if getattr(X, "ndim", 0) != 2 or geom.is_empty:
+        return shapely.contains_xy(geom, X, Y) if not geom.is_empty else np.zeros(np.shape(X), bool)
+    xs, ys = X[:, 0], Y[0, :]
+    if not (np.all(np.diff(xs) > 0) and np.all(np.diff(ys) > 0)) or not np.all(X[0, :] == X[0, 0]):
+        return shapely.contains_xy(geom, X, Y)
+    x0, y0, x1, y1 = geom.bounds
+    i0, i1 = np.searchsorted(xs, x0, "left"), np.searchsorted(xs, x1, "right")
+    j0, j1 = np.searchsorted(ys, y0, "left"), np.searchsorted(ys, y1, "right")
+    out = np.zeros(X.shape, bool)
+    if i1 > i0 and j1 > j0:
+        out[i0:i1, j0:j1] = shapely.contains_xy(geom, X[i0:i1, j0:j1], Y[i0:i1, j0:j1])
+    return out
 
 
 def _escape(board: Board, ref: str, num: str, reach: float = 0.5):
@@ -1602,6 +1626,18 @@ def _wavefront(blk, vblk, goal, starts, Ls, via_cost):
     pending = {}                                        # step -> [(k, mask)] via arrivals
     vc = int(round(via_cost))
     hit = None
+    n_, m_ = free[0].shape
+    diag = []                                           # per layer: (where a diagonal step lands, where it comes
+    for k in range(nL):                                 # from, its two corners clear) - fixed for the whole search
+        fr = free[k]
+        dl = []
+        for di, dj in ((1, 1), (-1, -1), (1, -1), (-1, 1)):    # diagonals only past two clear corners
+            dst = (slice(max(di, 0), n_ + min(di, 0)), slice(max(dj, 0), m_ + min(dj, 0)))
+            src = (slice(max(-di, 0), n_ + min(-di, 0)), slice(max(-dj, 0), m_ + min(-dj, 0)))
+            dl.append((dst, src, (_shift(fr, 0, dj) & _shift(fr, di, 0))[dst]))
+        diag.append(dl)
+    unvis = [d == INF for d in dist]                    # (kept up to date: no full compare against INF per step)
+    nvblk = ~vblk if vblk is not None else None
     for step in range(1, 6000):
         new = []
         for k in range(nL):
@@ -1611,22 +1647,22 @@ def _wavefront(blk, vblk, goal, starts, Ls, via_cost):
             g[:-1, :] |= f[1:, :]
             g[:, 1:] |= f[:, :-1]
             g[:, :-1] |= f[:, 1:]
-            fr = free[k]
-            for di, dj in ((1, 1), (-1, -1), (1, -1), (-1, 1)):    # diagonals only past two clear corners
-                sh = _shift(f, di, dj) & _shift(fr, 0, dj) & _shift(fr, di, 0)
-                g |= sh
-            g &= free[k] & (dist[k] == INF)
+            for dst, src, cm in diag[k]:
+                g[dst] |= f[src] & cm
+            g &= free[k] & unvis[k]
             new.append(g)
-            if vblk is not None and nL >= 2 and f.any():   # change layer here, arriving vc steps later
+            if nvblk is not None and nL >= 2 and f.any():   # change layer here, arriving vc steps later
+                fv = f & nvblk
                 for k2 in range(nL):
                     if k2 != k:
-                        pending.setdefault(step - 1 + vc, []).append((k2, f & ~vblk))
+                        pending.setdefault(step - 1 + vc, []).append((k2, fv))
         for k2, m in pending.pop(step, []):
-            m = m & free[k2] & (dist[k2] == INF)
+            m = m & free[k2] & unvis[k2]
             new[k2] |= m
         any_new = False
         for k in range(nL):
             dist[k][new[k]] = step
+            unvis[k] &= ~new[k]
             front[k] = new[k]
             any_new |= bool(new[k].any())
             gk = new[k] & goal[k]
