@@ -14,7 +14,7 @@ MOD = (35.0, 30.0)                                   # the module's origin; its 
 
 
 def build():
-    b = Board("esp32_sensor", OUT, thickness=1.6, copper_oz=1.0)
+    b = Board("esp32_sensor", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2")
     b.place("U1", "RF_Module:ESP32-WROOM-32E", MOD, 0, "ESP32-WROOM-32E", "Espressif ESP32-WROOM-32E-N4")
     b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (4.0, 9.0), 270,
             "USB-C", "GCT USB4105-GF-A", overhang=True)

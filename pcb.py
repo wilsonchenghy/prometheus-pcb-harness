@@ -340,13 +340,31 @@ class Board:
     # declarations
     def place(self, ref: str, fp: str, at: Tuple[float, float], rot: float = 0.0, value: str = "", mpn: str = "",
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
-              overhang: bool = False, side: str = "F", lcsc: str = ""):
+              overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
         KiCad 3D model path (vendor_parts.kicad; default: the one the footprint names) or ``body`` a build123d shape in
         the footprint frame for one KiCad lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
         pads go to B.Cu, its model hangs under the board. ``lcsc``: the LCSC / JLCPCB part number (C-number) for
-        assembly and the cart (``fab``)"""
+        assembly and the cart (``fab``). ``min_drill``: the thermal vias in an exposed pad (a plated hole whose pad
+        number also has SMD copper) drilled smaller than this are enlarged to it, keeping their copper ring (default:
+        the board's fab preset's plated-drill minimum; a part's pin holes are never changed: its leads must fit)"""
         pads = footprint(fp)["pads"]
+        if min_drill is None and self.rules is not None:
+            import fab
+            min_drill = (fab.RULES[self.rules] if isinstance(self.rules, str) else self.rules).get("pth_drill")
+        if min_drill:
+            def _thermal(lst):
+                if not any(p["kind"] == "smd" for p in lst):
+                    return lst
+                out = []
+                for p in lst:
+                    if p["drill"] and not p["slot"] and p["drill"] < min_drill - 1e-9:
+                        ring = max((min(p["size"]) - p["drill"]) / 2, 0.1)
+                        sz = max(min(p["size"]), min_drill + 2 * ring)
+                        p = {**p, "drill": min_drill, "size": (max(p["size"][0], sz), max(p["size"][1], sz))}
+                    out.append(p)
+                return out
+            pads = {n: _thermal(lst) for n, lst in pads.items()}
         if side == "B":
             sw = {"F": "B", "B": "F", "FB": "FB", "": ""}
             pads = {n: [{**p, "at": (-p["at"][0], p["at"][1]), "rot": -p["rot"], "layers": sw.get(p["layers"], p["layers"]),
@@ -356,7 +374,8 @@ class Board:
             model = footprint(fp).get("model")
         self.comps[ref] = {"fp": fp, "at": tuple(at), "rot": rot, "value": value, "mpn": mpn, "model": model,
                            "model_offset": model_offset, "body": body, "note": note, "overhang": overhang,
-                           "pads": pads, "side": side, "lcsc": lcsc}
+                           "pads": pads, "side": side, "lcsc": lcsc,
+                           "pads_key": f"{min_drill}" if min_drill else ""}    # (the pads differ from the footprint's)
 
     def courtyard(self, ref: str):
         """a part's courtyard outline in board coordinates (flipped for a bottom-side part), or None"""
@@ -626,12 +645,13 @@ class Board:
         """a hash of everything copper() reads: an edit anywhere (a track moved, a via, a pour, a part) changes it"""
         import hashlib
         import pickle
-        comps = sorted((r, c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F")) for r, c in self.comps.items())
+        comps = sorted((r, c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F"), c.get("pads_key", ""))
+                       for r, c in self.comps.items())
         state = (comps, sorted((n, tuple(map(tuple, v["pins"]))) for n, v in self.nets.items()),
                  [(t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) for t in self.tracks],
                  [(v["net"], tuple(v["at"]), v["dia"]) for v in self.vias],
                  [(p["net"], p["layer"], repr(p["poly"]), repr(p.get("holes"))) for p in self.pours],
-                 tuple(self.holes), self.clear, self.layers, repr(getattr(self, "keepouts", [])),
+                 tuple(self.holes), self.clear, self.hole_gap, self.edge, self.layers, repr(getattr(self, "keepouts", [])),
                  repr(getattr(self, "_hole_ko", {})), self.outline.wkb)
         return hashlib.sha1(pickle.dumps(state)).hexdigest()
 
@@ -1981,7 +2001,8 @@ def cached_route(board: Board, do_route, tag: str = "", store: Optional[str] = N
 
 def placement(board: Board) -> dict:
     """each part's footprint, position, rotation and side: what a saved routing was routed round"""
-    return {r: (c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F")) for r, c in board.comps.items()}
+    return {r: (c["fp"], tuple(c["at"]), c["rot"], c.get("side", "F")) + ((c["pads_key"],) if c.get("pads_key") else ())
+            for r, c in board.comps.items()}                  # (pads_key: its pads differ from the footprint's)
 
 
 def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, float]] = ()) -> set:
@@ -2018,6 +2039,9 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
     tree = STRtree([g for _, _, g, _ in obst])
     circles = [Point(x, y).buffer(r, 16) for x, y, r in rip]
     inner = board.outline.buffer(-board.edge)
+    drills = [(g.centroid, d) for *_, g, d in board.pad_shapes() if d] + \
+             [(Point(x, y), d) for x, y, d in board.holes] + [(Point(v["at"]), v["drill"]) for v in board.vias]
+    dtree = STRtree([c for c, _ in drills]) if drills else None
     for it in old_t + old_v:
         n = it["net"]
         if n in bad:
@@ -2026,6 +2050,12 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
         if any(g.intersects(c) for c in circles) or not inner.contains(g):
             bad.add(n)
             continue
+        if "pts" not in it and dtree is not None:        # a via keeps the drill gap (the rules may have changed)
+            c0 = Point(it["at"])
+            if any(c0.distance(drills[int(i)][0]) - (it["drill"] + drills[int(i)][1]) / 2 < board.hole_gap - 1e-6
+                   for i in dtree.query(c0.buffer(it["drill"] / 2 + board.hole_gap + 3))):
+                bad.add(n)
+                continue
         for i in tree.query(g.buffer(board.clear)):
             Lo, no, go, dr = obst[int(i)]
             if no == n:

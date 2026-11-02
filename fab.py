@@ -231,7 +231,9 @@ def fab_check(board, rules=None) -> List[str]:
             for p in lst:
                 if p.get("drill"):
                     if p["drill"] < r["pth_drill"] - 1e-9:
-                        out.append(f"{ref}.{num}: drill {p['drill']:.2f} < {r['pth_drill']:.2f} mm")
+                        out.append(f"{ref}.{num}: drill {p['drill']:.2f} < {r['pth_drill']:.2f} mm" +
+                                   (" (a thermal via: Board(rules=...) or place(..., min_drill=...) enlarges it)"
+                                    if any(q["kind"] == "smd" for q in lst) else ""))
     for (x, y, d) in board.holes:
         holes.append(((x, y), d, "mounting hole", None))
     if holes:                                            # drill wall to drill wall (vias and mounting holes):

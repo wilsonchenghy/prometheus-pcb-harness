@@ -852,3 +852,21 @@ def test_kicad_board_reads_back_with_kiutils(tmp_path):
     assert len(kb.footprints) == 2 and len(kb.zones) == 1
     assert {n.name for n in kb.nets} >= {"A", "GND"}
     assert len(kb.traceItems) == sum(len(t["pts"]) - 1 for t in b.tracks) + len(b.vias)
+
+
+def test_thermal_vias_meet_the_fab_drill_and_stale_routes_are_not_reused():
+    """with a fab preset, an exposed pad's 0.2 mm thermal vias are drilled to the house minimum (a pin's hole is
+    left alone), and a routing saved before the change does not come back with a via now too close to them"""
+    import fab
+    import pcb
+    out = [(0, 0), (40, 0), (40, 40), (0, 40)]
+    b = pcb.Board("t", out, rules="jlcpcb-2")
+    b.place("U1", "RF_Module:ESP32-WROOM-32E", (20.0, 22.0), 0, "ESP32")
+    assert all(p["drill"] in (None, 0.3) for p in b.comps["U1"]["pads"]["39"])
+    assert not [p for p in fab.fab_check(b) if "drill" in p]
+    old = {"placement": {"U1": ("RF_Module:ESP32-WROOM-32E", (20.0, 22.0), 0, "F")}, "tracks": [], "vias": []}
+    assert "U1" in {r for r in pcb.placement(b) if pcb.placement(b)[r] != old["placement"].get(r)}
+    plain = pcb.Board("t2", out)
+    plain.place("U1", "RF_Module:ESP32-WROOM-32E", (20.0, 22.0), 0, "ESP32")
+    assert any(p["drill"] == 0.2 for p in plain.comps["U1"]["pads"]["39"])
+    assert pcb.placement(plain) == old["placement"]                # (no preset: footprint as KiCad has it)
