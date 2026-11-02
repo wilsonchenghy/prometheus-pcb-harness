@@ -63,6 +63,21 @@ def _fpv():
     return [(*g["esc_build"](), "jlcpcb-2"), (*g["fc_build"](), "jlcpcb-2")]
 
 
+def _placed(script, fixed, rules="jlcpcb-2"):
+    """a bench board with its parts' positions thrown away (all but the ones the enclosure fixes) and placed and
+    routed from scratch by pcb.place_and_route: the whole flow from a parts list"""
+    def go():
+        g = runpy.run_path(os.path.join(HERE, script), run_name="bench")
+        b = g["build"]()
+        b.name += "_placed"
+        if rules and b.rules is None:                # (the house's drill gap and clearance from the start)
+            b.rules, b.hole_gap = rules, max(b.hole_gap, fab.RULES[rules]["hole_gap"])
+            b.clear = max(b.clear, fab.RULES[rules]["space"])
+        move = [r for r in b.comps if r not in fixed]
+        return [(b, pcb.place_and_route(b, move=move), rules)]
+    return go
+
+
 BOARDS = {
     "blinker": _blinker,
     "usb_ldo": _usb_ldo,
@@ -75,6 +90,9 @@ BOARDS = {
     "qdd": lambda: [(*_ex("quadruped/qdd_power_board.py")["build"](), "jlcpcb-2")],
     "fpv": _fpv,
     "controller": _controller,
+    "blinker_placed": _placed("blinker.py", {"J1"}),
+    "usb_ldo_placed": _placed("usb_ldo.py", {"J1", "J2"}),
+    "esp32_placed": _placed("esp32_sensor.py", {"U1", "J1", "J2", "SW1", "SW2"}),
 }
 
 
@@ -122,13 +140,13 @@ def main(argv):
         except Exception as e:                            # a board that will not build is a result too
             rows.append({"set": n, "error": f"{type(e).__name__}: {str(e)[:200]}", "pass": False})
             print(json.dumps(rows[-1]), flush=True)
-    print(f"\n{'board':16s} {'parts':>5s} {'L':>2s} {'build':>7s} {'check':>6s} {'gerb':>6s} {'kicad':>6s}  result")
+    print(f"\n{'board':20s} {'parts':>5s} {'L':>2s} {'build':>7s} {'check':>6s} {'gerb':>6s} {'kicad':>6s}  result")
     for r in rows:
         if "error" in r:
-            print(f"{r['set']:16s} error: {r['error']}")
+            print(f"{r['set']:20s} error: {r['error']}")
             continue
         res = "PASS" if r["pass"] else f"route {r['route problems']} / check {r['check']} / fab {r['fab_check']}"
-        print(f"{r['board']:16s} {r['parts']:5d} {r['layers']:2d} {r['build+route s']:7.1f} {r['check s']:6.1f} "
+        print(f"{r['board']:20s} {r['parts']:5d} {r['layers']:2d} {r['build+route s']:7.1f} {r['check s']:6.1f} "
               f"{r['gerbers s']:6.1f} {r['kicad s']:6.1f}  {res}")
     if out_json:
         json.dump(rows, open(out_json, "w"), indent=1)

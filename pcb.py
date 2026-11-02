@@ -1758,22 +1758,22 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     if move is None:
         move = [r for r, c in board.comps.items() if c.get("unplaced")] or \
                [r for r, c in board.comps.items() if not c["overhang"]]
-    tracks0, vias0 = list(board.tracks), list(board.vias)
+    tracks0, vias0, fan0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
     best = None
     for k in range(max(1, tries)):
-        board.tracks, board.vias = list(tracks0), list(vias0)
+        board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try fans out afresh)
         left = autoplace(board, move=move, gap=gap + 0.5 * k, seed=k, **kw)
         probs = [f"{r}: no room to place it" for r in left] + autoroute(board)
         probs += [p for p in board.check() if p not in probs]
         score = len(probs)
         if best is None or score < best[0]:
             best = (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
-                    list(board.tracks), list(board.vias))
+                    list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))
         if not probs:
             break
     for r, (at, rot) in best[2].items():
         board.comps[r]["at"], board.comps[r]["rot"] = at, rot
-    board.tracks, board.vias = best[3], best[4]
+    board.tracks, board.vias, board._fan = best[3], best[4], best[5]
     board.__dict__.pop("_pads_memo", None)
     return best[1]
 
