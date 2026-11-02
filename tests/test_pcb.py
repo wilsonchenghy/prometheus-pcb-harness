@@ -744,3 +744,19 @@ def test_fab_order_cpl_bom_and_cart(tmp_path):
     assert "10k 0603 resistor" in by["R1,R2"]["Manufacturer Part Number"]
     page = open(files["html"]).read()
     assert "digikey.com" in page and "lcsc.com/search?q=C125052" in page and files["gerbers"].endswith(".zip")
+
+
+def test_fab_check_against_a_house_preset():
+    """fab.fab_check: a thin track, a small via near the edge and two vias too close are each reported, with where"""
+    import fab
+    import pcb
+    b = pcb.Board("t", [(0, 0), (30, 0), (30, 20), (0, 20)], clearance=0.1)
+    b.track("A", "F", [(5.0, 10.0), (20.0, 10.0)], width=0.1)
+    b.via("A", (0.4, 10.0), drill=0.2, dia=0.4)
+    b.via("A", (10.0, 5.0)), b.via("A", (10.5, 5.0))
+    probs = fab.fab_check(b, "jlcpcb-2")
+    txt = "\n".join(probs)
+    assert "0.100 mm wide" in txt and "clearance 0.100" in txt and "drill 0.20 < 0.30" in txt
+    assert "closer than 0.30 mm to the edge" in txt and "drills 0.10 mm apart" in txt
+    assert not [p for p in fab.fab_check(b, dict(fab.RULES["pcbway-std"], track=0.1, space=0.1, drill=0.2, via_dia=0.4,
+                                                 annular=0.1, hole_gap=0.0, edge=0.0)) if "wide" in p]

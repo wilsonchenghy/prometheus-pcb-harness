@@ -616,6 +616,67 @@ class Board:
                     out.append((k, tuple(end)))
         return out
 
+    def prune_spurs(self, tracks: Optional[Sequence[int]] = None, rounds: int = 4) -> int:
+        """trim the dangling ends of ``tracks`` (default: all) back to where they last lie inside other copper of
+        their net, and drop tracks that reach nothing past their other end: a fine-pitch pad's way-out stub that the
+        route joined part-way along, or a closing segment that overshot, otherwise leaves a spur KiCad reads as
+        unconnected. Never splits a net (only the dead end is cut). Returns how many track ends it changed"""
+        from shapely.geometry import LineString, Point
+        from shapely.ops import substring, unary_union
+        changed = 0
+        idx = set(range(len(self.tracks)) if tracks is None else tracks)
+        for _ in range(rounds):
+            loose = [(k, e) for k, e in self.loose_ends(only=sorted(i for i in idx if i < len(self.tracks)))]
+            if not loose:
+                break
+            pads = self.pad_shapes()
+            pn = self.pad_net()
+            drop = set()
+            for k, end in loose:
+                if k in drop:
+                    continue
+                t = self.tracks[k]
+                net, L = t["net"], t["layer"]
+                other = [g for (r, n, L_, g, d) in pads if pn.get((r, n)) == net and (L_ == L or d)]
+                other += [Point(v["at"]).buffer(v["dia"] / 2, 16) for v in self.vias if v["net"] == net]
+                other += [LineString(u["pts"]).buffer(u["w"] / 2, 12) for j, u in enumerate(self.tracks)
+                          if j != k and j not in drop and u["net"] == net and u["layer"] == L]
+                other += [g for g in [self.pour_fill(net, L)] if g is not None and not g.is_empty] \
+                    if any(pz["net"] == net and pz["layer"] == L for pz in self.pours) else []
+                inner = unary_union(other).buffer(-0.02) if other else None
+                pts = list(t["pts"])
+                if tuple(pts[0]) == tuple(end):
+                    pts = pts[::-1]                      # the loose end last
+                line = LineString(pts)
+                hit = line.intersection(inner) if inner is not None and not inner.is_empty else None
+                far = 0.0
+                for g in (getattr(hit, "geoms", None) or ([hit] if hit is not None and not hit.is_empty else [])):
+                    for c in getattr(g, "coords", []):
+                        far = max(far, line.project(Point(c)))
+                if far <= 1e-3:
+                    drop.add(k)                          # it lies inside nothing of its net: the whole spur goes
+                    changed += 1
+                    continue
+                if far >= line.length - 1e-4:
+                    continue
+                cut = substring(line, 0.0, far)
+                new = [tuple(c) for c in cut.coords]
+                if len(new) >= 2 and cut.length > 1e-3:
+                    t["pts"] = new if tuple(pts[0]) == tuple(t["pts"][0]) else new[::-1]
+                    changed += 1
+                else:
+                    drop.add(k)
+                    changed += 1
+            if drop:
+                remap = {}
+                keep = [t for j, t in enumerate(self.tracks) if j not in drop]
+                for j in range(len(self.tracks)):
+                    if j not in drop:
+                        remap[j] = len(remap)
+                self.tracks = keep
+                idx = {remap[j] for j in idx if j in remap}
+        return changed
+
     def anchor_groups(self, net: str, cu=None, pads=None, pn=None) -> List[List[Tuple[str, str]]]:
         """the pins of ``net`` grouped the way KiCad joins copper: a pad joins the tracks and zones it overlaps, a
         track another track or a via only where an END point lies inside it, a via what its centre lies in; two
@@ -1417,6 +1478,9 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
         tree[L_pin].append(g_pin)
         if pin in fan_geo:
             tree[fan_geo[pin][0]].append(fan_geo[pin][1])
+    if getattr(board, "prune", True):                    # the net's dead ends (a way-out stub, a fan-out the route
+        board.prune_spurs([k for k, t in enumerate(board.tracks) if t["net"] == net])   # joined part-way along);
+    #                                                      board.prune = False keeps a deliberate stub (an antenna)
     return probs
 
 

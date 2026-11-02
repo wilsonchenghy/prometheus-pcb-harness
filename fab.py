@@ -170,6 +170,70 @@ fill a cart in one go, or follow a line's links to search it at each shop.</p>
     return path
 
 
+# Design-rule presets: each house's STANDARD capabilities (no extra charge), conservative, mm. Houses revise these:
+# check the house's capabilities page for your order (layer count, copper weight, thickness change them).
+RULES = {
+    "jlcpcb-2": dict(track=0.127, space=0.127, drill=0.3, via_dia=0.6, annular=0.13, hole_gap=0.5, edge=0.3,
+                     pth_drill=0.3, max_layers=2, note="JLCPCB 2-layer, 1 oz outer"),
+    "jlcpcb-4": dict(track=0.09, space=0.09, drill=0.3, via_dia=0.5, annular=0.1, hole_gap=0.5, edge=0.3,
+                     pth_drill=0.3, max_layers=4, note="JLCPCB 4-layer, 1 oz outer, 0.5 oz inner"),
+    "pcbway-std": dict(track=0.1, space=0.1, drill=0.2, via_dia=0.45, annular=0.15, hole_gap=0.4, edge=0.3,
+                       pth_drill=0.2, max_layers=4, note="PCBWay standard"),
+    "oshpark-2": dict(track=0.1524, space=0.1524, drill=0.254, via_dia=0.508, annular=0.127, hole_gap=0.5, edge=0.38,
+                      pth_drill=0.254, max_layers=2, note="OSH Park 2-layer"),
+}
+
+
+def fab_check(board, rules="jlcpcb-2") -> List[str]:
+    """the board against a house's design rules (a preset name from RULES or a dict like one): track widths,
+    the clearance it was checked at, vias (drill, pad, annular ring), plated and unplated drills, drill-to-drill
+    gaps and copper to the board edge. Returns the problems, each saying where; [] = within the house's standard
+    process. Run with Board.check(): that one checks the design, this one the fab's limits"""
+    from shapely.geometry import LineString, Point
+    r = RULES[rules] if isinstance(rules, str) else rules
+    out = []
+    if len(board.layers) > r.get("max_layers", 99):
+        out.append(f"{len(board.layers)} layers: the preset allows {r['max_layers']}")
+    if board.clear < r["space"] - 1e-9:
+        out.append(f"clearance {board.clear:.3f} mm is under the house's {r['space']:.3f} mm")
+    edge = board.outline.exterior
+    for k, t in enumerate(board.tracks):
+        if t["w"] < r["track"] - 1e-9:
+            out.append(f"track {t['net']} ({t['layer']}) {t['w']:.3f} mm wide at {tuple(round(c, 2) for c in t['pts'][0])}: "
+                       f"the house's minimum is {r['track']:.3f} mm")
+        d = LineString(t["pts"]).distance(edge) - t["w"] / 2 if len(t["pts"]) > 1 else Point(t["pts"][0]).distance(edge)
+        if d < r["edge"] - 1e-6:
+            out.append(f"track {t['net']} ({t['layer']}) {d:.2f} mm from the board edge (min {r['edge']:.2f})")
+    holes = []
+    for v in board.vias:
+        ring = (v["dia"] - v["drill"]) / 2
+        if v["drill"] < r["drill"] - 1e-9:
+            out.append(f"via {v['net']} at {tuple(round(c, 2) for c in v['at'])}: drill {v['drill']:.2f} < {r['drill']:.2f} mm")
+        if v["dia"] < r["via_dia"] - 1e-9 or ring < r["annular"] - 1e-9:
+            out.append(f"via {v['net']} at {tuple(round(c, 2) for c in v['at'])}: pad {v['dia']:.2f} mm, ring "
+                       f"{ring:.3f} mm (min pad {r['via_dia']:.2f}, ring {r['annular']:.3f})")
+        if Point(v["at"]).distance(edge) - v["dia"] / 2 < r["edge"] - 1e-6:
+            out.append(f"via {v['net']} at {tuple(round(c, 2) for c in v['at'])} is closer than {r['edge']:.2f} mm to the edge")
+        holes.append((v["at"], v["drill"], f"via {v['net']}"))
+    for ref, c in board.comps.items():
+        for num, lst in c["pads"].items():
+            for p in lst:
+                if p.get("drill"):
+                    if p["drill"] < r["pth_drill"] - 1e-9:
+                        out.append(f"{ref}.{num}: drill {p['drill']:.2f} < {r['pth_drill']:.2f} mm")
+    for (x, y, d) in board.holes:
+        holes.append(((x, y), d, "mounting hole"))
+    for i in range(len(holes)):                          # drill wall to drill wall (vias and mounting holes)
+        (a, da, na) = holes[i]
+        for j in range(i + 1, len(holes)):
+            (b, db, nb) = holes[j]
+            gap = Point(a).distance(Point(b)) - (da + db) / 2
+            if Point(a).distance(Point(b)) > 1e-6 and gap < r["hole_gap"] - 1e-6:
+                out.append(f"{na} at {tuple(round(c, 2) for c in a)} and {nb} at {tuple(round(c, 2) for c in b)}: drills "
+                           f"{gap:.2f} mm apart (min {r['hole_gap']:.2f})")
+    return out
+
+
 def order(board, out_dir: str, boards: int = 5, spare: float = 0.1, origin=(0.0, 0.0)) -> Dict[str, str]:
     """everything to order a board made and assembled and its parts bought, in one folder: gerbers/ and
     gerbers.zip, cpl.csv, bom_jlc.csv, and the cart (cart/: the three shops' CSVs and buy.html)"""
