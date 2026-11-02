@@ -60,7 +60,8 @@ def _controller():
 
 def _fpv():
     g = _ex("fpv_quad/fpv_boards.py")
-    return [(*g["esc_build"](), "jlcpcb-2"), (*g["fc_build"](), "jlcpcb-2")]
+    # (0.1 mm tracks off 0.4-0.5 mm pitch parts: a 4 mil house, not JLCPCB's 2-layer 5 mil)
+    return [(*g["esc_build"](), "pcbway-std"), (*g["fc_build"](), "pcbway-std")]
 
 
 def _placed(script, fixed, rules="jlcpcb-2"):
