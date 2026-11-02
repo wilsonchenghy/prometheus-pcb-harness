@@ -40,7 +40,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
-ROUTER_VERSION = 3          # in route_jobs' checkpoint key: bump when the router changes what it would produce
+ROUTER_VERSION = 4          # in route_jobs' checkpoint key: bump when the router changes what it would produce
 HOLE_GAP = 0.25             # mm between drill walls (a common fab minimum)
 EDGE = 0.25                 # mm from copper (tracks, vias) to the board edge
 MIN_FILL = 0.1              # mm: a pour's narrowest copper (KiCad's zone min_thickness)
@@ -1768,9 +1768,31 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     R_ = {(r, a): rect(r, a) for r in move for a in rots}
     P_ = {(r, a): pads_at(r, a) for r in board.comps for a in (rots if r in move else [board.comps[r]["rot"] % 360])}
     poured = {p["net"] for p in board.pours}
-    wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in board.nets.items()}
+    # decoupling: a two-pin capacitor between a supply and a poured (ground) net belongs by one of that supply's IC
+    # pins; the netlist does not say which, so the caps are dealt out over those pins in turn and each is held to its
+    # pin by a stiff spring (a pseudo-net of the two pins)
+    NETS = dict(board.nets)
+    pnet = board.pad_net()
+    many = {r for r, c in board.comps.items() if len(c["pads"]) >= 6}
+    deal: Dict[str, int] = {}
+    for r in sorted(mset, key=lambda r: (len(r), r)):
+        c = board.comps[r]
+        if not r.upper().startswith("C") or len([n for n in c["pads"] if n]) != 2:
+            continue
+        ns = {num: pnet.get((r, num)) for num in c["pads"] if num}
+        sup = [(num, n) for num, n in ns.items() if n and n not in poured]
+        if len(sup) != 1 or not any(n in poured for n in ns.values()):
+            continue
+        num, n = sup[0]
+        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many]
+        if not targets:
+            continue
+        k = deal.get(n, 0)
+        deal[n] = k + 1
+        NETS[f"~decap {r}"] = {"pins": [(r, num), targets[k % len(targets)]], "amps": 3.0}
+    wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in NETS.items()}
     nets_of: Dict[str, List[str]] = {}
-    for n, d in board.nets.items():
+    for n, d in NETS.items():
         for r, _ in d["pins"]:
             nets_of.setdefault(r, [])
             if n not in nets_of[r]:
@@ -1819,7 +1841,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
         return x + dx, y + dy
 
     def net_cost(n, only_placed=True):
-        pts = [pin_xy(r, num) for r, num in board.nets[n]["pins"] if r in board.comps and (r in placed or not only_placed)]
+        pts = [pin_xy(r, num) for r, num in NETS[n]["pins"] if r in board.comps and (r in placed or not only_placed)]
         if len(pts) < 2:
             return 0.0
         a = np.asarray(pts)
@@ -1836,18 +1858,20 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     gx, gy = np.meshgrid(np.arange(minx, maxx + 1e-9, step), np.arange(miny, maxy + 1e-9, step))
     gx, gy = gx.ravel(), gy.ravel()
     cx, cy = board.outline.centroid.x, board.outline.centroid.y
-    order = sorted(move, key=lambda r: -sum(len(board.nets[n]["pins"]) * wt[n] for n in nets_of.get(r, []))
+    order = sorted(move, key=lambda r: -sum(len(NETS[n]["pins"]) * wt[n] for n in nets_of.get(r, []))
                    - 0.5 * len(board.comps[r]["pads"]))
     failed = []
     for r in order:
         best = None
-        for a in rots:
+        for gap_try, a in [(gt, a) for gt in dict.fromkeys((gap, min(gap, 0.3))) for a in rots]:
+            if best is not None and gap_try != gap:
+                break                                    # (only a part with no room at the full gap squeezes in)
             x0, y0, x1, y1 = R_[(r, a)]
             bxs = np.stack([gx + x0, gy + y0, gx + x1, gy + y1], axis=1)
             ok = shapely.contains(inner, shapely.box(bxs[:, 0], bxs[:, 1], bxs[:, 2], bxs[:, 3]))
             others = np.array(fixed_obs[side[r]] + [box_of(o, *pos[o]) for o in placed if o in mset and side[o] == side[r]])
             if len(others):
-                g = gap - 1e-6
+                g = gap_try - 1e-6
                 hit = ((bxs[:, None, 0] < others[None, :, 2] + g) & (others[None, :, 0] < bxs[:, None, 2] + g) &
                        (bxs[:, None, 1] < others[None, :, 3] + g) & (others[None, :, 1] < bxs[:, None, 3] + g)).any(1)
                 ok &= ~hit
@@ -1855,8 +1879,8 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
                 continue
             cost = 0.002 * (np.abs(gx - cx) + np.abs(gy - cy))     # (with nothing to pull it, the middle)
             for n in nets_of.get(r, []):
-                mine = [P_[(r, a)][num] for rr, num in board.nets[n]["pins"] if rr == r and num in P_[(r, a)]]
-                oth = [pin_xy(rr, num) for rr, num in board.nets[n]["pins"] if rr != r and rr in placed]
+                mine = [P_[(r, a)][num] for rr, num in NETS[n]["pins"] if rr == r and num in P_[(r, a)]]
+                oth = [pin_xy(rr, num) for rr, num in NETS[n]["pins"] if rr != r and rr in placed]
                 if not mine:
                     continue
                 mx = np.array([m[0] for m in mine])
@@ -1882,9 +1906,9 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     # 2. anneal: move, turn or swap a part; keep what shortens the wire (and, early on, some of what does not)
     mov = [r for r in move if r in placed]
     if len(mov) >= 1:
-        total = sum(net_cost(n) for n in board.nets)
+        total = sum(net_cost(n) for n in NETS)
         iters = int(effort * 400 * len(mov) * max(1, len(rots)))
-        T0 = max(total / max(len(board.nets), 1) * 0.3, 0.1)
+        T0 = max(total / max(len(NETS), 1) * 0.3, 0.1)
         span = max(maxx - minx, maxy - miny)
         for k in range(iters):
             frac = k / max(iters, 1)
@@ -1942,7 +1966,7 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         left = autoplace(board, move=move, gap=gap + 0.25 * k, seed=k, **kw)
         probs = [f"{r}: no room to place it" for r in left] + autoroute(board, **(route_kw or {}))
         probs += [p for p in board.check() if p not in probs]
-        score = len(probs)
+        score = len(probs) + 50 * len(left)               # (a part left off the board is worse than any miss)
         if best is None or score < best[0]:
             best = (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
                     list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))
@@ -3139,6 +3163,7 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
         jobs = [j for j in jobs if j[0] in failed0] + [j for j in jobs if j[0] in redo and j[0] not in failed0]
         print(f"reusing the last routing: {len(jobs)} nets to route again", flush=True)
     base = (list(board.tracks), list(board.vias))
+    computed = best is None
     for _ in range(0 if best else passes):
         board.tracks, board.vias = list(base[0]), list(base[1])
         got, failed = [], []
@@ -3164,6 +3189,42 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
         if not failed:
             break
         jobs = failed + [j for j in jobs if j not in failed]
+    from shapely.geometry import LineString, Point
+    if computed and best is not None and best[0]:        # rip up and retry: the nets round each pad still
+        for rr in (rip, 2 * rip):                        # unreached torn up, the failed nets routed first, the
+            board.tracks, board.vias = list(best[1]), list(best[2])   # torn ones after; kept if it does better
+            fails, circles = set(), []
+            for m in best[0]:
+                mm = re.match(r"route (\S+): could not reach (\S+) \(blocked", m)
+                if mm:
+                    fails.add(mm.group(1))
+                    ref, num = mm.group(2).rsplit(".", 1)
+                    if ref in board.comps and num in board.comps[ref]["pads"]:
+                        circles.append(Point(*board.pad(ref, num)).buffer(rr))
+            if not circles:
+                break
+            from shapely.ops import unary_union as _uu
+            zone = _uu(circles)
+            torn = {t["net"] for t in board.tracks if not t.get("fan") and t["net"] not in fails
+                    and zone.intersects(LineString(t["pts"]))} | \
+                   {v["net"] for v in board.vias if v["net"] not in fails and zone.contains(Point(v["at"]))}
+            poured_ = {pz["net"] for pz in board.pours}
+            torn -= poured_                              # (a ground's pins drop through vias: leave it be)
+            redo = fails | torn
+            board.tracks = [t for t in board.tracks if t["net"] not in redo or t.get("fan")]
+            board.vias = [v for v in board.vias if v["net"] not in redo or v["net"] in poured_]
+            order = [j for j in jobs if j[0] in fails] + [j for j in jobs if j[0] in torn]
+            got = []
+            for job in order:
+                ex = {k: v for k, v in (job[3] if len(job) > 3 else {}).items() if k != "rejoin"}
+                got += route(board, job[0], width=job[1], only=job[2], **{**kw(job[0]), **ex})
+            got = [m for m in best[0] if m.split(":")[0].split()[-1] not in redo] + got
+            print(f"rip-up within {rr} mm of {len(circles)} pads ({len(torn)} nets torn up): "
+                  f"{len(best[0])} problems before, {len(got)} after", flush=True)
+            if len(got) < len(best[0]):
+                best = (got, list(board.tracks), list(board.vias))
+            if not best[0]:
+                break
     if best is not None and not best[0]:                 # every net whole: trim way-out stubs a route ran past
         board.tracks, board.vias = list(best[1]), list(best[2])
         if board.prune_spurs():
