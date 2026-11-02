@@ -40,6 +40,7 @@ parts cart, KiCad project, report; `--step` adds the 3D board; exit 0 when every
 
 ```
 python -m pcb_cli bench/esp32_sensor.py out/ --boards 10 --rules jlcpcb-2
+pcb-harness bench/esp32_sensor.py out/          # the same, as installed by pip
 ```
 
 Already have a KiCad schematic? Export its netlist (Eeschema: File > Export > Netlist) and give the board's size;

@@ -1,0 +1,24 @@
+name: tests
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/cache@v4            # the KiCad footprints the tests fetch
+        with:
+          path: ~/.cache/prometheus/parts
+          key: kicad-parts-${{ hashFiles('tests/**', 'bench/**', 'examples/netlist/**') }}
+          restore-keys: kicad-parts-
+      - run: pip install -e ".[dev]"
+      - run: pytest -q
+      - run: python -m pcb_cli bench/blinker.py out/blinker
+      - run: python -m pcb_cli examples/netlist/blinker_sch.net out/netlist --size 35x25 --at J1=4,12.5
