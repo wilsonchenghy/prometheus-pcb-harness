@@ -103,6 +103,9 @@ def main(argv=None) -> int:
     ap.add_argument("--kicad-drc", choices=("auto", "off", "require"), default="auto",
                     help="KiCad's own DRC on the exported board: auto (when KiCad 9+ is installed; default), off, "
                          "or require (fail when KiCad is missing)")
+    ap.add_argument("--router", choices=("auto", "freerouting", "harness"), default="auto",
+                    help="auto (FreeRouting when Java and its jar are installed, else the built-in router; default), "
+                         "freerouting, or harness")
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
@@ -114,15 +117,15 @@ def main(argv=None) -> int:
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers")
     if any(c.get("unplaced") for c in b.comps.values()) and not a.no_route:
         t = time.perf_counter()
-        probs = pcb.place_and_route(b)
+        probs = pcb.place_and_route(b, router=a.router)
         print(f"placed and routed: {'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
     place = b.check_placement()
     if place:
         print("placement:", *place, sep="\n  ")
     if probs is None and not b.tracks and not a.no_route:
         t = time.perf_counter()
-        probs = pcb.autoroute(b)
-        print(f"autoroute: {'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
+        probs = pcb.route_board(b, a.router)
+        print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
     probs = probs or []
     chk = b.check()
     fchk = fab.fab_check(b, a.rules)
@@ -154,7 +157,8 @@ def main(argv=None) -> int:
             print(f"   ... and {len(ps) - 20} more")
     print(f"wrote {a.out}: review {files['report']}, parts {files['html']} ({time.perf_counter() - t0:.1f} s)")
     import json
-    result = {"board": b.name, "clean": not (probs or chk or fchk or kchk), "kicad_drc": kicad, "parts": len(b.comps), "nets": len(b.nets),
+    result = {"board": b.name, "clean": not (probs or chk or fchk or kchk), "kicad_drc": kicad,
+              "router": getattr(b, "router_used", "none (routed by the script)"), "parts": len(b.comps), "nets": len(b.nets),
               "layers": len(b.layers), "seconds": round(time.perf_counter() - t0, 1),
               "placement": {r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")] for r, c in b.comps.items()},
               "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),

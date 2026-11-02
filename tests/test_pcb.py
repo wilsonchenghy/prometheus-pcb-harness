@@ -974,3 +974,36 @@ def test_cli_findings_are_data_for_an_agent():
     f = pcb_cli.finding("design", "F.Cu: A and B 0.18 mm apart (clearance 0.2) at (10.6, 10.6)")
     assert f["kind"] == "clearance" and f["at"] == [10.6, 10.6]
     assert pcb_cli.finding("design", "net GP0 is split in 2: J2.1 | U1.2")["pins"] == ["J2.1", "U1.2"]
+
+
+def test_freerouting_round_trip(tmp_path):
+    """the Specctra design names every netted pad and the net widths; a session's wires and vias come back as
+    tracks and vias at the session's resolution; with FreeRouting installed, a small board routes clean through it"""
+    import freerouting
+    import pcb
+    out = [(0, 0), (30, 0), (30, 20), (0, 20)]
+    b = pcb.Board("frt", out)
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (8.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (22.0, 10.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")], width=0.3)
+    b.net("GND", [("R1", "1"), ("R2", "2")])
+    b.pour("GND", "B", out)
+    dsn = freerouting.export_dsn(b, str(tmp_path / "frt.dsn"), skip_nets=["GND"])
+    tree = freerouting._sexpr(open(dsn).read())
+    nets = {n[1]: n for n in freerouting._walk(tree, "net")}
+    assert set(nets) == {"A"} and '"R1"-"2"' in open(dsn).read()
+    assert any("300.0" in " ".join(map(str, c)) for c in freerouting._walk(tree, "rule") if "width" in str(c))
+    ses = tmp_path / "frt.ses"
+    ses.write_text('(session "frt.ses" (routes (resolution um 10) (network_out (net "A" '
+                   '(wire (path F.Cu 3000 88000 100000 150000 100000)) (via "V" 150000 100000)))))')
+    assert freerouting.import_ses(b, str(ses)) == (1, 1)
+    assert b.tracks[-1]["pts"] == [(8.8, 10.0), (15.0, 10.0)] and b.tracks[-1]["w"] == 0.3
+    assert b.vias[-1]["at"] == (15.0, 10.0)
+    if freerouting.available():
+        b2 = pcb.Board("frt2", out)
+        for r, x in (("R1", 8.0), ("R2", 22.0)):
+            b2.place(r, "Resistor_SMD:R_0603_1608Metric", (x, 10.0), 0, "1k")
+        b2.net("A", [("R1", "2"), ("R2", "1")])
+        b2.net("GND", [("R1", "1"), ("R2", "2")])
+        b2.pour("GND", "B", out)
+        assert freerouting.route(b2) == [] and b2.check() == []

@@ -1587,6 +1587,23 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     return _join_islands(board, net, probs, kw, only)
 
 
+def route_board(board: Board, router: str = "auto", **kw) -> List[str]:
+    """route the whole board with ``router``: "freerouting" (FreeRouting, the router KiCad users use, through a
+    Specctra round trip: ``freerouting.py``; needs Java and its jar), "harness" (``autoroute``, this file's grid
+    router), or "auto" (FreeRouting when it is installed, else the harness's). Sets ``board.router_used``"""
+    if router not in ("auto", "freerouting", "harness"):
+        raise ValueError("router: auto, freerouting or harness")
+    if router != "harness":
+        import freerouting
+        if freerouting.available():
+            board.router_used = "freerouting"
+            return freerouting.route(board, **kw)
+        if router == "freerouting":
+            raise RuntimeError("FreeRouting not found (Java and the jar: see freerouting.find_jar)")
+    board.router_used = "harness"
+    return autoroute(board, **kw)
+
+
 def auto_grid(board: Board) -> float:
     """the routing grid for a board: 0.25 mm, or 0.2 mm when a part's pins sit at a pitch the 0.25 grid misses and
     0.2 hits (0.4 mm, 0.8 mm: an RP2040's QFN-56), so each pin's centre is a grid point"""
@@ -1950,7 +1967,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
 
 
 def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 4, gap: float = 1.0,
-                    route_kw: Optional[dict] = None, **kw) -> List[str]:
+                    route_kw: Optional[dict] = None, router: str = "auto", **kw) -> List[str]:
     """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed, a little more
     room between parts) and route again, up to ``tries`` times; keeps the placement and routing with the fewest
     problems (``kw`` go to ``autoplace``, ``route_kw`` to ``autoroute``, e.g. ``{"grid": 0.2}``). Returns that routing's problems (empty: placed, routed, and check()
@@ -1964,7 +1981,7 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     for k in range(max(1, tries)):
         board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try fans out afresh)
         left = autoplace(board, move=move, gap=gap + 0.25 * k, seed=k, **kw)
-        probs = [f"{r}: no room to place it" for r in left] + autoroute(board, **(route_kw or {}))
+        probs = [f"{r}: no room to place it" for r in left] + route_board(board, router, **(route_kw or {}))
         probs += [p for p in board.check() if p not in probs]
         score = len(probs) + 50 * len(left)               # (a part left off the board is worse than any miss)
         if best is None or score < best[0]:
