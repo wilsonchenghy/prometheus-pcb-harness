@@ -82,17 +82,26 @@ def _download_fp(name: str) -> Path:
     lib, fp = name.split(":")
     dst = _fp_file(name)
     if not dst.exists() or dst.stat().st_size < 200:
+        import time
+        import urllib.error
         import urllib.request
         dst.parent.mkdir(parents=True, exist_ok=True)
-        with urllib.request.urlopen(f"{KICAD_FP_RAW}{lib}.pretty/{fp}.kicad_mod", timeout=60) as r:
-            data = r.read()
+        for attempt in range(6):                         # (GitLab answers 429 to a burst: wait and try again)
+            try:
+                with urllib.request.urlopen(f"{KICAD_FP_RAW}{lib}.pretty/{fp}.kicad_mod", timeout=60) as r:
+                    data = r.read()
+                break
+            except urllib.error.HTTPError as e:
+                if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
+                    raise
+                time.sleep(float(e.headers.get("Retry-After") or 0) or 1.5 * 2 ** attempt)
         if not data.lstrip().startswith(b"(footprint") and not data.lstrip().startswith(b"(module"):
             raise FileNotFoundError(f"no KiCad footprint {name}")
         dst.write_bytes(data)
     return dst
 
 
-def prefetch(names: Sequence[str], workers: int = 16) -> List[str]:
+def prefetch(names: Sequence[str], workers: int = 8) -> List[str]:
     """download every footprint in ``names`` not yet cached, in parallel (a cold board otherwise waits on one
     download per footprint, a few seconds each). Returns the names that could not be fetched."""
     from concurrent.futures import ThreadPoolExecutor
@@ -1396,8 +1405,9 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     return _join_islands(board, net, probs, kw, only)
 
 
-def autoroute(board: Board, passes: int = 3, **kw) -> List[str]:
-    """route the whole board in one call: fine-pitch fan-outs first, then the signal nets (the most local first),
+def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[str]:
+    """route the whole board in one call: fine-pitch fan-outs first, a via beside each surface pad of a poured net
+    (``drop``: the ground pins of a two-layer board drop to its ground pour), then the signal nets (the most local first),
     then the power nets (the least current first), the nets with a pour last, each at ``Board.net_width`` (a net's
     own width, else what its current needs), in negotiated passes (``route_jobs``: a net that fails is routed
     first on the next pass), and finally ``repair`` (a net a later one split joined back). ``kw`` goes to every
@@ -1419,6 +1429,14 @@ def autoroute(board: Board, passes: int = 3, **kw) -> List[str]:
     last = sorted([n for n in nets if n in poured], key=lambda n: board.nets[n]["amps"])
     if not getattr(board, "_fan", None):
         board.fanout(width=0.2)
+    if drop:                                             # each surface pad of a net poured on another layer drops
+        pn = board.pad_net()                             # through a via of its own beside it, first, while there is
+        for net in last:                                 # room (the ground pins of a two-layer board, a plane's)
+            layers = {p["layer"] for p in board.pours if p["net"] == net}
+            pins = [tuple(p) for p in board.nets[net]["pins"]
+                    if any(L_ not in layers and not d for r_, n_, L_, g, d in board.pad_shapes() if (r_, n_) == tuple(p))]
+            if pins:
+                board.drop(net, pins, width=min(0.3, board.net_width(net)))
     jobs = [(n, board.net_width(n), None) for n in sig + pwr + last]
     probs = route_jobs(board, jobs, kw=(lambda net: dict(kw)) if kw else None, passes=passes)
     return probs + repair(board, **kw)

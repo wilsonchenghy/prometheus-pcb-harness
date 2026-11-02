@@ -818,15 +818,13 @@ def test_parts_take_their_footprints_3d_model_and_export_step(tmp_path):
     assert os.path.getsize(f) > 1000
 
 
-def test_autoroute_routes_a_board_in_one_call(tmp_path, monkeypatch):
+def test_autoroute_routes_a_board_in_one_call():
     """pcb.autoroute: every net of a small board routed (signals, then power, then the poured ground) with no
     per-net tuning; a net's own width is used"""
-    import pathlib
+    import uuid
     import pcb
-    import vendor_parts
-    monkeypatch.setattr(vendor_parts, "CACHE", pathlib.Path(tmp_path))    # (no route checkpoints from other runs)
     out = [(0, 0), (30, 0), (30, 20), (0, 20)]
-    b = pcb.Board("a", out)
+    b = pcb.Board(f"a{uuid.uuid4().hex[:8]}", out)                  # (a fresh name: no route checkpoint reused)
     for k, x in enumerate((6, 14, 22)):
         b.place(f"R{k + 1}", "Resistor_SMD:R_0603_1608Metric", (x, 10.0), 90, "1k")
     b.net("VCC", [("R1", "2"), ("R2", "2"), ("R3", "2")], amps=0.5, width=0.4)
