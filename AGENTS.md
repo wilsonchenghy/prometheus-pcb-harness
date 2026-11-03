@@ -26,6 +26,22 @@ read the findings, and edit the script until the run is clean.
 
 5. **Edit and run again.** Routes are cached per design, so a run after a small edit only re-routes what moved.
 
+## Requirements and one stage at a time
+
+Write what the board must meet in a requirements file and pass `--spec req.json`: `size_mm`, `layers`, `house`,
+`nets` (`{"VBAT": {"amps": 2}}`), `pairs` (`[["CANH", "CANL", 2.0]]`: matched in length), `near`
+(`[["C1", "U1", 3.0]]`: this part within that distance of that one, pad to pad), `edge` (connectors at the edge),
+`holes`, `assembly`, `max_parts`. The critic reviews the board against it, and against the usual review rules
+(decoupling by its pins, crystal by its chip, connectors at the edge, USB pairs, antenna keep-out), in
+milliseconds; an `error` makes the run not clean. The placer honours `near` too: each part held near another is
+placed right after it and moved within its distance if it ends up further.
+
+`--stage` runs one step: `critic` (the review alone, instant: run it after every edit to the script), `place`,
+`route` (place and route, then the checks), `check`, `export` (order files and KiCad's DRC). Each run saves the
+placed and routed board as `out/board_state.pkl`; `check`, `export` and `critic` start from it when the design is
+unchanged, so they take seconds. A differential pair over its skew is length-tuned after routing (a serpentine on
+the shorter net, kept only when the check finds nothing new).
+
 ## KiCad's DRC
 
 When KiCad 9+ is installed (`kicad-cli` on the PATH), every run also checks the exported board with KiCad's own
