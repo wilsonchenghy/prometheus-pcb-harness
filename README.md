@@ -82,10 +82,35 @@ boards yourself.
 
 ## Install
 
+**One command** (Python 3.10+):
+
 ```
-pip install -e .                 # core: numpy, shapely, pillow, matplotlib
-pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypdf (schematics), pytest
-pytest -q                        # the tests
+pip install "pcb-harness @ git+https://github.com/wilsonchenghy/pcb-harness"
+pcb-harness setup        # adds FreeRouting (needs Java), then reports what the machine has
+```
+
+or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash`, which does
+both. KiCad 9 (for KiCad's own DRC) is a system install: `pcb-harness doctor` says whether it is there, and
+`docs/setup.md` has the commands per OS. Everything beyond Python is optional; see the table there for what you
+get without it.
+
+**With Claude Code or another AI agent** (on your machine or in a cloud session): give it the link and the job.
+
+> Install https://github.com/wilsonchenghy/pcb-harness (follow its docs/setup.md), then design a board that ...
+
+In a Claude Code cloud session, add the repository to the session (or let the agent clone it). The repository
+carries a Claude Code skill (`.claude/skills/pcb-harness`) and `AGENTS.md`, so the agent follows the harness's
+loop: check the machine, write the board script, run, fix the findings until clean. The agent will ask before
+installing KiCad (it needs root); approve it, or in auto mode switch to *Accept edits* first.
+
+**For a cloud or container environment** that every session starts from: put `bash install.sh` (and the KiCad
+commands from `docs/setup.md`) in its setup script.
+
+**From a clone, for development:**
+
+```
+pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypdf (schematics), pytest, gerbonara, kiutils
+pytest -q
 ```
 
 KiCad footprints and 3D models are downloaded on first use into `~/.cache/prometheus/parts` (override with
