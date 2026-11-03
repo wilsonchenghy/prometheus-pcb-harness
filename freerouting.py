@@ -449,6 +449,12 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
         pads = [(num, L, g) for r, num, L, g, d in board.pad_shapes() if r == ref and num and not d]
         if len(pads) < 6:
             continue
+        def _pin(g):                                       # (a pin: long and narrow; an exposed pad, its pieces
+            x0_, y0_, x1_, y1_ = g.bounds                  # or a BGA ball is not, and does not set the pitch)
+            return max(x1_ - x0_, y1_ - y0_) >= 1.5 * min(x1_ - x0_, y1_ - y0_)
+        pads = [p_ for p_ in pads if _pin(p_[2])]
+        if len(pads) < 6:
+            continue
         cs = np.array([(g.centroid.x, g.centroid.y) for _, _, g in pads])
         dd = np.hypot(*(cs[:, None, :] - cs[None, :, :]).transpose(2, 0, 1))
         np.fill_diagonal(dd, np.inf)

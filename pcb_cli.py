@@ -196,7 +196,17 @@ def load_state(b, out, key) -> bool:
     return True
 
 
+def _repeatable(argv) -> None:
+    """the same board for the same input: Python orders sets of names by a per-process hash, and the router's
+    choices follow some of those orders, so a run started without PYTHONHASHSEED starts again with it fixed"""
+    if os.environ.get("PYTHONHASHSEED") is None and not os.environ.get("PCB_NO_REEXEC"):
+        os.environ["PYTHONHASHSEED"] = "0"
+        os.execv(sys.executable, [sys.executable, "-m", "pcb_cli", *argv])
+
+
 def main(argv=None) -> int:
+    if argv is None:                                     # (the command line, not a call from Python)
+        _repeatable(sys.argv[1:])
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["doctor"]:
         return report()

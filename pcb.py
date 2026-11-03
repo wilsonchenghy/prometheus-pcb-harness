@@ -1677,7 +1677,8 @@ def _route_board(board: Board, router: str = "auto", **kw) -> List[str]:
                 t0, v0 = list(board.tracks), list(board.vias)
                 try:
                     board.router_used = "freerouting (through KiCad)"
-                    return freerouting.route_kicad(board, **kw)
+                    probs = freerouting.route_kicad(board, **kw)
+                    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw))
                 except (RuntimeError, OSError) as e:      # (KiCad's import refused a session now and then: the
                     board.tracks, board.vias = t0, v0     # harness's own Specctra round trip instead)
                     board.__dict__.pop("_cu_memo", None)
@@ -1754,6 +1755,30 @@ def tune_pairs(board: Board, tries_per_seg: int = 6) -> List[str]:
             lp, ln = board.net_length(p_), board.net_length(n_)
             left.append(f"pair {p_} / {n_}: still {abs(lp - ln):.2f} mm apart after length tuning")
     return left
+
+
+def _second_pass(board: Board, probs: List[str], again) -> List[str]:
+    """nets still unreached or split after FreeRouting and the finish: torn up whole and given to FreeRouting once
+    more with the rest of the copper in place (it finds ways the grid router does not); kept only when better"""
+    def unreached(ps):
+        return {m.group(1) for m in (re.match(r"route (\S+): could not reach", p_) or
+                                    re.match(r"net (\S+) is split", p_) for p_ in ps) if m}
+    nets = {n for n in unreached(probs) if n in board.nets and n not in {p["net"] for p in board.pours}}
+    if not nets:
+        return probs
+    before = (list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())), probs,
+              severity(probs) + severity(board.check()))
+    board.tracks = [t for t in board.tracks if t["net"] not in nets]
+    board.vias = [v for v in board.vias if v["net"] not in nets]
+    board.__dict__.pop("_cu_memo", None)
+    try:
+        probs2 = again()
+    except (RuntimeError, OSError):
+        probs2 = None
+    if probs2 is None or severity(probs2) + severity(board.check()) >= before[4]:
+        board.tracks, board.vias, board._fan, probs2 = before[0], before[1], before[2], before[3]
+        board.__dict__.pop("_cu_memo", None)
+    return probs2
 
 
 def auto_grid(board: Board) -> float:
