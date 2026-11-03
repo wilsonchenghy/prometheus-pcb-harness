@@ -1853,7 +1853,17 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             continue
         k = deal.get(n, 0)
         deal[n] = k + 1
-        NETS[f"~decap {r}"] = {"pins": [(r, num), targets[k % len(targets)]], "amps": 3.0}
+        NETS[f"~decap {r}"] = {"pins": [(r, num), targets[k % len(targets)]], "amps": 5.0}
+    for r in sorted(mset):                               # a crystal held to its IC's oscillator pins (short, quiet
+        if not re.match(r"^(Y|X)\d", r):                 # traces), its load capacitors following through their nets
+            continue
+        for num in board.comps[r]["pads"]:
+            n = pnet.get((r, num))
+            if not n or n in poured or n not in board.nets:
+                continue
+            ic_pins = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in many and p_[0] != r]
+            if ic_pins:
+                NETS[f"~xtal {r}.{num}"] = {"pins": [(r, num), ic_pins[0]], "amps": 5.0}
     wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in NETS.items()}
     nets_of: Dict[str, List[str]] = {}
     for n, d in NETS.items():

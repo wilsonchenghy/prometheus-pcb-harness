@@ -216,7 +216,7 @@ def main(argv=None) -> int:
         place = [p_ for p_ in place if p_ not in nopos] + \
             [f"{len(nopos)} parts have no position yet ({', '.join(p_.split()[0] for p_ in nopos[:8])} ...): "
              "--stage place or all places them"]
-    if place:
+    if place and stage not in ("place", "critic"):         # (those stages print it with their results)
         print("placement:", *place, sep="\n  ")
     if route_ok and probs is None and not b.tracks:
         t = time.perf_counter()
