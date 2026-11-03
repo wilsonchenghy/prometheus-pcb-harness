@@ -178,65 +178,113 @@ def main(argv=None) -> int:
     ap.add_argument("--router", choices=("auto", "freerouting", "harness"), default="auto",
                     help="auto (FreeRouting when Java and its jar are installed, else the built-in router; default), "
                          "freerouting, or harness")
+    ap.add_argument("--stage", choices=("critic", "place", "route", "check", "export", "all"), default="all",
+                    help="run one stage: critic (the design review, instant), place (place what has no position), "
+                         "route (place and route, then the checks), check (the checks on the board as the script "
+                         "left it), export (the order files and KiCad's DRC, no routing), all (default)")
+    ap.add_argument("--spec", help="a requirements file (JSON: size_mm, layers, house, nets, pairs, near, edge, holes, "
+                                   "assembly, max_parts) the critic checks the board against")
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
         real_stdout, sys.stdout = sys.stdout, sys.stderr
     t0 = time.perf_counter()
+    import json
+    import critic
+    spec = critic.load_spec(a.spec) if a.spec else {}
+    os.makedirs(a.out, exist_ok=True)
     b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
     for note in getattr(b, "import_notes", []):
         print("note:", note)
-    print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers")
-    if any(c.get("unplaced") for c in b.comps.values()) and not a.no_route:
+    print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers  [stage: {a.stage}]")
+    stage = a.stage
+    route_ok = stage in ("route", "all") and not a.no_route
+    timings = {}
+    if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()) and not a.no_route:
         t = time.perf_counter()
-        probs = pcb.place_and_route(b, router=a.router)
-        print(f"placed and routed: {'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
+        if route_ok:
+            probs = pcb.place_and_route(b, router=a.router)
+            print(f"placed and routed ({getattr(b, 'router_used', '')}): "
+                  f"{'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
+        else:
+            left = pcb.autoplace(b)
+            print(f"placed: {'every part' if not left else 'no room for ' + ', '.join(left)} ({time.perf_counter() - t:.1f} s)")
+        timings["place" if not route_ok else "place+route"] = round(time.perf_counter() - t, 2)
     place = b.check_placement()
+    nopos = [p_ for p_ in place if "has no position yet" in p_]
+    if len(nopos) > 3:                                    # (one line for the parts the placer has not placed)
+        place = [p_ for p_ in place if p_ not in nopos] + \
+            [f"{len(nopos)} parts have no position yet ({', '.join(p_.split()[0] for p_ in nopos[:8])} ...): "
+             "--stage place or all places them"]
     if place:
         print("placement:", *place, sep="\n  ")
-    if probs is None and not b.tracks and not a.no_route:
+    if route_ok and probs is None and not b.tracks:
         t = time.perf_counter()
         probs = pcb.route_board(b, a.router)
-        print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
+        timings["route"] = round(time.perf_counter() - t, 2)
+        print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({timings['route']} s)")
     probs = probs or []
-    chk = b.check()
-    fchk = fab.fab_check(b, a.rules)
-    files = fab.order(b, a.out, boards=a.boards)
-    kpaths = pcb.export_kicad(b, os.path.join(a.out, "kicad"))
-    kchk, kicad = [], {"run": False}
-    if a.kicad_drc != "off":                            # a third, independent judge: KiCad's own DRC
-        ver = pcb.kicad_version()
-        major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
-        if major >= 9:
-            d = pcb.kicad_drc(kpaths[0])
-            kchk = d["errors"] + d["unconnected"]
-            kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
-        else:
-            why = f"KiCad {ver} is too old (9+ needed: the board is KiCad 9 format)" if ver else "KiCad (kicad-cli) is not installed"
-            how = pcb.KICAD_INSTALL.get(sys.platform, pcb.KICAD_INSTALL["linux"])
-            kicad = {"run": False, "skipped": why, "install": how}
-            print(f"KiCad DRC: skipped, {why}. To add it: {how}")
-            if a.kicad_drc == "require":
-                kchk = [f"KiCad DRC required but {why}"]
-    if a.step:
-        files["step"] = pcb.export_step(b, os.path.join(a.out, f"{b.name}.step"))
-    for name, ps in (("routing", probs), ("design check", chk), ("house check", fchk)) + \
-            ((("KiCad DRC", kchk),) if kicad["run"] or kchk else ()):
+    t = time.perf_counter()
+    notes = critic.review(b, spec)
+    timings["critic"] = round(time.perf_counter() - t, 3)
+    crit_err = [n for n in notes if n["severity"] == "error"]
+    chk, fchk, kchk, kicad, files = [], [], [], {"run": False}, {}
+    routed = bool(b.tracks) or stage in ("check", "export")
+    if stage in ("place", "critic"):
+        chk = place                                       # (no copper yet: the placement is what can be checked)
+    else:
+        t = time.perf_counter()
+        chk = b.check()
+        fchk = fab.fab_check(b, a.rules or spec.get("house"))
+        timings["check"] = round(time.perf_counter() - t, 2)
+    if stage in ("export", "all"):
+        t = time.perf_counter()
+        files = fab.order(b, a.out, boards=a.boards)
+        kpaths = pcb.export_kicad(b, os.path.join(a.out, "kicad"))
+        if a.kicad_drc != "off":                        # a third, independent judge: KiCad's own DRC
+            ver = pcb.kicad_version()
+            major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
+            if major >= 9:
+                d = pcb.kicad_drc(kpaths[0])
+                kchk = d["errors"] + d["unconnected"]
+                kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+            else:
+                why = f"KiCad {ver} is too old (9+ needed: the board is KiCad 9 format)" if ver else "KiCad (kicad-cli) is not installed"
+                how = pcb.KICAD_INSTALL.get(sys.platform, pcb.KICAD_INSTALL["linux"])
+                kicad = {"run": False, "skipped": why, "install": how}
+                print(f"KiCad DRC: skipped, {why}. To add it: {how}")
+                if a.kicad_drc == "require":
+                    kchk = [f"KiCad DRC required but {why}"]
+        if a.step:
+            files["step"] = pcb.export_step(b, os.path.join(a.out, f"{b.name}.step"))
+        timings["export"] = round(time.perf_counter() - t, 2)
+    sections = [("routing", probs), ("placement" if stage in ("place", "critic") else "design check", chk),
+                ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else [])
+    if stage in ("place", "critic"):
+        sections = [s_ for s_ in sections if s_[0] != "house check"]
+    for name, ps in sections:
         print(f"{name}: {'clean' if not ps else ''}")
         for p in ps[:20]:
             print("  ", p)
         if len(ps) > 20:
             print(f"   ... and {len(ps) - 20} more")
-    print(f"wrote {a.out}: review {files['report']}, parts {files['html']} ({time.perf_counter() - t0:.1f} s)")
-    import json
-    result = {"board": b.name, "clean": not (probs or chk or fchk or kchk), "kicad_drc": kicad,
+    print("critic: " + ("no notes" if not notes else ""))
+    for n in notes[:20]:
+        print(f"   [{n['severity']}] {n['text']}")
+    if files:
+        print(f"wrote {a.out}: review {files['report']}, parts {files['html']}")
+    print(f"({time.perf_counter() - t0:.1f} s: " + ", ".join(f"{k} {v} s" for k, v in timings.items()) + ")")
+    clean = not (probs or chk or fchk or kchk or crit_err) and (routed or stage in ("place", "critic"))
+    result = {"board": b.name, "stage": stage, "clean": clean, "kicad_drc": kicad,
               "router": getattr(b, "router_used", "none (routed by the script)"),
-              "environment": {k: r["ok"] for k, r in doctor().items()},   # (what this machine had: docs/setup.md) "parts": len(b.comps), "nets": len(b.nets),
-              "layers": len(b.layers), "seconds": round(time.perf_counter() - t0, 1),
+              "environment": {k: r["ok"] for k, r in doctor().items()},   # (what this machine had: docs/setup.md)
+              "parts": len(b.comps), "nets": len(b.nets), "layers": len(b.layers),
+              "seconds": round(time.perf_counter() - t0, 1), "timings": timings,
               "placement": {r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")] for r, c in b.comps.items()},
               "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),
                                                           ("kicad", kchk))
                            for p in ps],
+              "critic": notes,
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)
@@ -244,7 +292,6 @@ def main(argv=None) -> int:
         sys.stdout = real_stdout
         print(json.dumps(result, indent=1))
     return 0 if result["clean"] else 1
-
 
 if __name__ == "__main__":
     sys.exit(main())

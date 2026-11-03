@@ -1036,3 +1036,38 @@ def test_doctor_reports_each_optional_piece():
     rows = pcb_cli.doctor()
     assert {"kicad", "kicad_python", "java", "freerouting"} <= set(rows)
     assert all(r["gives"] and r["without"] for r in rows.values())
+
+
+def test_critic_flags_requirements_and_review_points():
+    """the critic finds a broken requirement (size, layers, current, a part too far) and the usual review points
+    (decoupling far from a supply pin, an undeclared USB pair, no ground pour) in a moment"""
+    import time
+    import critic
+    import pcb
+    b = pcb.Board("crit", [(0, 0), (40, 0), (40, 30), (0, 30)])
+    b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (10, 15), 0, "MCU")
+    b.place("C1", "Capacitor_SMD:C_0603_1608Metric", (35, 25), 0, "100n")
+    b.net("3V3", [("U1", "8"), ("C1", "1")], amps=0.2)
+    b.net("GND", [("U1", "4"), ("C1", "2")])
+    b.net("USB_DP", [("U1", "2")])
+    b.net("USB_DM", [("U1", "3")])
+    t = time.perf_counter()
+    notes = critic.review(b, {"size_mm": [30, 30], "layers": 4, "nets": {"3V3": {"amps": 1.0}}, "near": [["C1", "U1", 3]]})
+    assert time.perf_counter() - t < 1.0
+    kinds = {(n["severity"], n["kind"]) for n in notes}
+    assert {("error", "size"), ("error", "layers"), ("error", "current"), ("error", "near")} <= kinds
+    assert {("warning", "decoupling"), ("warning", "pair"), ("warning", "ground")} <= kinds
+    assert notes[0]["severity"] == "error"
+
+
+def test_cli_stages(tmp_path):
+    """--stage critic and --stage place run without routing or writing order files; all writes them"""
+    import json
+    import pcb_cli
+    here = Path(__file__).parent.parent
+    rc = pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "c"), "--stage", "critic", "--kicad-drc", "off"])
+    r = json.load(open(tmp_path / "c" / "result.json"))
+    assert r["stage"] == "critic" and r["files"] == {} and "critic" in r and rc in (0, 1)
+    pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "a"), "--kicad-drc", "off", "--router", "harness"])
+    r = json.load(open(tmp_path / "a" / "result.json"))
+    assert r["stage"] == "all" and "gerbers" in r["files"] and r["parts"] == 8

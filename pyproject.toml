@@ -20,7 +20,7 @@ dev = ["pytest", "build123d", "schemdraw", "cairosvg", "pypdf", "gerbonara", "ki
 pcb-harness = "pcb_cli:main"
 
 [tool.setuptools]
-py-modules = ["pcb", "schem", "vendor_parts", "fab", "pcb_cli", "freerouting"]
+py-modules = ["pcb", "schem", "vendor_parts", "fab", "pcb_cli", "freerouting", "critic"]
 packages = ["pcb_footprints"]
 
 [tool.setuptools.package-data]
