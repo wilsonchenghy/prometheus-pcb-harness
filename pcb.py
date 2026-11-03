@@ -1773,6 +1773,20 @@ def auto_grid(board: Board) -> float:
     return 0.2 if any(p < 0.8 and off(p, 0.25) > 0.05 and off(p, 0.2) < 0.05 for p in pitches) else 0.25
 
 
+def drop_pours(board: Board, nets: Optional[Sequence[str]] = None) -> None:
+    """each surface pad of a net poured on another layer drops through a via of its own beside it (the ground pins
+    of a two-layer board, a plane's), first, while there is room round a fine-pitch part"""
+    poured = {p["net"] for p in board.pours}
+    for net in (nets if nets is not None else sorted(poured, key=lambda n: board.nets[n]["amps"])):
+        if net not in board.nets:
+            continue
+        layers = {p["layer"] for p in board.pours if p["net"] == net}
+        pins = [tuple(p) for p in board.nets[net]["pins"]
+                if any(L_ not in layers and not d for r_, n_, L_, g, d in board.pad_shapes() if (r_, n_) == tuple(p))]
+        if pins:
+            board.drop(net, pins, width=min(0.3, board.net_width(net)))
+
+
 def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[str]:
     """route the whole board in one call: fine-pitch fan-outs first, a via beside each surface pad of a poured net
     (``drop``: the ground pins of a two-layer board drop to its ground pour), then the signal nets (the most local first),
@@ -1799,15 +1813,12 @@ def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[st
     last = sorted([n for n in nets if n in poured], key=lambda n: board.nets[n]["amps"])
     if not getattr(board, "_fan", None):
         board.fanout(width=0.2)
-    if drop:                                             # each surface pad of a net poured on another layer drops
-        pn = board.pad_net()                             # through a via of its own beside it, first, while there is
-        for net in last:                                 # room (the ground pins of a two-layer board, a plane's)
-            layers = {p["layer"] for p in board.pours if p["net"] == net}
-            pins = [tuple(p) for p in board.nets[net]["pins"]
-                    if any(L_ not in layers and not d for r_, n_, L_, g, d in board.pad_shapes() if (r_, n_) == tuple(p))]
-            if pins:
-                board.drop(net, pins, width=min(0.3, board.net_width(net)))
+    if drop:
+        drop_pours(board, last)
     jobs = [(n, board.net_width(n), None) for n in sig + pwr + last]
+    if ("~freerouting", "") in getattr(board, "_fan", set()):     # (finishing another router's work: the nets it
+        jobs = [j for j in jobs if j[0] in poured or len(board.islands(j[0])) > 1   # left whole are not routed
+                or len(board.anchor_groups(j[0])) > 1]                             # again, net by net)
     probs = route_jobs(board, jobs, kw=(lambda net: dict(kw)) if kw else None, passes=passes)
     return probs + repair(board, **kw)
 
@@ -2015,9 +2026,20 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
                 return False
         return True
 
+    convex = inner.convex_hull.area - inner.area < 1e-6
+    rect_ = convex and abs(box(*inner.bounds).area - inner.area) < 1e-6
+    ib = inner.bounds
+
+    def inside(b_):                                       # (a convex board holds a box when it holds its corners)
+        if rect_:
+            return ib[0] <= b_[0] and ib[1] <= b_[1] and b_[2] <= ib[2] and b_[3] <= ib[3]
+        if convex:
+            return bool(shapely.contains_xy(inner, [b_[0], b_[2], b_[2], b_[0]], [b_[1], b_[1], b_[3], b_[3]]).all())
+        return inner.contains(box(*b_))
+
     def legal(r, x, y, a, skip=()):
         b_ = box_of(r, x, y, a)
-        if not inner.contains(box(*b_)):
+        if not inside(b_):
             return False
         others = fixed_obs[side[r]] + [box_of(o, *pos[o]) for o in placed if o in mset and o != r and o not in skip
                                          and side[o] == side[r]]
@@ -2145,7 +2167,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             if not all(legal(q, *pos[q], skip=()) for q in old):
                 pos.update(old)
                 continue
-            touched = {n for q in old for n in nets_of.get(q, [])}
+            touched = sorted({n for q in old for n in nets_of.get(q, [])})   # (sorted: the same sum every run)
             new_c = sum(net_cost(n) for n in touched)
             saved = dict(pos)
             pos.update(old)
@@ -2189,10 +2211,10 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
                 for th in np.linspace(0, 2 * math.pi, max(8, int(rr * 12)), endpoint=False):
                     x, y = round((tx + rr * math.cos(th) - ox_) / 0.05) * 0.05, round((ty + rr * math.sin(th) - oy_) / 0.05) * 0.05
                     b_ = box_of(ra, x, y, here[2])
-                    if not inner.contains(box(*b_)) or not clear(ra, b_, fixed_obs[side[ra]]):
+                    if not inside(b_) or not clear(ra, b_, fixed_obs[side[ra]]):
                         continue
                     g_ = gap - 1e-6
-                    blk = [o for o in placed if o in mset and o != ra and side[o] == side[ra] and
+                    blk = [o for o in sorted(placed) if o in mset and o != ra and side[o] == side[ra] and
                            (lambda o_: b_[0] < o_[2] + g_ and o_[0] < b_[2] + g_ and b_[1] < o_[3] + g_ and
                             o_[1] < b_[3] + g_)(box_of(o, *pos[o]))]
                     if not blk or len(blk) > 2 or any(o in held for o in blk):
@@ -2285,6 +2307,10 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         probs += [p for p in board.check() if p not in probs]
         score = severity(probs) + 50 * len(left) + 5 * len(near_misses(board))   # (a part left off the board is
         # worse than any miss; a short worse than a slip; a requirement's "within d mm" missed counts)
+        miss = near_misses(board)
+        print(f"place and route, try {k + 1}: " + ("clean" if not probs and not miss and not left else
+              "; ".join(([f"{len(probs)} problems ({probs[0][:70]})"] if probs else []) + miss[:2] +
+                        ([f"no room for {', '.join(left)}"] if left else []))), flush=True)
         if best is None or score < best[0]:
             best = (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
                     list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))
@@ -2534,6 +2560,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
                                 else g_.centroid.buffer(grid * 0.5)
                                 for (rr, nn), (g_, ll) in pads.items() if ll == L and pn.get((rr, nn)) == net]
                                or [Polygon()]) for L in Ls}
+    tg, gm_, seen_ = {}, {}, {}
     for pin in todo:
         if pin not in pads:
             probs.append(f"route {net}: no pad {pin}")
@@ -2542,7 +2569,17 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         if L_pin not in Ls:
             probs.append(f"route {net}: pad {pin} is not on a routing layer")
             continue
-        tg = {L: unary_union(tree[L]) if tree[L] else Polygon() for L in LT}
+        for L in LT:                                     # (the net's copper so far, and the grid cells next to it,
+            n0 = seen_.get(L, 0)                         # grown by what each pin's route added: copper only adds)
+            if L not in tg or len(tree[L]) != n0:
+                new_ = tree[L][n0:] if L in tg else tree[L]
+                tg[L] = unary_union(([tg[L]] if L in tg and not tg[L].is_empty else []) + new_) if (new_ or L in tg) \
+                    else Polygon()
+                if L in Ls:
+                    add_ = unary_union(new_).buffer(grid * 0.6) if new_ else Polygon()
+                    gm_[L] = (gm_[L] if L in gm_ else np.zeros_like(blk0[L])) | \
+                        (_cxy(add_, XX, YY) if not add_.is_empty else False)
+                seen_[L] = len(tree[L])
         if not tg[L_pin].is_empty and tg[L_pin].intersects(g_pin.buffer(-0.01)):
             continue
         blk = {L: blk0[L].copy() for L in Ls}
@@ -2573,8 +2610,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         if best:
             ci, cj = best[1], best[2]
         blk[L_pin][ci, cj] = False
-        goal = {k: (_cxy(tg[L].buffer(grid * 0.6), XX, YY) & ~blk[L]) if not tg[L].is_empty else np.zeros_like(blk[L])
-                for k, L in enumerate(Ls)}
+        goal = {k: (gm_[L] & ~blk[L]) if not tg[L].is_empty else np.zeros_like(blk[L]) for k, L in enumerate(Ls)}
         found, path = _wavefront_windowed(blk, vblk, goal, [(ci, cj, Ls.index(L_pin))], Ls, via_cost)
         if not found and len(Ls) > 1 and vblk is not None and not vblk[ci, cj] and \
                 all(not blk[L][ci, cj] or L == L_pin for L in Ls):
@@ -3597,16 +3633,28 @@ def kicad_models(board: Board, model_dir: str) -> List[str]:
             continue
         dst = CACHE / "kicad" / Path(path).name
         if not dst.exists() or dst.stat().st_size < 4096:
-            try:
-                with urllib.request.urlopen(KICAD_RAW + path, timeout=120) as r:
-                    data = r.read()
-                if not data.startswith(b"ISO-10303-21"):
-                    raise ValueError("not a STEP file")
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                dst.write_bytes(data)
-            except Exception:
+            # (a footprint now and then names a model the library has since renamed: its own name, without the
+            # thermal-via / mask variant, and the newer "P" for "Pitch", are tried next)
+            fpn = c["fp"].split(":")[-1]
+            base = re.sub(r"(_Mask[\dx.]+mm)?(_ThermalVias)?$", "", fpn)
+            folder = str(Path(path).parent)
+            cands = list(dict.fromkeys([path, path.replace("_Pitch", "_P"), f"{folder}/{fpn}.step",
+                                        f"{folder}/{base}.step"]))
+            got = None
+            for cand in cands:
+                try:
+                    with urllib.request.urlopen(KICAD_RAW + cand, timeout=120) as r:
+                        data = r.read()
+                    if data.startswith(b"ISO-10303-21"):
+                        got = data
+                        break
+                except Exception:
+                    continue
+            if got is None:
                 missing.append(path)
                 continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_bytes(got)
         out = Path(model_dir) / path
         out.parent.mkdir(parents=True, exist_ok=True)
         if not out.exists():

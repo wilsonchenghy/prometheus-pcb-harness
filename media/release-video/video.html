@@ -47,7 +47,7 @@
 </head><body>
 <canvas id="c" width="1920" height="1080"></canvas>
 <script>
-const W = 1920, H = 1080, FPS = 30, T_END = 63, SHIFT = 15;
+const W = 1920, H = 1080, FPS = 30, T_END = 67, SHIFT = 19, CV = 14.9;   // CV: the conveyor's end, the panel's start
 const C = { bg: "#0a110e", bg2: "#0f1a16", grid: "rgba(120,170,140,0.06)", ink: "#eef3ee", dim: "#8fa39a",
   copper: "#d98b4e", copperHi: "#f3b27a", back: "#3f7f78", pad: "#e6c27a", mask: "#123a2a", ok: "#7fd6a2",
   line: "rgba(200,220,210,0.16)" };
@@ -335,24 +335,29 @@ const SHOW = [
   ["twilight", "Twilight flight controller", "199 parts · 4 layers", "Teensy 4.1, pyro channels, servo power"],
   ["arm", "Robot arm power board", "56 parts · 2 oz copper", "60 A hot-swap, every track sized by IPC-2221"],
   ["qdd", "Quadruped power and CAN", "70 parts · 2 layers", "twelve motors on one bus"],
+  ["motor", "Dual motor driver", "15 parts · 2 oz copper", "DRV8833, thermal pad, 3 A in, placed by the harness"],
   ["ripple", "Wheelbot power and CAN", "67 parts · 2 layers", "six motor drives"],
+  ["can", "CAN sensor node", "24 parts · STM32F103", "CAN pair length-matched to 2 mm"],
   ["fpvfc", "FPV flight controller", "42 parts · STM32F405", "0.5 mm LQFP, both sides poured"],
+  ["ring", "Addressable LED ring", "31 parts · round board", "twelve WS2812B, one data chain"],
   ["cube", "Balancing cube main board", "25 parts · 2 layers", "three motor channels, encoders"],
+  ["power", "LiPo power bank", "25 parts · 2 A paths", "charger, protection, 5 V boost, placed to its spec"],
   ["ctl", "Game controller", "47 parts · 2 layers", "routed inside its shell's outline"],
 ];
-const PANEL_PARTS = [199, 56, 70, 67, 42, 25, 47, 34];
+const PANEL_KEYS = ["twilight", "arm", "qdd", "ripple", "fpvfc", "cube", "ctl", "rp2040", "motor", "can", "ring", "power"];
+const PANEL_PARTS = [199, 56, 70, 67, 42, 25, 47, 34, 15, 24, 31, 25];
 const IMG = {};
 function fitImg(im, w, h) { const k = Math.min(w / im.width, h / im.height); return [im.width * k, im.height * k]; }
 
-function showcase(t) {                                    // t: 0 .. 15
-  const k = Math.min(easeOut(span(t, 0, 0.6)), 1 - span(t, 14.4, 15));
+function showcase(t) {                                    // t: 0 .. SHIFT
+  const k = Math.min(easeOut(span(t, 0, 0.6)), 1 - span(t, SHIFT - 0.6, SHIFT));
   if (k <= 0) return;
   g.save();
   const beltY = 640, beam = W * 0.5;
-  layer(k * (1 - ease(span(t, 10.9, 11.5))), () => {
-    caption(t, 0, 11.2, "06  BUILT WITH IT", "Real boards, through the line.", "Each one routed, checked and exported by the harness.");
+  layer(k * (1 - ease(span(t, CV, CV + 0.6))), () => {
+    caption(t, 0, CV + 0.3, "06  BUILT WITH IT", "Real boards, through the line.", "Each one routed, checked and exported by the harness.");
     // rails, with chevrons moving with the belt
-    const v = 560, off = (t * v) % 60;
+    const v = 680, off = (t * v) % 60;
     g.fillStyle = "rgba(200,220,210,0.07)"; g.fillRect(0, beltY - 230, W, 460);
     g.strokeStyle = "rgba(200,220,210,0.25)"; g.lineWidth = 2;
     [beltY - 232, beltY + 232].forEach(y => { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); });
@@ -361,7 +366,7 @@ function showcase(t) {                                    // t: 0 .. 15
       [beltY - 246, beltY + 246].forEach(y => { g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x - 8, y); g.lineTo(x, y + 6); g.stroke(); });
     }
     // boards ride in from the right; each passes the beam in turn
-    const sp = 720, start = 0.3;
+    const sp = 780, start = 0.3;
     let under = -1, under_k = 0;
     SHOW.forEach(([key], i) => {
       const im = IMG[key]; if (!im) return;
@@ -399,14 +404,14 @@ function showcase(t) {                                    // t: 0 .. 15
       text(name, x, y, 40, { weight: 500, alpha: ck });
       text(stat, x, y + 44, 24, { mono: true, color: C.copper, alpha: ck });
       text(hard, W - 140, y + 44, 24, { color: C.dim, align: "right", alpha: ck });
-      text(String(under + 1).padStart(2, "0") + " / 07", W - 140, y, 22, { mono: true, color: C.dim, align: "right", alpha: ck });
+      text(String(under + 1).padStart(2, "0") + " / " + String(SHOW.length).padStart(2, "0"), W - 140, y, 22, { mono: true, color: C.dim, align: "right", alpha: ck });
     }
   });
-  layer(k * ease(span(t, 10.8, 11.3)), () => {
+  layer(k * ease(span(t, CV - 0.1, CV + 0.4)), () => {
     // the panel: every board tiled on one fab panel with rails, tooling holes, fiducials and mouse bites
-    const pk = ease(span(t, 10.8, 11.6));
-    caption(t, 11.2, 15, "06  BUILT WITH IT", "One harness. Every board.", "");
-    const PX = 220, PY = 280, PW = 1480, PH = 640;
+    const pk = ease(span(t, CV - 0.1, CV + 0.7));
+    caption(t, CV + 0.3, SHIFT, "06  BUILT WITH IT", "One harness. Every board.", "");
+    const PX = 220, PY = 230, PW = 1480, PH = 720;
     g.save(); g.globalAlpha = pk;
     g.fillStyle = "#10281e"; g.strokeStyle = "rgba(150,210,180,0.5)"; g.lineWidth = 2;
     g.beginPath(); g.roundRect(PX, PY, PW, PH, 6); g.fill(); g.stroke();
@@ -417,11 +422,11 @@ function showcase(t) {                                    // t: 0 .. 15
       g.fillStyle = C.pad; g.beginPath(); g.arc(x, y, 6, 0, 7); g.fill();
       g.strokeStyle = "rgba(230,194,122,0.5)"; g.lineWidth = 1; g.beginPath(); g.arc(x, y, 14, 0, 7); g.stroke();
     });
-    const keys = ["twilight", "arm", "qdd", "ripple", "fpvfc", "cube", "ctl", "rp2040"];
-    const cols = 4, cw = (PW - 120) / cols, ch = (PH - 120) / 2;
+    const keys = PANEL_KEYS;
+    const cols = 4, cw = (PW - 120) / cols, ch = (PH - 120) / 3;
     keys.forEach((key, i) => {
       const c_ = i % cols, r_ = Math.floor(i / cols);
-      const tk = easeOut(span(t, 10.9 + i * 0.1, 11.6 + i * 0.1));
+      const tk = easeOut(span(t, CV + i * 0.08, CV + 0.7 + i * 0.08));
       const x = PX + 60 + c_ * cw, y = PY + 60 + r_ * ch;
       g.globalAlpha = pk * tk;
       g.fillStyle = "rgba(5,10,8,0.6)"; g.fillRect(x + 8, y + 8, cw - 16, ch - 16);
@@ -430,14 +435,14 @@ function showcase(t) {                                    // t: 0 .. 15
       // mouse bites between tiles
       g.fillStyle = "#050807";
       if (c_ < cols - 1) for (let q = 0; q < 5; q++) { g.beginPath(); g.arc(x + cw, y + ch / 2 - 20 + q * 10, 2.2, 0, 7); g.fill(); }
-      if (r_ === 0) for (let q = 0; q < 5; q++) { g.beginPath(); g.arc(x + cw / 2 - 20 + q * 10, y + ch, 2.2, 0, 7); g.fill(); }
+      if (r_ < 2) for (let q = 0; q < 5; q++) { g.beginPath(); g.arc(x + cw / 2 - 20 + q * 10, y + ch, 2.2, 0, 7); g.fill(); }
     });
     g.restore();
     const total = PANEL_PARTS.reduce((a, b) => a + b, 0);
-    const nk = ease(span(t, 11.2, 13.2));
+    const nk = ease(span(t, CV + 0.3, CV + 2.3));
     text(String(Math.round(total * nk)), 140, 1010, 54, { weight: 500, mono: true, alpha: pk });
     text("parts placed and routed", 140, 1044, 18, { mono: true, color: C.dim, alpha: pk, track: 2 });
-    text("8 boards", 520, 1010, 54, { weight: 500, mono: true, alpha: pk });
+    text(PANEL_KEYS.length + " boards", 520, 1010, 54, { weight: 500, mono: true, alpha: pk });
     text("2 and 4 layers", 520, 1044, 18, { mono: true, color: C.dim, alpha: pk, track: 2 });
   });
   g.restore();
@@ -636,7 +641,7 @@ window.__setup = async (data) => {
   const u = D.compMap["U1"].at;
   D.tracks.sort((a, b) => Math.hypot(a.pts[0][0] - u[0], a.pts[0][1] - u[1]) - Math.hypot(b.pts[0][0] - u[0], b.pts[0][1] - u[1]));
   D.vias.sort((a, b) => Math.hypot(a.at[0] - u[0], a.at[1] - u[1]) - Math.hypot(b.at[0] - u[0], b.at[1] - u[1]));
-  for (const k of ["twilight", "arm", "qdd", "ripple", "fpvfc", "cube", "ctl"]) {
+  for (const k of SHOW.map(r => r[0])) {
     IMG[k] = await new Promise(res => { const im = new Image(); im.onload = () => res(im); im.src = "img/cut_" + k + ".png"; });
   }
   boardFrame(1360, 600, 14.5);

@@ -16,7 +16,7 @@ const fs = require('fs');
     }
   } else {
     fs.mkdirSync(out, { recursive: true });
-    const N = 63 * 30;
+    const N = 67 * 30;
     for (let i = 0; i < N; i++) {
       await p.evaluate(t => window.__render(t), i / 30);
       await canvas.screenshot({ path: `${out}/f${String(i).padStart(5, '0')}.png` });
