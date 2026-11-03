@@ -2314,39 +2314,88 @@ def near_misses(board: Board) -> List[str]:
     return out
 
 
+def _one_try(board: Board, move, k: int, gap: float, route_kw, router: str, kw) -> tuple:
+    """one placement and routing of ``place_and_route``: (score, problems, placement, tracks, vias, fan, line)"""
+    left = autoplace(board, move=move, gap=gap + 0.25 * min(k, 3), seed=k, **kw)   # (later tries: other seeds at
+    probs = [f"{r}: no room to place it" for r in left] + route_board(board, router, **(route_kw or {}))  # the same
+    probs += [p for p in board.check() if p not in probs]                         # room, not ever more than fits)
+    miss = near_misses(board)
+    score = severity(probs) + 50 * len(left) + 5 * len(miss)   # (a part left off the board is worse than any miss;
+    # a short worse than a slip; a requirement's "within d mm" missed counts)
+    line = f"place and route, try {k + 1}: " + ("clean" if not probs and not miss and not left else
+           "; ".join(([f"{len(probs)} problems ({probs[0][:70]})"] if probs else []) + miss[:2] +
+                     ([f"no room for {', '.join(left)}"] if left else [])))
+    return (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
+            list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())), line,
+            not probs and not miss, getattr(board, "router_used", None))
+
+
+def _try_worker(blob: bytes, move, k, gap, route_kw, router, kw) -> tuple:
+    import pickle
+    global _NO_LATEST
+    _NO_LATEST = True                                    # (tries in parallel: no routing reused from another try)
+    return _one_try(pickle.loads(blob), move, k, gap, route_kw, router, kw)
+
+
+_NO_LATEST = False
+
+
 def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 6, gap: float = 1.0,
-                    route_kw: Optional[dict] = None, router: str = "auto", **kw) -> List[str]:
-    """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed, a little more
-    room between parts) and route again, up to ``tries`` times; keeps the placement and routing with the fewest
-    problems (``kw`` go to ``autoplace``, ``route_kw`` to ``autoroute``, e.g. ``{"grid": 0.2}``). Returns that routing's problems (empty: placed, routed, and check()
-    clean)"""
+                    route_kw: Optional[dict] = None, router: str = "auto", workers: Optional[int] = None,
+                    **kw) -> List[str]:
+    """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed) and route
+    again, up to ``tries`` times; keeps the placement and routing with the fewest problems (``kw`` go to
+    ``autoplace``, ``route_kw`` to ``autoroute``, e.g. ``{"grid": 0.2}``). ``workers``: tries run that many at a
+    time in separate processes (default: one per CPU, at most 4; ``PCB_WORKERS`` overrides); the first clean try,
+    in order, is kept, so the result is the same as one at a time. Returns that routing's problems (empty: placed,
+    routed, and check() clean)"""
+    import os
+    import pickle
     move = list(move) if move is not None else None
     if move is None:
         move = [r for r, c in board.comps.items() if c.get("unplaced")] or \
                [r for r, c in board.comps.items() if not c["overhang"]]
     tracks0, vias0, fan0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
-    best = None
-    for k in range(max(1, tries)):
-        board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try fans out afresh)
-        left = autoplace(board, move=move, gap=gap + 0.25 * min(k, 3), seed=k, **kw)   # (later tries: other seeds
-        # at the same room, not ever more room than the board has)
-        probs = [f"{r}: no room to place it" for r in left] + route_board(board, router, **(route_kw or {}))
-        probs += [p for p in board.check() if p not in probs]
-        score = severity(probs) + 50 * len(left) + 5 * len(near_misses(board))   # (a part left off the board is
-        # worse than any miss; a short worse than a slip; a requirement's "within d mm" missed counts)
-        miss = near_misses(board)
-        print(f"place and route, try {k + 1}: " + ("clean" if not probs and not miss and not left else
-              "; ".join(([f"{len(probs)} problems ({probs[0][:70]})"] if probs else []) + miss[:2] +
-                        ([f"no room for {', '.join(left)}"] if left else []))), flush=True)
-        if best is None or score < best[0]:
-            best = (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
-                    list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))
-        if not probs and not near_misses(board):
+    tries = max(1, tries)
+    if workers is None:
+        workers = int(os.environ.get("PCB_WORKERS") or min(4, os.cpu_count() or 1))
+    workers = max(1, min(workers, tries))
+    best, results = None, {}
+    if workers > 1:
+        import multiprocessing as mp
+        from concurrent.futures import ProcessPoolExecutor
+        ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
+        blob = pickle.dumps(board)
+        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as ex:
+            for k0 in range(0, tries, workers):
+                futs = {k: ex.submit(_try_worker, blob, move, k, gap, route_kw, router, kw)
+                        for k in range(k0, min(tries, k0 + workers))}
+                for k in sorted(futs):
+                    results[k] = futs[k].result()
+                    print(results[k][6], flush=True)
+                if any(results[k][7] for k in futs):
+                    break
+    else:
+        for k in range(tries):
+            board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try afresh)
+            results[k] = _one_try(board, move, k, gap, route_kw, router, kw)
+            print(results[k][6], flush=True)
+            if results[k][7]:
+                break
+    for k in sorted(results):                            # (the first clean try, else the fewest problems)
+        if results[k][7]:
+            best = results[k]
             break
+        if best is None or results[k][0] < best[0]:
+            best = results[k]
     for r, (at, rot) in best[2].items():
         board.comps[r]["at"], board.comps[r]["rot"] = at, rot
+        board.comps[r].pop("unplaced", None)
     board.tracks, board.vias, board._fan = best[3], best[4], best[5]
+    if best[8]:
+        board.router_used = best[8]
     board.__dict__.pop("_pads_memo", None)
+    board.__dict__.pop("_cu_memo", None)
     return best[1]
 
 
@@ -3554,7 +3603,7 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
     import os
     fresh = bool(os.environ.get("PCB_REROUTE"))
     best = pickle.loads(ckpt.read_bytes()) if ckpt.exists() and not fresh else None
-    if best is None and latest.exists() and not fresh:
+    if best is None and latest.exists() and not fresh and not _NO_LATEST:
         old = pickle.loads(latest.read_bytes())
         failed0 = {m.split()[1].rstrip(":") for m in old["got"] if m.startswith("route ")}
         circles = []
