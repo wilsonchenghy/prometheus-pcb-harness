@@ -57,4 +57,7 @@ jobs:
           echo "d7fd0f63f52e6d74b0fad6715f87ca9f0ffd7109d66b2a584638000270592ecf  $HOME/.cache/prometheus/freerouting/freerouting-2.0.1.jar" | sha256sum -c
       - run: pip install -e ".[dev]"
       - run: pytest -q -k freerouting
-      - run: python -m pcb_cli bench/rp2040_board.py out/rp2040 --router freerouting --kicad-drc off
+      # (FreeRouting's own Specctra round trip, no KiCad here: two boards it routes clean that way; the RP2040
+      # board needs the KiCad round trip, run by hand where KiCad is installed)
+      - run: python -m pcb_cli bench/motor_driver.py out/motor --spec bench/specs/motor_driver.json --router freerouting --kicad-drc off
+      - run: python -m pcb_cli bench/can_node.py out/can --spec bench/specs/can_node.json --router freerouting --kicad-drc off

@@ -75,7 +75,7 @@ routes):
 | motor_driver (DRV8833, 2 oz) | 15 | 2 | 14 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
 | power_bank (LiPo, 2 A paths) | 25 | 2 | 13 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
 | can_node (STM32F103, CAN) | 24 | 2 | about 40 s, placed, FreeRouting, pair length-tuned | clean, KiCad DRC clean, its spec met |
-| rp2040_board (0.4 mm QFN-56) | 34 | 2 | about 3.5 min, placed (clean on the 6th placement tried; tries run 4 at a time), FreeRouting | clean, KiCad DRC clean |
+| rp2040_board (0.4 mm QFN-56) | 34 | 2 | about 3.5 min, placed (clean on the 6th placement tried; tries run 4 at a time), FreeRouting through KiCad (without KiCad: not clean, 2 nets left) | clean, KiCad DRC clean |
 | arm_pdb (60 A power) | 56 | 2 | about 80 s | clean (JLCPCB) |
 | cube_main | 25 | 2 | about 60 s | clean (JLCPCB) |
 | ripple_main | 67 | 2 | about 50 s | clean (JLCPCB) |
