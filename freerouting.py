@@ -294,7 +294,8 @@ def _repair(board, fr_t, fr_v, probs, kw):
         before = (list(board.tracks), list(board.vias), probs, score(probs))
         bad = set()
         for msg in board.check():
-            m = re.match(r"\S+\.Cu: (.+?) and (.+?) (short|[\d.]+ mm apart)", msg)
+            m = re.match(r"\S+\.Cu: (.+?) and (.+?) (short|[\d.]+ mm apart)", msg) or \
+                re.match(r"via (\S+) and via (\S+) drills", msg)        # (FreeRouting has no hole-to-hole rule)
             if m:
                 bad |= {n for n in (m.group(1), m.group(2)) if n in board.nets}
         is_fr = lambda t: (t["net"], t["layer"], tuple(map(tuple, t["pts"]))) in fr_t   # (by shape: a cached
@@ -477,12 +478,18 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
             pitch = float(dd.min())                       # the neighbours (their stubs, or their full-width
             nbw = max([board.net_width(pn[(ref, pads[j][0])]) for j in np.nonzero(dd[i] < pitch * 1.2)[0]
                        if pn.get((ref, pads[j][0])) in board.nets] or [width])   # tracks past a shorter stub)
-            fit = math.floor(min(pitch - board.clear - 0.01, 2 * (pitch - board.clear - 0.01) - nbw) * 100) / 100
-            if fit < width:                               # necks down to the pin (marked, so the current check
-                continue                                  # reads it as a pin entry), and FreeRouting takes the full
-            board.track(net, L, pts, round(min(need, fit), 3))   # width on from the stub's end, clear of the row
-            if need > fit:
-                board.tracks[-1]["neck"] = True
+            room = pitch - board.clear - 0.01
+            if need <= room:                              # (fits between the neighbours' pads at the net's width)
+                board.track(net, L, pts, round(need, 3))
+                n += 1
+                continue
+            if board.width_for(board.nets[net]["amps"], L) <= room:
+                continue                                  # (a signal at a house's minimum: left to FreeRouting)
+            fit = math.floor(min(room, 2 * room - nbw) * 100) / 100   # a power net necks down to the pin (marked,
+            if fit < width:                               # so the current check reads it as a pin entry), and
+                continue                                  # FreeRouting takes the full width on from the stub's end
+            board.track(net, L, pts, round(fit, 3))
+            board.tracks[-1]["neck"] = True
             n += 1
     board._fan = set(getattr(board, "_fan", set())) | {("~escape", "")}
     board.__dict__.pop("_cu_memo", None)

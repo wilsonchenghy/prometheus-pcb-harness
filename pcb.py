@@ -1818,7 +1818,8 @@ def autoroute(board: Board, passes: int = 3, drop: bool = True, **kw) -> List[st
     jobs = [(n, board.net_width(n), None) for n in sig + pwr + last]
     if ("~freerouting", "") in getattr(board, "_fan", set()):     # (finishing another router's work: the nets it
         jobs = [j for j in jobs if j[0] in poured or len(board.islands(j[0])) > 1   # left whole are not routed
-                or len(board.anchor_groups(j[0])) > 1]                             # again, net by net)
+                or len(board.anchor_groups(j[0])) > 1]                             # again, net by net: a stub's
+        board.prune_spurs()                              # tip past where FreeRouting joined it is trimmed)
     probs = route_jobs(board, jobs, kw=(lambda net: dict(kw)) if kw else None, passes=passes)
     return probs + repair(board, **kw)
 
@@ -2288,7 +2289,7 @@ def near_misses(board: Board) -> List[str]:
     return out
 
 
-def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 4, gap: float = 1.0,
+def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 6, gap: float = 1.0,
                     route_kw: Optional[dict] = None, router: str = "auto", **kw) -> List[str]:
     """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed, a little more
     room between parts) and route again, up to ``tries`` times; keeps the placement and routing with the fewest
