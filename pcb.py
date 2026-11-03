@@ -2579,6 +2579,9 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
                 tree[L].append(Point(v["at"]).buffer(v["dia"] / 2))
     pins = [tuple(p) for p in board.nets[net]["pins"]]
     pins += [p for p in extra if (p[0], p[1].split("~")[0]) in pins]
+    for p_ in [p_ for p_ in pins if p_ not in pads]:      # (a pin its footprint does not have: said, not routed)
+        probs.append(f"route {net}: no pad {p_}")
+    pins = [p_ for p_ in pins if p_ in pads]
     if not only and getattr(board, "root_big", True):    # grow the net from its biggest pad (a regulator's tab, a
         big = max((p_ for p_ in pins if p_ in pads),     # capacitor), not from a pad boxed in by fine-pitch
                   key=lambda p_: (pads[p_][0].area, -pins.index(p_)), default=None)   # neighbours: everything
