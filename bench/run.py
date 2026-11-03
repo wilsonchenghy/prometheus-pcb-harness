@@ -3,7 +3,8 @@ routes), checked, checked against a fab preset, plotted, and exported to Gerbers
 files, each stage timed. KiCad itself is not needed (its DRC is the examples' own export step).
 
     python bench/run.py                 # all boards
-    python bench/run.py blinker cube    # some
+    python bench/run.py blinker cube    # some (led_ring, power_bank, motor_driver, can_node and rp2040 are placed
+                                        # and routed from scratch against bench/specs/; rp2040 takes minutes)
     python bench/run.py --json out.json
 
 A board passes when it routes with no problems, Board.check() is clean and fab.fab_check() is clean.
@@ -79,6 +80,23 @@ def _placed(script, fixed, rules="jlcpcb-2"):
     return go
 
 
+def _specced(script):
+    """a bench board placed and routed the way the command line does it (``place_and_route``: FreeRouting through
+    KiCad when installed), against its requirements file in ``bench/specs/`` when there is one: the critic's errors
+    count as problems"""
+    def go():
+        import critic
+        g = runpy.run_path(os.path.join(HERE, script), run_name="bench")
+        b = g["build"]()
+        sp = os.path.join(HERE, "specs", script.replace(".py", ".json"))
+        spec = critic.load_spec(sp) if os.path.exists(sp) else {}
+        b.near = [tuple(x) for x in spec.get("near", [])]
+        probs = pcb.place_and_route(b)
+        probs += [n["text"] for n in critic.review(b, spec) if n["severity"] == "error"]
+        return [(b, probs, spec.get("house") or b.rules or "jlcpcb-2")]
+    return go
+
+
 BOARDS = {
     "blinker": _blinker,
     "usb_ldo": _usb_ldo,
@@ -94,6 +112,11 @@ BOARDS = {
     "blinker_placed": _placed("blinker.py", {"J1"}),
     "usb_ldo_placed": _placed("usb_ldo.py", {"J1", "J2"}),
     "esp32_placed": _placed("esp32_sensor.py", {"U1", "J1", "J2", "SW1", "SW2"}),
+    "led_ring": _specced("led_ring.py"),
+    "power_bank": _specced("power_bank.py"),
+    "motor_driver": _specced("motor_driver.py"),
+    "can_node": _specced("can_node.py"),
+    "rp2040": _specced("rp2040_board.py"),
 }
 
 
