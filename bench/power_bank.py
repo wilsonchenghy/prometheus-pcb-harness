@@ -59,7 +59,8 @@ def build():
     b.net("OD", [("U2", "1"), ("Q1", "4")])
     b.net("OC", [("U2", "3"), ("Q1", "5")])
     b.net("CS", [("U2", "2"), ("R5", "1")])
-    b.net("FET_D", [("Q1", "1"), ("Q1", "8")], amps=2.0)
+    b.net("FET_D", [("Q1", "1"), ("Q1", "8")])                   # (the common drain, joined inside the package:
+    # the cell's current flows S1 -> S2 within the FS8205A, so this tie carries none)
     # the boost: L1 from the cell to SW, D3 to the output, R6 / R7 set 5 V
     b.net("SW", [("U3", "1"), ("L1", "2"), ("D3", "2")], amps=2.0)
     b.net("VOUT", [("D3", "1"), ("C5", "1"), ("R6", "1"), ("J2", "1")], amps=1.5)

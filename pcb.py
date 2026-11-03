@@ -530,11 +530,13 @@ class Board:
                              [Point(v["at"]).buffer(v["drill"] / 2 + self.hole_gap + via[0] / 2, 12) for v in self.vias]
                              or [Point(0, 0).buffer(0)])
         inside = self.outline.buffer(-(via[1] / 2 + 0.3))
+        bare = unary_union([Point(x, y).buffer(d / 2, 12) for x, y, d in self.npth()] +
+                           [Point(x, y).buffer(d / 2, 12) for x, y, d in self.holes] or [Point(0, 0).buffer(0)])
         kz = unary_union([__import__("shapely.geometry", fromlist=["Polygon"]).Polygon(k["poly"])
                           for k in getattr(self, "keepouts", [])] or [Point(0, 0).buffer(0)])
         shapes = {(r, n_, L): g for r, n_, L, g, _ in self.pad_shapes()}
         import shapely
-        for g_ in list(others.values()) + [drills, inside, kz]:   # (tested thousands of times per call: prepared)
+        for g_ in list(others.values()) + [drills, inside, kz, bare]:   # (tested thousands of times per call: prepared)
             shapely.prepare(g_)
         for ref, num in pins:
             c = self.comps[ref]
@@ -559,7 +561,7 @@ class Board:
                     if any(disk.intersects(others[l]) for l in self.layers):
                         continue
                     trk = LineString([(p0.x, p0.y), (q.x, q.y)]).buffer(w_ / 2 + self.clear + 0.04, 8)
-                    if trk.intersects(others[L]):
+                    if trk.intersects(others[L]) or trk.buffer(HOLE_CLEAR - self.clear).intersects(bare):
                         continue
                     best = q
                     break
@@ -2049,6 +2051,29 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     cx, cy = board.outline.centroid.x, board.outline.centroid.y
     order = sorted(move, key=lambda r: -sum(len(NETS[n]["pins"]) * wt[n] for n in nets_of.get(r, []))
                    - 0.5 * len(board.comps[r]["pads"]))
+    partners: Dict[str, List[str]] = {}                  # (a part held near another goes right after it: a
+    for m, dm in NETS.items():                           # cluster, placed before the room round its chip fills)
+        if dm.get("limit") is not None and len(dm["pins"]) == 2:
+            (ra_, _), (rb_, _) = dm["pins"]
+            partners.setdefault(rb_, []).append(ra_)
+    seq, seen_ = [], set()
+
+    def _emit(r):
+        if r in seen_ or r not in mset:
+            return
+        seen_.add(r)
+        seq.append(r)
+        for q in sorted(partners.get(r, []), key=lambda q: -len(board.comps[q]["pads"])):
+            _emit(q)
+    for r in order:
+        _emit(r)
+    for r in list(partners):                             # (a fixed chip's partners come first of all)
+        if r not in mset:
+            for q in partners[r]:
+                if q in mset and q not in seen_:
+                    seq.insert(0, q)
+                    seen_.add(q)
+    order = seq + [r for r in order if r not in seen_]
     failed = []
     for r in order:
         best = None
@@ -2129,6 +2154,78 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             d = new_c - old_c
             if d > 0 and rng.random() >= math.exp(-d / T):
                 pos.update(old)
+    # 3. settle: a part still further than its "within d mm" (a requirement, a decoupling cap) goes to the
+    # cheapest legal spot round its partner's pin within that distance, if there is one
+    mov_set = set(mov) if len(mov) >= 1 else set()
+    gap = min(gap, 0.5)                                  # (legal() reads it: a held part may sit closer)
+    for n, d_ in NETS.items():
+        lim = d_.get("limit")
+        if lim is None or len(d_["pins"]) != 2:
+            continue
+        (ra, pa), (rb, pb) = d_["pins"]
+        if ra not in mov_set or rb not in placed:
+            continue
+        if math.dist(pin_xy(ra, pa), pin_xy(rb, pb)) <= lim:
+            continue
+        tx, ty = pin_xy(rb, pb)
+        best_ = None
+        here = pos[ra]
+        for a in rots:
+            ox_, oy_ = P_[(ra, a)].get(pa, (0.0, 0.0))
+            for rr in np.arange(0.0, lim + 1e-9, 0.25):
+                for th in np.linspace(0, 2 * math.pi, max(8, int(rr * 12)), endpoint=False):
+                    x, y = round((tx + rr * math.cos(th) - ox_) / 0.05) * 0.05, round((ty + rr * math.sin(th) - oy_) / 0.05) * 0.05
+                    if not legal(ra, x, y, a):
+                        continue
+                    pos[ra] = (x, y, a)
+                    c_ = sum(net_cost(m) for m in nets_of.get(ra, []))
+                    if best_ is None or c_ < best_[0]:
+                        best_ = (c_, pos[ra])
+                    pos[ra] = here
+        if best_ is None:                                # no room: take a spot from parts no rule holds, and
+            held = {q for m, dm in NETS.items() if dm.get("limit") is not None for q, _ in dm["pins"]}
+            ox_, oy_ = P_[(ra, here[2])].get(pa, (0.0, 0.0))     # place them again where they cost the least
+            for rr in np.arange(0.0, lim + 1e-9, 0.25):
+                for th in np.linspace(0, 2 * math.pi, max(8, int(rr * 12)), endpoint=False):
+                    x, y = round((tx + rr * math.cos(th) - ox_) / 0.05) * 0.05, round((ty + rr * math.sin(th) - oy_) / 0.05) * 0.05
+                    b_ = box_of(ra, x, y, here[2])
+                    if not inner.contains(box(*b_)) or not clear(ra, b_, fixed_obs[side[ra]]):
+                        continue
+                    g_ = gap - 1e-6
+                    blk = [o for o in placed if o in mset and o != ra and side[o] == side[ra] and
+                           (lambda o_: b_[0] < o_[2] + g_ and o_[0] < b_[2] + g_ and b_[1] < o_[3] + g_ and
+                            o_[1] < b_[3] + g_)(box_of(o, *pos[o]))]
+                    if not blk or len(blk) > 2 or any(o in held for o in blk):
+                        continue
+                    keep_ = {o: pos[o] for o in blk}
+                    pos[ra] = (x, y, here[2])
+                    for o in blk:
+                        pos[o] = (1e6, 1e6, pos[o][2])   # (off the board while it looks for a spot)
+                    ok_ = True
+                    for o in blk:
+                        bo = None
+                        for a in rots:
+                            for j in range(0, len(gx), 2):
+                                if not legal(o, gx[j], gy[j], a):
+                                    continue
+                                pos[o] = (float(gx[j]), float(gy[j]), a)
+                                c_ = sum(net_cost(m) for m in nets_of.get(o, []))
+                                if bo is None or c_ < bo[0]:
+                                    bo = (c_, pos[o])
+                                pos[o] = (1e6, 1e6, a)
+                        if bo is None:
+                            ok_ = False
+                            break
+                        pos[o] = bo[1]
+                    if ok_:
+                        best_ = (0.0, pos[ra])
+                        break
+                    pos.update(keep_)
+                    pos[ra] = here
+                if best_ is not None:
+                    break
+        if best_ is not None:
+            pos[ra] = best_[1]
     for r in move:
         if r in placed:
             c = board.comps[r]
@@ -2191,7 +2288,7 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         if best is None or score < best[0]:
             best = (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
                     list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))
-        if not probs:
+        if not probs and not near_misses(board):
             break
     for r, (at, rot) in best[2].items():
         board.comps[r]["at"], board.comps[r]["rot"] = at, rot

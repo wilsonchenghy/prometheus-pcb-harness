@@ -13,6 +13,7 @@ drops their pins into the pour; FreeRouting routes every other net.
 from __future__ import annotations
 
 import glob
+import math
 import os
 import re
 import shutil
@@ -409,9 +410,17 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     t0, v0 = len(board.tracks), len(board.vias)
     have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"]))) for t in board.tracks}
     have_v = {(v["net"], tuple(round(c, 3) for c in v["at"])) for v in board.vias}
+    from shapely.geometry import LineString
+    on = {}                                              # (KiCad hands back a stub it already had split into
+    for t in board.tracks:                               # pieces: those are not new copper)
+        on.setdefault((t["net"], t["layer"], round(t["w"], 3)), []).append(LineString(t["pts"]).buffer(2e-3))
     for net, L, pts, w in segs:
-        if net in board.nets and (net, L, tuple(pts)) not in have_t and pts[0] != pts[1]:
-            board.track(net, L, pts, round(w, 4))
+        if net not in board.nets or (net, L, tuple(pts)) in have_t or math.dist(pts[0], pts[-1]) < 1e-3:
+            continue
+        seg = LineString(pts)
+        if any(g.contains(seg) for g in on.get((net, L, round(w, 3)), [])):
+            continue
+        board.track(net, L, pts, round(w, 4))
     for net, at, drill, dia in vias:
         if net in board.nets and (net, tuple(round(c, 3) for c in at)) not in have_v:
             board.via(net, at, drill, dia)
@@ -464,10 +473,16 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
             else:
                 ey = y1_ if dy > 0 else y0_
                 pts = [(round(cx, 4), round(cy, 4)), (round(cx, 4), round(ey + (reach if dy > 0 else -reach), 4))]
-            need = max(width, board.net_width(net))       # as wide as the net needs; a pin whose stub cannot be
-            if need > float(dd.min()) - board.clear - 0.01:  # (between its neighbours) is left to FreeRouting
-                continue
-            board.track(net, L, pts, round(need, 3))
+            need = max(width, board.net_width(net))       # as wide as the net needs, or as wide as fits between
+            pitch = float(dd.min())                       # the neighbours (their stubs, or their full-width
+            nbw = max([board.net_width(pn[(ref, pads[j][0])]) for j in np.nonzero(dd[i] < pitch * 1.2)[0]
+                       if pn.get((ref, pads[j][0])) in board.nets] or [width])   # tracks past a shorter stub)
+            fit = math.floor(min(pitch - board.clear - 0.01, 2 * (pitch - board.clear - 0.01) - nbw) * 100) / 100
+            if fit < width:                               # necks down to the pin (marked, so the current check
+                continue                                  # reads it as a pin entry), and FreeRouting takes the full
+            board.track(net, L, pts, round(min(need, fit), 3))   # width on from the stub's end, clear of the row
+            if need > fit:
+                board.tracks[-1]["neck"] = True
             n += 1
     board._fan = set(getattr(board, "_fan", set())) | {("~escape", "")}
     board.__dict__.pop("_cu_memo", None)
