@@ -6,3 +6,4 @@ build/
 media/release-video/frames/
 media/release-video/keys/
 *.mp4
+media/release-video/*.wav
