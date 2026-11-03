@@ -1028,3 +1028,11 @@ def test_footprint_bare_holes_are_obstacles_and_drilled():
     import glob
     npth = open([f for f in glob.glob(out + "/*") if "NPTH" in f][0]).read()
     assert "C0.650" in npth
+
+
+def test_doctor_reports_each_optional_piece():
+    """pcb-harness doctor names KiCad, its Python, Java and FreeRouting, each with what it gives and the fallback"""
+    import pcb_cli
+    rows = pcb_cli.doctor()
+    assert {"kicad", "kicad_python", "java", "freerouting"} <= set(rows)
+    assert all(r["gives"] and r["without"] for r in rows.values())

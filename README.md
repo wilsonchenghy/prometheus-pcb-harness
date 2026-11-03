@@ -50,7 +50,8 @@ the parts are placed, routed to the fab's rules and written out for ordering (`p
 python -m pcb_cli examples/netlist/blinker_sch.net out/ --size 35x25 --at J1=4,12.5
 ```
 
-Driving it from an agent? `AGENTS.md` gives the loop (write the script, run with `--json`, fix the findings).
+Setting up a machine or an agent's environment (KiCad, Java, FreeRouting, and what happens without them)?
+`docs/setup.md`; `pcb-harness doctor` says what a machine has. Driving it from an agent? `AGENTS.md` gives the loop (write the script, run with `--json`, fix the findings).
 New here? `docs/getting-started.md` walks a board from nothing to an order; `docs/ordering.md` says which file
 goes where when you order. `python bench/run.py` builds and times
 every example board.

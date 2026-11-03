@@ -1,6 +1,8 @@
 """The harness from the command line: build a board from a script, route it if it is not routed, check it, and write
 everything to order it.
 
+    python -m pcb_cli doctor                           # what this machine has: KiCad, Java, FreeRouting...
+    python -m pcb_cli setup                            # download FreeRouting (checksum-checked)
     python -m pcb_cli my_board.py out/                 # route (if needed), check, report, order files
     python -m pcb_cli my_board.py out/ --boards 10 --rules jlcpcb-4 --step
     python -m pcb_cli my_schematic.net out/ --size 50x40 --at J1=4,20,90 --amps VBUS=2   # a KiCad netlist
@@ -85,7 +87,77 @@ def finding(stage: str, text: str) -> dict:
     return out
 
 
+FREEROUTING_URL = "https://github.com/freerouting/freerouting/releases/download/v2.0.1/freerouting-2.0.1.jar"
+FREEROUTING_SHA256 = "d7fd0f63f52e6d74b0fad6715f87ca9f0ffd7109d66b2a584638000270592ecf"
+
+
+def doctor() -> dict:
+    """what this machine gives the harness: Python packages, KiCad (its DRC), Java and FreeRouting (the router),
+    and what the harness falls back to without each"""
+    import importlib.util
+    import shutil
+    import pcb
+    import freerouting
+    ver = pcb.kicad_version()
+    major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
+    java = shutil.which("java")
+    jar = freerouting.find_jar()
+    rows = {
+        "kicad": {"ok": major >= 9, "have": ver or "not installed",
+                  "gives": "KiCad's own DRC on every run; FreeRouting through KiCad's Specctra export",
+                  "without": "the harness's own design check and house check only (still run every time)"},
+        "kicad_python": {"ok": freerouting.kicad_available(), "have": "pcbnew importable" if freerouting.kicad_available()
+                         else "no", "gives": "KiCad writes FreeRouting's input (exact pads, net classes)",
+                         "without": "the harness writes the Specctra file itself"},
+        "java": {"ok": bool(java), "have": java or "not installed", "gives": "runs FreeRouting",
+                 "without": "no FreeRouting: the built-in grid router"},
+        "freerouting": {"ok": bool(jar), "have": jar or "not found", "gives": "the router KiCad users use",
+                        "without": "the built-in grid router (fine for simple boards; dense 0.4 mm pitch chips fail)"},
+        "build123d": {"ok": importlib.util.find_spec("build123d") is not None, "have": "",
+                      "gives": "STEP of the assembled board (--step)", "without": "no STEP"},
+        "schemdraw": {"ok": importlib.util.find_spec("schemdraw") is not None, "have": "",
+                      "gives": "schematic sheets (schem.py)", "without": "no schematic sheets"},
+    }
+    return rows
+
+
+def setup() -> int:
+    """download FreeRouting into the cache (checked against its published SHA-256) and say what else to install"""
+    import hashlib
+    import urllib.request
+    path = os.path.expanduser(f"~/.cache/prometheus/freerouting/{os.path.basename(FREEROUTING_URL)}")
+    if not os.path.exists(path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        print(f"downloading FreeRouting from {FREEROUTING_URL}")
+        tmp = path + ".part"
+        urllib.request.urlretrieve(FREEROUTING_URL, tmp)
+        got = hashlib.sha256(open(tmp, "rb").read()).hexdigest()
+        if got != FREEROUTING_SHA256:
+            os.remove(tmp)
+            print(f"FreeRouting's checksum does not match ({got}): not installed")
+            return 1
+        os.replace(tmp, path)
+    print(f"FreeRouting: {path}")
+    return report()
+
+
+def report() -> int:
+    rows = doctor()
+    for k, r in rows.items():
+        print(f"{'ok ' if r['ok'] else '-- '} {k:13s} {r['have'] or ('yes' if r['ok'] else 'no')}")
+        print(f"     {'gives: ' + r['gives'] if r['ok'] else 'without it: ' + r['without']}")
+    missing = [k for k, r in rows.items() if not r["ok"]]
+    if missing:
+        print("\nto install what is missing: docs/setup.md")
+    return 0
+
+
 def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["doctor"]:
+        return report()
+    if argv[:1] == ["setup"]:
+        return setup()
     import fab
     import pcb
     ap = argparse.ArgumentParser(prog="python -m pcb_cli", description=__doc__.split("\n\n")[0])
@@ -158,7 +230,8 @@ def main(argv=None) -> int:
     print(f"wrote {a.out}: review {files['report']}, parts {files['html']} ({time.perf_counter() - t0:.1f} s)")
     import json
     result = {"board": b.name, "clean": not (probs or chk or fchk or kchk), "kicad_drc": kicad,
-              "router": getattr(b, "router_used", "none (routed by the script)"), "parts": len(b.comps), "nets": len(b.nets),
+              "router": getattr(b, "router_used", "none (routed by the script)"),
+              "environment": {k: r["ok"] for k, r in doctor().items()},   # (what this machine had: docs/setup.md) "parts": len(b.comps), "nets": len(b.nets),
               "layers": len(b.layers), "seconds": round(time.perf_counter() - t0, 1),
               "placement": {r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")] for r, c in b.comps.items()},
               "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),

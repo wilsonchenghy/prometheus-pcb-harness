@@ -5,6 +5,9 @@ read the findings, and edit the script until the run is clean.
 
 ## The loop
 
+0. **Check the machine once**: `pcb-harness doctor`. Missing KiCad, Java or FreeRouting? `pcb-harness setup` adds
+   FreeRouting (no root); for the rest show the user `docs/setup.md` and install only with their approval. Each is
+   optional: without them the harness uses its own router and checks (see the table in `docs/setup.md`).
 1. **Write `board.py`** with a `build()` that returns a `pcb.Board`: the outline, the parts (`place(ref,
    "Lib:Footprint", at, rot, value, mpn, lcsc=...)`; `at=None` lets the placer choose), the nets with their
    current (`net(name, pins, amps=...)`), the pours. Or start from a KiCad netlist (`.net`).
