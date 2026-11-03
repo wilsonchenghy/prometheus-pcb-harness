@@ -276,12 +276,19 @@ def route(board, passes: int = 100, finish: bool = True, keep: Optional[str] = N
         return []
     board._fan = set(getattr(board, "_fan", set())) | {("~freerouting", "")}   # (no fan-out stubs: FreeRouting
     probs = pcb.autoroute(board, **kw)                                        # already left every pad its way):
+    return _repair(board, fr_t, fr_v, probs, kw)
+
+
+def _repair(board, fr_t, fr_v, probs, kw):
+    """after FreeRouting and the harness's finish: tear up and re-route the FreeRouting copper of any net in a short
+    or a clearance slip (kept only when that does better)"""
+    import pcb
     # the harness's router then does the poured nets and anything FreeRouting left open. FreeRouting's own
     # clearance test misses a 45-degree turn just off a fine-pitch pin clipping the next pin's corner (by ~0.04
     # mm); measured exactly here, the FreeRouting copper of each net in such a pair is torn up and the harness's
     # router, which measures the real shapes, routes those few nets again (what a KiCad user does by hand
     # after FreeRouting, at KiCad's DRC)
-    score = lambda ps: len(ps) + len(board.check())
+    score = lambda ps: pcb.severity(ps) + pcb.severity(board.check())
     for _ in range(3):
         before = (list(board.tracks), list(board.vias), probs, score(probs))
         bad = set()
@@ -291,10 +298,16 @@ def route(board, passes: int = 100, finish: bool = True, keep: Optional[str] = N
                 bad |= {n for n in (m.group(1), m.group(2)) if n in board.nets}
         is_fr = lambda t: (t["net"], t["layer"], tuple(map(tuple, t["pts"]))) in fr_t   # (by shape: a cached
         torn = {n for n in bad if any(is_fr(t) and t["net"] == n for t in board.tracks)}  # routing drops flags)
-        if not torn:
-            break
-        board.tracks = [t for t in board.tracks if not (is_fr(t) and t["net"] in torn)]
-        board.vias = [v for v in board.vias if not ((v["net"], tuple(v["at"])) in fr_v and v["net"] in torn)]
+        mine = False
+        if not torn:                                     # (the harness's own finish made it: its tracks of those
+            poured = {p["net"] for p in board.pours}     # nets, not the pours' via drops, are routed again)
+            torn = {n for n in bad if n not in poured}
+            mine = True
+            if not torn:
+                break
+        board.tracks = [t for t in board.tracks if not ((mine or is_fr(t)) and t["net"] in torn)]
+        board.vias = [v for v in board.vias if not ((mine or (v["net"], tuple(v["at"])) in fr_v)
+                                                    and v["net"] in torn)]
         board.__dict__.pop("_cu_memo", None)
         probs = pcb.autoroute(board, **kw)
         if score(probs) >= before[3]:                   # (kept only when it does better)
@@ -393,6 +406,7 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     if r.returncode != 0 or not os.path.exists(routed):
         raise RuntimeError("KiCad's Specctra import failed:\n" + (r.stdout + r.stderr)[-2000:])
     segs, vias = _read_kicad_copper(routed, board)
+    t0, v0 = len(board.tracks), len(board.vias)
     have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"]))) for t in board.tracks}
     have_v = {(v["net"], tuple(round(c, 3) for c in v["at"])) for v in board.vias}
     for net, L, pts, w in segs:
@@ -404,8 +418,10 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     board.__dict__.pop("_cu_memo", None)
     if not finish:
         return []
+    fr_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"]))) for t in board.tracks[t0:]}
+    fr_v = {(v["net"], tuple(v["at"])) for v in board.vias[v0:]}
     board._fan = set(getattr(board, "_fan", set())) | {("~freerouting", "")}
-    return pcb.autoroute(board, **kw)
+    return _repair(board, fr_t, fr_v, pcb.autoroute(board, **kw), kw)
 
 
 def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: float = 1.05) -> int:

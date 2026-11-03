@@ -24,7 +24,7 @@ def build():
     b.place("J2", TB, (W - 5.3, 8.0), 90, "motor A", "Phoenix 1729128")
     b.place("J3", TB, (W - 5.3, 22.0), 90, "motor B", "Phoenix 1729128")
     b.place("J4", "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical", (8.0, H - 3.0), 90, "logic", "")
-    for x, y in ((3.5, H - 9.0), (W - 15.0, H - 3.5)):
+    for x, y in ((3.5, H - 9.0), (W - 13.0, H - 3.5)):
         b.hole((x, y), 2.7)
     b.place("U1", "Package_SO:HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask3x3mm_ThermalVias", None, 0, "DRV8833",
             "TI DRV8833PWPR")

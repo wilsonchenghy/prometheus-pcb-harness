@@ -544,6 +544,9 @@ class Board:
                 continue
             p0 = g.centroid
             r0 = max(g.bounds[2] - g.bounds[0], g.bounds[3] - g.bounds[1]) / 2
+            mrr = g.minimum_rotated_rectangle.exterior.coords
+            minor = min(math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2]))
+            w_ = round(max(width, min(self.net_width(net), minor)), 3)   # (as wide as the net, up to the pad)
             best = None
             for k in range(int(reach / 0.25)):
                 r = r0 + via[1] / 2 + self.clear + 0.05 + 0.25 * k
@@ -555,7 +558,7 @@ class Board:
                         continue
                     if any(disk.intersects(others[l]) for l in self.layers):
                         continue
-                    trk = LineString([(p0.x, p0.y), (q.x, q.y)]).buffer(width / 2 + self.clear + 0.04, 8)
+                    trk = LineString([(p0.x, p0.y), (q.x, q.y)]).buffer(w_ / 2 + self.clear + 0.04, 8)
                     if trk.intersects(others[L]):
                         continue
                     best = q
@@ -567,7 +570,7 @@ class Board:
                 continue
             self.tracks.append({"net": net, "layer": L, "pts": [(round(p0.x, 4), round(p0.y, 4)),
                                                                 (round(best.x, 4), round(best.y, 4))],
-                                "w": width, "amps": amps})
+                                "w": w_, "amps": amps, **({"neck": True} if w_ < self.net_width(net) - 1e-6 else {})})
             self.vias.append({"net": net, "at": (round(best.x, 4), round(best.y, 4)), "drill": via[0], "dia": via[1]})
             drills = drills.union(best.buffer(via[0] + self.hole_gap, 12))
             shapely.prepare(drills)
@@ -1039,6 +1042,30 @@ class Board:
             groups.setdefault(max(rs, key=lambda r_: (seen[r_], -r_)), []).append(pin)
         return sorted(groups.values(), key=len, reverse=True)
 
+    NECK_LEN = 1.5      # mm: a narrower track this short entering a pad smaller than the full width is a pin entry
+
+    def _pin_neck(self, t, need, pads, pn) -> bool:
+        """A short track narrower than its current needs, ending in a pad of its own net that is itself narrower than
+        that width (a 2 A trace necking down into a 0.4 mm TSSOP pin): the pad limits the current there anyway, as in
+        KiCad's and every router's pin entry, so it is not a narrow track."""
+        from shapely.geometry import Point
+        if t.get("neck"):                                 # (a via drop as wide as its pad: drop() marks it)
+            return True
+        L = sum(math.dist(a, b) for a, b in zip(t["pts"], t["pts"][1:]))
+        if L > self.NECK_LEN:
+            return False
+        for end in (t["pts"][0], t["pts"][-1]):
+            p = Point(end)
+            for ref, num, lay, pg, _ in pads:
+                if lay != t["layer"] or pn.get((ref, num)) != t["net"] or not pg.buffer(1e-3).contains(p):
+                    continue
+                mrr = pg.minimum_rotated_rectangle
+                xs, ys = mrr.exterior.coords.xy
+                sides = [math.dist((xs[i], ys[i]), (xs[i + 1], ys[i + 1])) for i in range(2)]
+                if min(sides) < need - 1e-6:
+                    return True
+        return False
+
     def check(self) -> List[str]:
         import shapely
         from shapely.geometry import LineString, Point, Polygon
@@ -1186,7 +1213,7 @@ class Board:
                 continue
             amps = t["amps"] if t["amps"] is not None else d["amps"]
             need = self.width_for(amps, t["layer"])
-            if t["w"] + 1e-6 < need:
+            if t["w"] + 1e-6 < need and not self._pin_neck(t, need, pads, pn):
                 probs.append(f"track {t['net']} ({t['layer']}.Cu, {t['w']} mm) is too narrow for {amps} A on "
                              f"{self.oz_of(t['layer'])} oz copper: needs {need:.2f} mm for a {self.max_rise:g} C rise "
                              f"(IPC-2221)")
@@ -1625,6 +1652,16 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
 
 
 def route_board(board: Board, router: str = "auto", **kw) -> List[str]:
+    """route the whole board (``_route_board``), then length-match the differential pairs (``tune_pairs``)"""
+    probs = _route_board(board, router, **kw)
+    if getattr(board, "pairs", None):
+        tune_pairs(board)
+        probs = [p_ for p_ in probs if not p_.startswith("pair ")] + \
+            [p_ for p_ in board.check() if p_.startswith("pair ")]
+    return probs
+
+
+def _route_board(board: Board, router: str = "auto", **kw) -> List[str]:
     """route the whole board with ``router``: "freerouting" (FreeRouting, the router KiCad users use, through a
     Specctra round trip: ``freerouting.py``; needs Java and its jar), "harness" (``autoroute``, this file's grid
     router), or "auto" (FreeRouting when it is installed, else the harness's). Sets ``board.router_used``"""
@@ -1649,6 +1686,72 @@ def route_board(board: Board, router: str = "auto", **kw) -> List[str]:
             raise RuntimeError("FreeRouting not found (Java and the jar: see freerouting.find_jar)")
     board.router_used = "harness"
     return autoroute(board, **kw)
+
+
+def tune_pairs(board: Board, tries_per_seg: int = 6) -> List[str]:
+    """length-match each differential pair whose skew is over its limit (``Board.pair``) the way KiCad's length
+    tuner does: a serpentine on a straight stretch of the shorter net, its legs a clearance apart, kept only when
+    the design check finds nothing new (no short, clearance slip or cut pour). Returns what is still over"""
+    left = []
+    for p_, n_, skew in getattr(board, "pairs", []):
+        lp, ln = board.net_length(p_), board.net_length(n_)
+        if abs(lp - ln) <= skew:
+            continue
+        short = p_ if lp < ln else n_
+        want = abs(lp - ln) - skew / 3                    # (aim inside the limit, not at its edge)
+        base = set(board.check())
+        segs = []
+        for i, t in enumerate(board.tracks):
+            if t["net"] != short:
+                continue
+            for k, (a, b) in enumerate(zip(t["pts"], t["pts"][1:])):
+                if math.dist(a, b) >= 2.0:
+                    segs.append((math.dist(a, b), i, k))
+        done = False
+        for S, i, k in sorted(segs, reverse=True):
+            t = board.tracks[i]
+            a, b = t["pts"][k], t["pts"][k + 1]
+            ux, uy = (b[0] - a[0]) / S, (b[1] - a[1]) / S
+            per = 2 * (t["w"] + board.clear + 0.05)       # one bump: up, across, down, across
+            nmax = int((S - 1.0) // per)
+            for nb in sorted({max(1, nmax), max(1, nmax // 2), max(1, nmax // 4)}, reverse=True)[:3]:
+                A = want / (2 * nb)
+                if A < t["w"] or A > 3.0:
+                    continue
+                for sign in (1, -1):
+                    nx, ny = -uy * sign, ux * sign
+                    s0 = (S - nb * per) / 2
+                    pts = [a]
+                    for j in range(nb):
+                        for d_, h in ((0, 0), (0, A), (per / 2, A), (per / 2, 0)):
+                            o = s0 + j * per + d_
+                            pts.append((round(a[0] + ux * o + nx * h, 4), round(a[1] + uy * o + ny * h, 4)))
+                    pts.append(b)
+                    old = t["pts"]
+                    t["pts"] = old[:k] + pts + old[k + 2:]
+                    board.__dict__.pop("_cu_memo", None)
+                    now = set(board.check())
+                    new = {m for m in now - base if not m.startswith(f"pair {p_} / {n_}")}
+                    if not new:
+                        done = abs(board.net_length(p_) - board.net_length(n_)) <= skew
+                        base = now
+                        break
+                    t["pts"] = old
+                    board.__dict__.pop("_cu_memo", None)
+                else:
+                    continue
+                break
+            if done:
+                break
+            lp, ln = board.net_length(p_), board.net_length(n_)
+            want = abs(lp - ln) - skew / 3
+            if abs(lp - ln) <= skew:
+                done = True
+                break
+        if not done:
+            lp, ln = board.net_length(p_), board.net_length(n_)
+            left.append(f"pair {p_} / {n_}: still {abs(lp - ln):.2f} mm apart after length tuning")
+    return left
 
 
 def auto_grid(board: Board) -> float:
@@ -1839,9 +1942,10 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     pnet = board.pad_net()
     many = {r for r, c in board.comps.items() if len(c["pads"]) >= 6}
     deal: Dict[str, int] = {}
+    told = {x for a_, b_, _ in getattr(board, "near", []) for x in (a_, b_)}    # (a requirement says where it goes)
     for r in sorted(mset, key=lambda r: (len(r), r)):
         c = board.comps[r]
-        if not r.upper().startswith("C") or len([n for n in c["pads"] if n]) != 2:
+        if r in told or not r.upper().startswith("C") or len([n for n in c["pads"] if n]) != 2:
             continue
         ns = {num: pnet.get((r, num)) for num in c["pads"] if num}
         sup = [(num, n) for num, n in ns.items() if n and n not in poured]
@@ -1853,7 +1957,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             continue
         k = deal.get(n, 0)
         deal[n] = k + 1
-        NETS[f"~decap {r}"] = {"pins": [(r, num), targets[k % len(targets)]], "amps": 5.0}
+        NETS[f"~decap {r}"] = {"pins": [(r, num), targets[k % len(targets)]], "amps": 5.0, "limit": 3.0}
     for r in sorted(mset):                               # a crystal held to its IC's oscillator pins (short, quiet
         if not re.match(r"^(Y|X)\d", r):                 # traces), its load capacitors following through their nets
             continue
@@ -1863,7 +1967,15 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
                 continue
             ic_pins = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in many and p_[0] != r]
             if ic_pins:
-                NETS[f"~xtal {r}.{num}"] = {"pins": [(r, num), ic_pins[0]], "amps": 5.0}
+                NETS[f"~xtal {r}.{num}"] = {"pins": [(r, num), ic_pins[0]], "amps": 5.0, "limit": 5.0}
+    for a_, b_, dmax in getattr(board, "near", []):     # the requirements' "within d mm of": a spring that turns
+        if a_ not in board.comps or b_ not in board.comps:     # stiff past d (pins on a shared net, else the centres)
+            continue
+        shared = [(pa, pb) for pa in board.comps[a_]["pads"] for pb in board.comps[b_]["pads"]
+                  if pa and pb and pnet.get((a_, pa)) and pnet.get((a_, pa)) == pnet.get((b_, pb))]
+        shared.sort(key=lambda q: pnet.get((a_, q[0])) in poured)
+        pa, pb = shared[0] if shared else (None, None)
+        NETS[f"~near {a_} {b_}"] = {"pins": [(a_, pa), (b_, pb)], "amps": 5.0, "limit": max(0.5, dmax - 0.5)}
     wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in NETS.items()}
     nets_of: Dict[str, List[str]] = {}
     for n, d in NETS.items():
@@ -1924,6 +2036,9 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             d = np.abs(a[:, None, :] - a[None, :, :]).sum(-1)    # sits by a pin, not just inside the net's box
             np.fill_diagonal(d, np.inf)
             hp += 0.5 * d.min(1).sum()
+        lim = NETS[n].get("limit")
+        if lim is not None and len(a) == 2:              # (a "within d mm" spring: stiff past its limit)
+            hp += 30.0 * max(0.0, float(np.hypot(*(a[0] - a[1]))) - lim)
         return wt[n] * hp
 
     # 1. one at a time, most connected first, each where it adds the least wire
@@ -2023,6 +2138,37 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     return failed
 
 
+def severity(probs: Sequence[str]) -> int:
+    """a routing's problems weighed: a short 20, a clearance slip 5, a split net 5, anything else 1"""
+    w = 0
+    for p_ in probs:
+        if re.match(r"\S+\.Cu: .+ short", p_):
+            w += 20
+        elif re.match(r"\S+\.Cu: .+ mm apart", p_) or "split" in p_:
+            w += 5
+        else:
+            w += 1
+    return w
+
+
+def near_misses(board: Board) -> List[str]:
+    """the parts further apart than ``board.near`` asks (the requirements' "within d mm", pad to pad)"""
+    from shapely.ops import unary_union
+    out = []
+    near = getattr(board, "near", [])
+    if not near:
+        return out
+    by = {}
+    for ref, num, L, g, _ in board.pad_shapes():
+        by.setdefault(ref, []).append(g)
+    for a, b, dmax in near:
+        if a in by and b in by:
+            d = unary_union(by[a]).distance(unary_union(by[b]))
+            if d > dmax:
+                out.append(f"{a} is {d:.1f} mm from {b} (within {dmax})")
+    return out
+
+
 def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 4, gap: float = 1.0,
                     route_kw: Optional[dict] = None, router: str = "auto", **kw) -> List[str]:
     """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed, a little more
@@ -2040,7 +2186,8 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         left = autoplace(board, move=move, gap=gap + 0.25 * k, seed=k, **kw)
         probs = [f"{r}: no room to place it" for r in left] + route_board(board, router, **(route_kw or {}))
         probs += [p for p in board.check() if p not in probs]
-        score = len(probs) + 50 * len(left)               # (a part left off the board is worse than any miss)
+        score = severity(probs) + 50 * len(left) + 5 * len(near_misses(board))   # (a part left off the board is
+        # worse than any miss; a short worse than a slip; a requirement's "within d mm" missed counts)
         if best is None or score < best[0]:
             best = (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
                     list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())))

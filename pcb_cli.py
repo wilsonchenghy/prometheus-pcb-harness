@@ -152,6 +152,50 @@ def report() -> int:
     return 0
 
 
+STATE = "board_state.pkl"
+
+
+def design_key(b) -> str:
+    """the design the script describes (parts, nets, pours, holes, the parts it fixed in place): a saved board state
+    is reused only for this same design"""
+    import hashlib
+    import json
+    d = {"comps": {r: [c["fp"]] + ([] if c.get("unplaced") else [c["at"], c["rot"], c.get("side", "F")])
+                   for r, c in sorted(b.comps.items())},
+         "nets": b.nets, "pours": b.pours, "holes": b.holes, "outline": b.outline.wkt}
+    return hashlib.sha1(json.dumps(d, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+
+def save_state(b, out, key):
+    """the placed and routed board, so a later --stage check / export / critic starts from it"""
+    import pickle
+    st = {"key": key, "place": {r: {k: c[k] for k in ("at", "rot", "side") if k in c} for r, c in b.comps.items()},
+          "tracks": b.tracks, "vias": b.vias, "fan": getattr(b, "_fan", set()),
+          "router": getattr(b, "router_used", None)}
+    with open(os.path.join(out, STATE), "wb") as f:
+        pickle.dump(st, f)
+
+
+def load_state(b, out, key) -> bool:
+    import pickle
+    p = os.path.join(out, STATE)
+    if not os.path.exists(p):
+        return False
+    with open(p, "rb") as f:
+        st = pickle.load(f)
+    if st.get("key") != key:
+        print(f"note: {p} is from another version of the design: not reused")
+        return False
+    for r, c in st["place"].items():
+        if r in b.comps:
+            b.comps[r].update(c)
+            b.comps[r].pop("unplaced", None)
+    b.tracks, b.vias, b._fan = st["tracks"], st["vias"], st["fan"]
+    if st.get("router"):
+        b.router_used = st["router"] + " (saved)"
+    return True
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["doctor"]:
@@ -198,6 +242,12 @@ def main(argv=None) -> int:
         print("note:", note)
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers  [stage: {a.stage}]")
     stage = a.stage
+    if spec.get("near"):                                 # (the placer holds these parts within their distance)
+        b.near = list(getattr(b, "near", [])) + [tuple(x) for x in spec["near"]]
+    key = design_key(b)
+    if stage in ("critic", "check", "export") and not b.tracks and load_state(b, a.out, key):
+        print(f"from the last run in {a.out}: {sum(1 for c in b.comps.values())} parts placed, "
+              f"{len(b.tracks)} tracks, {len(b.vias)} vias ({b.router_used})")
     route_ok = stage in ("route", "all") and not a.no_route
     timings = {}
     if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()) and not a.no_route:
@@ -224,6 +274,8 @@ def main(argv=None) -> int:
         timings["route"] = round(time.perf_counter() - t, 2)
         print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({timings['route']} s)")
     probs = probs or []
+    if stage in ("place", "route", "all") and timings:
+        save_state(b, a.out, key)
     t = time.perf_counter()
     notes = critic.review(b, spec)
     timings["critic"] = round(time.perf_counter() - t, 3)

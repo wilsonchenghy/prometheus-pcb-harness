@@ -134,7 +134,8 @@ function drawBoard(t, opt) {
   const ko = ease(span(t, 11.0, 12.6));
   if (ko > 0) {
     g.save(); g.globalAlpha = ko;
-    poly(D.outline, opt.maskFill ? C.mask : "rgba(18,58,42,0.55)", "rgba(150,210,180,0.55)", 2);
+    poly(D.outline, "rgba(18,58,42,0.55)", "rgba(150,210,180,0.55)", 2);
+    if (opt.maskFill) { g.globalAlpha = ko * opt.maskFill; poly(D.outline, C.mask); g.globalAlpha = ko; }
     g.restore();
   }
   // pours
@@ -346,10 +347,9 @@ function fitImg(im, w, h) { const k = Math.min(w / im.width, h / im.height); ret
 function showcase(t) {                                    // t: 0 .. 15
   const k = Math.min(easeOut(span(t, 0, 0.6)), 1 - span(t, 14.4, 15));
   if (k <= 0) return;
-  g.save(); g.globalAlpha = k;
+  g.save();
   const beltY = 640, beam = W * 0.5;
-  const belt = t < 11.2;
-  if (belt) {
+  layer(k * (1 - ease(span(t, 10.9, 11.5))), () => {
     caption(t, 0, 11.2, "06  BUILT WITH IT", "Real boards, through the line.", "Each one routed, checked and exported by the harness.");
     // rails, with chevrons moving with the belt
     const v = 560, off = (t * v) % 60;
@@ -377,7 +377,7 @@ function showcase(t) {                                    // t: 0 .. 15
       if (right < beam) {                                 // inspected: the stamp
         const sk = easeOut(clamp((beam - right) / 120));
         g.save(); g.translate(cx + w / 2 - 120, beltY - h / 2 + 40); g.rotate(-0.12);
-        g.globalAlpha = k * sk; g.strokeStyle = C.ok; g.lineWidth = 3;
+        g.globalAlpha = sk; g.strokeStyle = C.ok; g.lineWidth = 3;
         g.strokeRect(-110, -26, 220, 52);
         text("INSPECTED", 0, 10, 26, { align: "center", mono: true, color: C.ok, weight: 500, track: 3 });
         g.restore();
@@ -396,17 +396,18 @@ function showcase(t) {                                    // t: 0 .. 15
       const [, name, stat, hard] = SHOW[under];
       const ck = clamp(under_k * 3) * (1 - clamp((under_k - 0.9) * 10));
       const x = 140, y = 900;
-      text(name, x, y, 40, { weight: 500, alpha: k * ck });
-      text(stat, x, y + 44, 24, { mono: true, color: C.copper, alpha: k * ck });
-      text(hard, W - 140, y + 44, 24, { color: C.dim, align: "right", alpha: k * ck });
-      text(String(under + 1).padStart(2, "0") + " / 07", W - 140, y, 22, { mono: true, color: C.dim, align: "right", alpha: k * ck });
+      text(name, x, y, 40, { weight: 500, alpha: ck });
+      text(stat, x, y + 44, 24, { mono: true, color: C.copper, alpha: ck });
+      text(hard, W - 140, y + 44, 24, { color: C.dim, align: "right", alpha: ck });
+      text(String(under + 1).padStart(2, "0") + " / 07", W - 140, y, 22, { mono: true, color: C.dim, align: "right", alpha: ck });
     }
-  } else {
+  });
+  layer(k * ease(span(t, 10.8, 11.3)), () => {
     // the panel: every board tiled on one fab panel with rails, tooling holes, fiducials and mouse bites
-    const pk = ease(span(t, 11.2, 12.4));
+    const pk = ease(span(t, 10.8, 11.6));
     caption(t, 11.2, 15, "06  BUILT WITH IT", "One harness. Every board.", "");
     const PX = 220, PY = 280, PW = 1480, PH = 640;
-    g.save(); g.globalAlpha = k * pk;
+    g.save(); g.globalAlpha = pk;
     g.fillStyle = "#10281e"; g.strokeStyle = "rgba(150,210,180,0.5)"; g.lineWidth = 2;
     g.beginPath(); g.roundRect(PX, PY, PW, PH, 6); g.fill(); g.stroke();
     [[PX + 30, PY + 30], [PX + PW - 30, PY + 30], [PX + 30, PY + PH - 30], [PX + PW - 30, PY + PH - 30]].forEach(([x, y]) => {
@@ -420,9 +421,9 @@ function showcase(t) {                                    // t: 0 .. 15
     const cols = 4, cw = (PW - 120) / cols, ch = (PH - 120) / 2;
     keys.forEach((key, i) => {
       const c_ = i % cols, r_ = Math.floor(i / cols);
-      const tk = easeOut(span(t, 11.5 + i * 0.12, 12.3 + i * 0.12));
+      const tk = easeOut(span(t, 10.9 + i * 0.1, 11.6 + i * 0.1));
       const x = PX + 60 + c_ * cw, y = PY + 60 + r_ * ch;
-      g.globalAlpha = k * pk * tk;
+      g.globalAlpha = pk * tk;
       g.fillStyle = "rgba(5,10,8,0.6)"; g.fillRect(x + 8, y + 8, cw - 16, ch - 16);
       const im = IMG[key];
       if (im) { const [w, h] = fitImg(im, cw - 40, ch - 40); g.drawImage(im, x + cw / 2 - w / 2, y + ch / 2 - h / 2 + 10 * (1 - tk), w, h); }
@@ -433,12 +434,12 @@ function showcase(t) {                                    // t: 0 .. 15
     });
     g.restore();
     const total = PANEL_PARTS.reduce((a, b) => a + b, 0);
-    const nk = ease(span(t, 11.8, 13.6));
-    text(String(Math.round(total * nk)), 140, 1010, 54, { weight: 500, mono: true, alpha: k * pk });
-    text("parts placed and routed", 140, 1044, 18, { mono: true, color: C.dim, alpha: k * pk, track: 2 });
-    text("8 boards", 520, 1010, 54, { weight: 500, mono: true, alpha: k * pk });
-    text("2 and 4 layers", 520, 1044, 18, { mono: true, color: C.dim, alpha: k * pk, track: 2 });
-  }
+    const nk = ease(span(t, 11.2, 13.2));
+    text(String(Math.round(total * nk)), 140, 1010, 54, { weight: 500, mono: true, alpha: pk });
+    text("parts placed and routed", 140, 1044, 18, { mono: true, color: C.dim, alpha: pk, track: 2 });
+    text("8 boards", 520, 1010, 54, { weight: 500, mono: true, alpha: pk });
+    text("2 and 4 layers", 520, 1044, 18, { mono: true, color: C.dim, alpha: pk, track: 2 });
+  });
   g.restore();
 }
 
@@ -547,8 +548,6 @@ function title(t) {
     silk("REV 1.0", 140, 1010, 20, sk * 0.8, { align: "left" });
     silk("U1  RP2040", W - 140, 1010, 20, sk * 0.8, { align: "right" });
   }
-  const fo = span(t, 4.6, 5.2);
-  if (fo > 0) { g.fillStyle = `rgba(10,17,14,${fo})`; g.fillRect(0, 0, W, H); }
 }
 
 function endCard(t) {
@@ -586,9 +585,21 @@ function endCard(t) {
   silk("PYTHON  ·  KICAD 9  ·  FREEROUTING  ·  APACHE-2.0", W / 2, 820, 22, fk, { track: 6 });
 }
 
+let LAYER = null;
+function layer(alpha, fn) {
+  if (alpha <= 0.001) return;
+  if (!LAYER) { LAYER = document.createElement("canvas"); LAYER.width = W; LAYER.height = H; }
+  const keep = g; g = LAYER.getContext("2d");
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+  g.clearRect(0, 0, W, H);
+  g.save(); fn(); g.restore();
+  g = keep;
+  g.save(); g.globalAlpha = alpha; g.drawImage(LAYER, 0, 0); g.restore();
+}
+
 function render(t) {
   background(t);
-  title(t);
+  layer(1 - span(t, 4.6, 5.2), () => title(t));
   // the board's scenes (4.5 s to 38.6 s): it sits right, then centre during routing, then right again
   if (t > 4.4 && t < 38.8) {
     let cx = 1360, cy = 600, s = 20;
@@ -597,10 +608,8 @@ function render(t) {
     if (t < 15.4) { s = 14.5; }
     boardFrame(cx, cy, s);
     const vis = fadeWindow(t, 4.6, 38.8, 0.6, 0.6);
-    g.save(); g.globalAlpha = vis;
-    drawBoard(t, { placed: t > 13.5, ghost: 1 - span(t, 13, 16), padAlpha: 1,
-                   route: ease(span(t, 16.6, 24.6)), pour: ease(span(t, 25.2, 26.6)), maskFill: t > 25.5 });
-    g.restore();
+    layer(vis, () => drawBoard(t, { placed: t > 15.0, ghost: 1 - span(t, 13, 16), padAlpha: 1,
+                   route: ease(span(t, 16.6, 24.6)), pour: ease(span(t, 25.2, 26.6)), maskFill: ease(span(t, 25.2, 26.2)) }));
     caption(t, 4.6, 10.0, "01  PARTS", "Start with a parts list.", "Real KiCad footprints. No positions needed.");
     caption(t, 10.0, 15.8, "02  PLACEMENT", "It places them.", "Short wires, decoupling held to its pins, room for fan-out.");
     caption(t, 16.0, 26.2, "03  ROUTING", "It routes them.", "RP2040, 0.4 mm pitch QFN-56, two layers.");
@@ -610,7 +619,7 @@ function render(t) {
   }
   if (t >= 38.6 && t < 38.6 + SHIFT) showcase(t - 38.6);
   agentLoop(t - SHIFT);
-  endCard(t - SHIFT);
+  layer(easeOut(span(t - SHIFT, 44.4, 45.2)), () => endCard(t - SHIFT));
   // fade in / out of the whole film
   const fo = Math.max(1 - span(t, 0, 0.4), span(t, T_END - 0.8, T_END));
   if (fo > 0) { g.fillStyle = `rgba(0,0,0,${fo})`; g.fillRect(0, 0, W, H); }
