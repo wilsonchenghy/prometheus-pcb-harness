@@ -305,7 +305,7 @@ def _repair(board, fr_t, fr_v, probs, kw):
             poured = {p["net"] for p in board.pours}     # nets, not the pours' via drops, are routed again)
             torn = {n for n in bad if n not in poured}
             mine = True
-            if not torn:
+            if not torn or len(torn) > 4:                # (a few nets; many is a placement to change, not repair)
                 break
         board.tracks = [t for t in board.tracks if not ((mine or is_fr(t)) and t["net"] in torn)]
         board.vias = [v for v in board.vias if not ((mine or (v["net"], tuple(v["at"])) in fr_v)

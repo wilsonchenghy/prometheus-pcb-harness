@@ -103,6 +103,31 @@ Or all of it in one command: `python -m pcb_cli bench/blinker.py out/` loads the
 `build()`, or a module-level `board` / `b`), routes it if it has no tracks, runs both checks, writes every file
 above plus `report.html`, and exits 0 only when everything is clean - a natural CI step.
 
+## Requirements, and one step at a time
+
+Write down what the board must meet in `req.json` (the motor driver's, `bench/specs/motor_driver.json`, is a
+model) and hand it to the run:
+
+```json
+{"size_mm": [42, 32], "layers": 2, "house": "jlcpcb-2",
+ "nets": {"VM": {"amps": 3.0}},
+ "near": [["C2", "U1", 4.0]],
+ "pairs": [["CANH", "CANL", 2.0]],
+ "edge": ["J1", "J2"], "holes": {"count": 2, "d": 2.7}}
+```
+
+```
+python -m pcb_cli board.py out/ --spec req.json --stage critic    # the review alone: milliseconds
+python -m pcb_cli board.py out/ --spec req.json --stage route     # place and route, then the checks
+python -m pcb_cli board.py out/ --spec req.json --stage export    # order files and KiCad's DRC, no routing
+```
+
+The critic checks the board against the file (sizes, currents, distances, pairs, connectors at the edge, holes)
+and the usual review points (decoupling by its pins, a crystal by its chip, a USB pair, an antenna's keep-out). The
+placer keeps each `near` part within its distance, and a `pairs` pair is length-tuned after routing. A route
+run saves the board in `out/board_state.pkl`; `check`, `export` and `critic` start from it while the design is
+unchanged. The same input always gives the same board.
+
 ## From a KiCad schematic
 
 `pcb.from_netlist("design.net", (50, 40), at={"J1": (4, 20, 90)}, amps={"VBUS": 2}, rules="jlcpcb-2")` reads the

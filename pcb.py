@@ -2328,7 +2328,8 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     best = None
     for k in range(max(1, tries)):
         board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try fans out afresh)
-        left = autoplace(board, move=move, gap=gap + 0.25 * k, seed=k, **kw)
+        left = autoplace(board, move=move, gap=gap + 0.25 * min(k, 3), seed=k, **kw)   # (later tries: other seeds
+        # at the same room, not ever more room than the board has)
         probs = [f"{r}: no room to place it" for r in left] + route_board(board, router, **(route_kw or {}))
         probs += [p for p in board.check() if p not in probs]
         score = severity(probs) + 50 * len(left) + 5 * len(near_misses(board))   # (a part left off the board is
