@@ -72,10 +72,10 @@ routes):
 | usb_ldo (USB-C to 3.3 V) | 10 | 2 | about 1 s, also placed automatically | clean (JLCPCB) |
 | esp32_sensor | 21 | 2 | 4 s; 8 s placed automatically | clean (JLCPCB) |
 | led_ring (12 WS2812B, round) | 31 | 2 | 14 s, placed, FreeRouting | clean, KiCad DRC clean |
-| motor_driver (DRV8833, 2 oz) | 15 | 2 | 28 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
-| power_bank (LiPo, 2 A paths) | 25 | 2 | 47 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
-| can_node (STM32F103, CAN) | 24 | 2 | about 55 s, placed, FreeRouting, pair length-tuned | clean, KiCad DRC clean, its spec met |
-| rp2040_board (0.4 mm QFN-56) | 34 | 2 | about 8 min, placed, FreeRouting | clean, KiCad DRC clean |
+| motor_driver (DRV8833, 2 oz) | 15 | 2 | 14 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
+| power_bank (LiPo, 2 A paths) | 25 | 2 | 13 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
+| can_node (STM32F103, CAN) | 24 | 2 | about 40 s, placed, FreeRouting, pair length-tuned | clean, KiCad DRC clean, its spec met |
+| rp2040_board (0.4 mm QFN-56) | 34 | 2 | about 9 min, placed (clean on the 6th placement tried), FreeRouting | clean, KiCad DRC clean |
 | arm_pdb (60 A power) | 56 | 2 | about 80 s | clean (JLCPCB) |
 | cube_main | 25 | 2 | about 60 s | clean (JLCPCB) |
 | ripple_main | 67 | 2 | about 50 s | clean (JLCPCB) |

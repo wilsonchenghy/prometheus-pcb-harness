@@ -295,7 +295,8 @@ def _repair(board, fr_t, fr_v, probs, kw):
         bad = set()
         for msg in board.check():
             m = re.match(r"\S+\.Cu: (.+?) and (.+?) (short|[\d.]+ mm apart)", msg) or \
-                re.match(r"via (\S+) and via (\S+) drills", msg)        # (FreeRouting has no hole-to-hole rule)
+                re.match(r"via (\S+) and via (\S+) drills", msg) or \
+                re.match(r"via (\S+) and (hole) drills", msg)            # (FreeRouting has no hole-to-hole rule)
             if m:
                 bad |= {n for n in (m.group(1), m.group(2)) if n in board.nets}
         is_fr = lambda t: (t["net"], t["layer"], tuple(map(tuple, t["pts"]))) in fr_t   # (by shape: a cached
