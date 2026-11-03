@@ -82,7 +82,7 @@ routes):
 | qdd_main | 70 | 2 | about 55 s | clean (JLCPCB) |
 | controller_main | 47 | 2 | about 26 s | routed clean; two mounting holes sit 0.3 mm from the shell's 7.2 mm cut-outs (the shell's geometry) |
 | fpv_fc (STM32F405) | 42 | 2 | about 60 s | clean (PCBWay: 0.1 mm tracks) |
-| fpv_esc (4-in-1) | 104 | 2 | about 80 s | one ground pad unreached: a layout fix, not yet made |
+| fpv_esc (4-in-1) | 104 | 2 | about 110 s | not clean: ground in three pieces (RB2V.2, and motor 4's low-side FET sources walled off by its phase pours): a layout fix, not yet made |
 | twilight_fc | 199 | 4 | committed routes | routed and checked clean; its regulators' 0.2 mm thermal vias need a house's small-via option |
 
 Not yet: KiCad's own DRC is not run by the tests (run it on the exported project if you have KiCad), CPL rotations
