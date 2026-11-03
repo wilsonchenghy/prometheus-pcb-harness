@@ -406,3 +406,53 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
         return []
     board._fan = set(getattr(board, "_fan", set())) | {("~freerouting", "")}
     return pcb.autoroute(board, **kw)
+
+
+def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: float = 1.05) -> int:
+    """the first stretch out of each pin of a fine-pitch part (pins closer than 0.8 mm), drawn before FreeRouting:
+    a straight track off the pin's outer end, alternately short and long, so every turn happens clear of the
+    neighbouring pins (FreeRouting's 45-degree turn right at a 0.4 mm pitch pin clips the next one). Returns how
+    many it drew"""
+    import numpy as np
+    pn = board.pad_net()
+    poured = {p["net"] for p in board.pours}
+    n = 0
+    for ref, c in board.comps.items():
+        if c.get("overhang") or ref.upper().startswith("J"):
+            continue                                       # (a connector: its pins are not a chip's fan-out)
+        pads = [(num, L, g) for r, num, L, g, d in board.pad_shapes() if r == ref and num and not d]
+        if len(pads) < 6:
+            continue
+        cs = np.array([(g.centroid.x, g.centroid.y) for _, _, g in pads])
+        dd = np.hypot(*(cs[:, None, :] - cs[None, :, :]).transpose(2, 0, 1))
+        np.fill_diagonal(dd, np.inf)
+        if dd.min() >= 0.8:
+            continue
+        ox, oy = c["at"]
+        side_rank: Dict[tuple, int] = {}
+        order = sorted(range(len(pads)), key=lambda i: (round(np.arctan2(cs[i][1] - oy, cs[i][0] - ox), 3)))
+        for k, i in enumerate(order):
+            num, L, g = pads[i]
+            net = pn.get((ref, num))
+            if not net or net in poured or net not in board.nets:
+                continue
+            x0_, y0_, x1_, y1_ = g.bounds
+            cx, cy = g.centroid.x, g.centroid.y
+            dx, dy = cx - ox, cy - oy
+            if max(x1_ - x0_, y1_ - y0_) < 1.5 * min(x1_ - x0_, y1_ - y0_):
+                continue                                   # (a square pad: an exposed pad or a BGA ball, not a pin)
+            reach = short if k % 2 == 0 else long
+            if abs(dx) > abs(dy):                          # a pin on the left or right side
+                ex = x1_ if dx > 0 else x0_
+                pts = [(round(cx, 4), round(cy, 4)), (round(ex + (reach if dx > 0 else -reach), 4), round(cy, 4))]
+            else:
+                ey = y1_ if dy > 0 else y0_
+                pts = [(round(cx, 4), round(cy, 4)), (round(cx, 4), round(ey + (reach if dy > 0 else -reach), 4))]
+            need = max(width, board.net_width(net))       # as wide as the net needs; a pin whose stub cannot be
+            if need > float(dd.min()) - board.clear - 0.01:  # (between its neighbours) is left to FreeRouting
+                continue
+            board.track(net, L, pts, round(need, 3))
+            n += 1
+    board._fan = set(getattr(board, "_fan", set())) | {("~escape", "")}
+    board.__dict__.pop("_cu_memo", None)
+    return n

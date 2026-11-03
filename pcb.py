@@ -1633,6 +1633,16 @@ def route_board(board: Board, router: str = "auto", **kw) -> List[str]:
     if router != "harness":
         import freerouting
         if freerouting.available():
+            freerouting.escape_fine_pitch(board)         # (fine-pitch pins' first stretch drawn by the harness)
+            if freerouting.kicad_available():            # (KiCad writes the Specctra design and reads the session)
+                t0, v0 = list(board.tracks), list(board.vias)
+                try:
+                    board.router_used = "freerouting (through KiCad)"
+                    return freerouting.route_kicad(board, **kw)
+                except (RuntimeError, OSError) as e:      # (KiCad's import refused a session now and then: the
+                    board.tracks, board.vias = t0, v0     # harness's own Specctra round trip instead)
+                    board.__dict__.pop("_cu_memo", None)
+                    board.router_note = f"KiCad round trip failed ({str(e).splitlines()[0][:120]}); direct"
             board.router_used = "freerouting"
             return freerouting.route(board, **kw)
         if router == "freerouting":
@@ -3472,7 +3482,7 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     KiCad's page (y down). Zones carry the harness's fill: KiCad refills them with its own rules on 'B'."""
     import json
     import os
-    from shapely.geometry import Polygon
+    from shapely.geometry import Point, Polygon
     from shapely.ops import unary_union
     os.makedirs(out_dir, exist_ok=True)
     x0, y0, x1, y1 = board.outline.bounds
@@ -3544,8 +3554,11 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     cu_all = board.copper() if board.pours else None    # (one pass for every pour: a net's pour is carved only round
     for i, pz in enumerate(board.pours):                 # other nets' fixed copper, so it is the same as copper(only_
         key = (pz["net"], pz["layer"])                   # net=...) gives, without a pass per net)
-        if key not in fills:
-            fills[key] = board.pour_fill(*key, cu=cu_all)
+        if key not in fills:                             # (the fill as KiCad will judge it: clear of every bare
+            fills[key] = board.pour_fill(*key, cu=cu_all)  # hole by the hole clearance, a pad merged into it too)
+            bare_ = [Point(x, y).buffer(d / 2 + HOLE_CLEAR + 0.01, 24) for x, y, d in board.all_holes()]
+            if bare_ and fills[key] is not None and not fills[key].is_empty:
+                fills[key] = fills[key].difference(unary_union(bare_))
         zp = Polygon(pz["poly"], pz.get("holes") or None)
         fill = _fractured(fills[key].intersection(zp))
         pcb_.append(["zone", ["net", netnum[pz["net"]]], ["net_name", _Q(pz["net"])], ["layer", LN[pz["layer"]]],
