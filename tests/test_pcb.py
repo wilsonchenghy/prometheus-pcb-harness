@@ -1071,3 +1071,56 @@ def test_cli_stages(tmp_path):
     pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "a"), "--kicad-drc", "off", "--router", "harness"])
     r = json.load(open(tmp_path / "a" / "result.json"))
     assert r["stage"] == "all" and "gerbers" in r["files"] and r["parts"] == 8
+
+
+def test_tune_pairs_lengthens_the_shorter_net():
+    """a pair over its skew gets a serpentine on the shorter net's straight stretch, within the skew after, and the
+    check finds nothing new"""
+    import pcb
+    b = pcb.Board("tp", [(0, 0), (40, 0), (40, 20), (0, 20)])
+    b.track("DP", "F", [(5.0, 5.0), (30.0, 5.0)], 0.2)
+    b.track("DN", "F", [(5.0, 12.0), (25.0, 12.0)], 0.2)
+    b.pair("DP", "DN", max_skew=0.5)
+    before = set(b.check())
+    assert pcb.tune_pairs(b) == []
+    assert abs(b.net_length("DP") - b.net_length("DN")) <= 0.5
+    assert len(b.tracks[1]["pts"]) > 2 and not (set(b.check()) - before)
+
+
+def test_placer_holds_required_parts_near_and_is_repeatable():
+    """board.near (a requirement's "within d mm") is met by autoplace, and the same seed gives the same placement"""
+    import pcb
+
+    def make():
+        out = [(0, 0), (40, 0), (40, 30), (0, 30)]
+        b = pcb.Board("nr", out, rules="jlcpcb-2")
+        b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", None, 0, "IC")
+        for r in ("R1", "R2", "R3", "R4"):
+            b.place(r, "Resistor_SMD:R_0603_1608Metric", None, 0, "1k")
+        b.place("C1", "Capacitor_SMD:C_0603_1608Metric", None, 0, "100n")
+        b.net("VCC", [("U1", "8"), ("C1", "1"), ("R1", "1"), ("R2", "1"), ("R3", "1"), ("R4", "1")])
+        b.net("GND", [("U1", "4"), ("C1", "2")])
+        for k in range(4):
+            b.net(f"S{k}", [("U1", str(k + 1 if k < 3 else 5)), (f"R{k + 1}", "2")])
+        b.near = [("C1", "U1", 2.0)]
+        return b
+    a, c = make(), make()
+    pcb.autoplace(a, seed=3)
+    pcb.autoplace(c, seed=3)
+    assert pcb.near_misses(a) == []
+    assert {r: v["at"] for r, v in a.comps.items()} == {r: v["at"] for r, v in c.comps.items()}
+
+
+def test_stage_check_starts_from_the_saved_board(tmp_path, capsys):
+    """a route run saves the board; --stage check then reuses its placement and copper without routing"""
+    import json
+    import pcb_cli
+    here = Path(__file__).parent.parent
+    out = str(tmp_path / "o")
+    pcb_cli.main([str(here / "bench" / "blinker.py"), out, "--stage", "route", "--router", "harness", "--kicad-drc", "off"])
+    assert (tmp_path / "o" / "board_state.pkl").exists()
+    capsys.readouterr()
+    pcb_cli.main([str(here / "bench" / "blinker.py"), out, "--stage", "check", "--kicad-drc", "off"])
+    said = capsys.readouterr().out
+    r = json.load(open(tmp_path / "o" / "result.json"))
+    assert "from the last run" in said and r["clean"] and "route" not in r["timings"]
