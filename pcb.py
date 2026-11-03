@@ -2361,13 +2361,19 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         workers = int(os.environ.get("PCB_WORKERS") or min(4, os.cpu_count() or 1))
     workers = max(1, min(workers, tries))
     best, results = None, {}
+    board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (the first try alone: most
+    results[0] = _one_try(board, move, 0, gap, route_kw, router, kw)              # boards are clean on it)
+    print(results[0][6], flush=True)
+    if results[0][7] or tries == 1:
+        workers = 0
     if workers > 1:
         import multiprocessing as mp
         from concurrent.futures import ProcessPoolExecutor
         ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
+        board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)
         blob = pickle.dumps(board)
         with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as ex:
-            for k0 in range(0, tries, workers):
+            for k0 in range(1, tries, workers):
                 futs = {k: ex.submit(_try_worker, blob, move, k, gap, route_kw, router, kw)
                         for k in range(k0, min(tries, k0 + workers))}
                 for k in sorted(futs):
@@ -2375,8 +2381,8 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
                     print(results[k][6], flush=True)
                 if any(results[k][7] for k in futs):
                     break
-    else:
-        for k in range(tries):
+    elif workers == 1:
+        for k in range(1, tries):
             board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try afresh)
             results[k] = _one_try(board, move, k, gap, route_kw, router, kw)
             print(results[k][6], flush=True)
