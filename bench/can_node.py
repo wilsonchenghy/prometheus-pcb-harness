@@ -3,7 +3,7 @@ switchable 120 R terminator, an AMS1117 regulator from the bus's 12 V, two JST-X
 Cortex 10-pin SWD header, a reset and a status LED. 2 layers, 50 x 36 mm, ground poured on both sides; CANH / CANL
 declared as a pair. Pin maps are ST's and TI's datasheets as remembered: verify before fab.
 
-    pcb-harness bench/can_node.py out/ --spec bench/specs/can_node.json
+    zeus bench/can_node.py out/ --spec bench/specs/can_node.json
 """
 import os
 import sys

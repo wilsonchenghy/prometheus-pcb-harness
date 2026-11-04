@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Renamed **Zeus — AI PCB Harness**: the command is `zeus` (`pcb-harness` still works), the package `zeus-pcb`.
 - `pcb-harness view out/` and `--view`: the board in a browser - layout with layers to switch, an interactive 3D
   view (three.js, shipped with the page; KiCad's photoreal render when KiCad is installed), a net-label schematic,
   the findings (click one: the board zooms to it) - and, during a run, its stage, the try it is on and about how

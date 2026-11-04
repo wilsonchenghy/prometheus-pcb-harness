@@ -63,7 +63,7 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
     skip = set(skip_nets)
     L_ = list(board.layers)
     lines = [f"(pcb {_q(os.path.basename(path))}",
-             '  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "pcb-harness") (host_version "1"))',
+             '  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "Zeus") (host_version "1"))',
              "  (resolution um 10)", "  (unit um)", "  (structure"]
     for i, L in enumerate(L_):
         lines.append(f"    (layer {_layer_name(L)} (type signal) (property (index {i})))")

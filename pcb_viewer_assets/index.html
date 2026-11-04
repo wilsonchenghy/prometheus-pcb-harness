@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>pcb-harness viewer</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='3' y='3' width='10' height='10' rx='2.5' fill='%238b95ff'/%3E%3C/svg%3E">
+<title>Zeus · AI PCB Harness</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M13.6 2 4.8 13.4h5.6L9.2 22l9.9-12.6h-6L13.6 2z' fill='%23d4b373'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="/fonts.css">
 <style>
 :root {
   --bg: #0a0b0d; --bg2: #0e1013; --panel: #121418; --panel2: #171a1f; --hover: #1d2127; --line: #22262d; --line2: #2c3139;
   --text: #e8eaed; --text2: #a3a9b3; --text3: #6b727d;
-  --amber: #f5a524; --amber2: #ffcf7a; --accent: #8b95ff; --accent2: #b4bbff; --warn: #f0a35e; --cyan: #3ec7e8; --green: #3ddc97; --red: #ff5d5d; --violet: #8b7cff;
+  --amber: #f5a524; --amber2: #ffcf7a; --accent: #d4b373; --accent2: #f0dcae; --gold1: #b8893f; --gold2: #f3dfae; --warn: #f0a35e; --cyan: #3ec7e8; --green: #3ddc97; --red: #ff5d5d; --violet: #8b7cff;
   --sans: "IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
   --r: 10px;
 }
@@ -23,13 +23,15 @@ button { font: inherit; color: inherit; }
 /* top bar */
 .top { grid-area: top; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-bottom: 1px solid var(--line); background: var(--bg2); }
 .logo { display: flex; align-items: center; gap: 9px; font-weight: 500; letter-spacing: .2px; }
-.logo svg { width: 22px; height: 22px; }
+.logo svg { width: 22px; height: 22px; filter: drop-shadow(0 0 6px rgba(212,179,115,.35)); }
+.logo .wm { font-weight: 600; letter-spacing: .4px; font-size: 14px; }
+.logo .tag { font-size: 11px; color: var(--text3); letter-spacing: .3px; padding-left: 9px; border-left: 1px solid var(--line2); }
 .crumb { color: var(--text3); display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .crumb b { color: var(--text); font-weight: 500; }
 .seg { margin: 0 auto; display: flex; padding: 3px; gap: 2px; border-radius: 9px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
 .seg button { border: 0; background: none; padding: 5px 16px; border-radius: 7px; cursor: pointer; color: var(--text2); font-weight: 500; transition: .15s; }
 .seg button:hover { color: var(--text); }
-.seg button.on { background: var(--hover); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.4), inset 0 0 0 1px var(--line2); }
+.seg button.on { background: var(--hover); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.4), inset 0 0 0 1px var(--line2), inset 0 -2px 0 rgba(212,179,115,.75); }
 .pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px 4px 9px; border-radius: 999px; font-weight: 500; font-size: 12px;
   background: var(--panel); box-shadow: inset 0 0 0 1px var(--line2); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text3); }
@@ -38,8 +40,8 @@ button { font: inherit; color: inherit; }
 @keyframes blink { 50% { opacity: .35; } }
 .btn { border: 0; cursor: pointer; padding: 6px 12px; border-radius: 7px; background: var(--panel2); box-shadow: inset 0 0 0 1px var(--line2); font-weight: 500; font-size: 12px; text-decoration: none; color: var(--text); }
 .btn:hover { background: var(--hover); }
-.btn.primary { background: #f3f4f6; color: #0b0c0f; box-shadow: 0 1px 0 rgba(255,255,255,.6) inset, 0 4px 16px rgba(139,149,255,.18); }
-.btn.primary:hover { background: #ffffff; }
+.btn.primary { background: linear-gradient(180deg, #f1dfb3, #c9a45f); color: #1d1608; box-shadow: 0 1px 0 rgba(255,250,235,.7) inset, 0 0 0 1px rgba(120,86,30,.35) inset, 0 6px 18px rgba(212,179,115,.18); }
+.btn.primary:hover { background: linear-gradient(180deg, #f6e8c4, #d3b06c); }
 
 /* side panels */
 .left, .right { background: var(--bg2); overflow: auto; }
@@ -56,7 +58,7 @@ button { font: inherit; color: inherit; }
 .search:focus { box-shadow: inset 0 0 0 1px var(--accent); }
 .net { font-family: var(--mono); font-size: 12px; }
 .net .w { margin-left: auto; color: var(--text3); font-size: 11px; }
-.net.sel { background: rgba(139,149,255,.12); color: var(--accent2); }
+.net.sel { background: rgba(212,179,115,.1); color: var(--accent2); }
 
 .tabs2 { display: flex; gap: 2px; padding: 10px 12px 0; border-bottom: 1px solid var(--line); }
 .tabs2 button { border: 0; background: none; padding: 8px 10px; cursor: pointer; color: var(--text3); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
@@ -121,7 +123,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .prog .line { position: absolute; left: 14px; right: 14px; bottom: 0; height: 2px; border-radius: 2px; overflow: hidden; background: rgba(255,255,255,.05); }
 .prog .line i { display: block; height: 100%; background: linear-gradient(90deg, transparent, var(--accent), var(--accent2)); transition: width .8s; }
 .canvas.running svg.pan, .canvas.running #three { filter: saturate(.6) brightness(.7); transition: filter .6s; }
-.shimmer { position: absolute; inset: 0; pointer-events: none; display: none; background: linear-gradient(105deg, transparent 40%, rgba(139,149,255,.06) 50%, transparent 60%); background-size: 250% 100%; animation: sweep 2.4s linear infinite; }
+.shimmer { position: absolute; inset: 0; pointer-events: none; display: none; background: linear-gradient(105deg, transparent 40%, rgba(212,179,115,.05) 50%, transparent 60%); background-size: 250% 100%; animation: sweep 2.4s linear infinite; }
 .canvas.running .shimmer { display: block; }
 @keyframes sweep { from { background-position: 150% 0; } to { background-position: -100% 0; } }
 
@@ -136,7 +138,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 #msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--text3); pointer-events: none; text-align: center; }
 #render { position: absolute; inset: 0; display: none; background: #000; } #render img { width: 100%; height: 100%; object-fit: contain; }
 .spot { position: absolute; inset: 0; pointer-events: none; z-index: 1;
-  background: radial-gradient(360px circle at var(--mx, -999px) var(--my, -999px), rgba(139,149,255,.075), transparent 70%); }
+  background: radial-gradient(360px circle at var(--mx, -999px) var(--my, -999px), rgba(212,179,115,.06), transparent 70%); }
 .loupe { position: absolute; z-index: 8; width: 200px; height: 200px; border-radius: 50%; pointer-events: none; display: none; overflow: hidden;
   background: #0a0b0d; box-shadow: 0 0 0 1px rgba(255,255,255,.22), 0 0 0 6px rgba(10,11,13,.6), 0 18px 40px rgba(0,0,0,.6); transform: translate(-50%, -50%); }
 .loupe svg { width: 100%; height: 100%; }
@@ -154,7 +156,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 #psvg { width: 100%; height: 100%; display: block; }
 .pfoot { display: flex; align-items: center; gap: 14px; padding: 0 22px; font: 400 12px var(--mono); color: var(--text3); z-index: 2; }
 .pfoot b { font: 300 22px var(--sans); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
-.pfoot #pnow { color: var(--text2); } .pfoot .btn { margin-left: auto; }
+.pfoot #pnow { color: var(--text2); } .pfoot .btn { margin-left: auto; box-shadow: inset 0 0 0 1px rgba(212,179,115,.55); color: var(--accent2); }
 .thread { fill: none; stroke-width: 1.4; opacity: .5; transition: opacity .2s, stroke-width .2s; }
 .thread.hi { opacity: 1; stroke-width: 2.4; }
 .flow { stroke-dasharray: 0.6 0.9; animation: flow .9s linear infinite; }
@@ -172,9 +174,9 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 <body>
 <div class="app">
   <div class="top">
-    <div class="logo"><svg viewBox="0 0 24 24"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c3c8ff"/><stop offset="1" stop-color="#6f7bff"/></linearGradient></defs>
-      <rect x="5" y="5" width="14" height="14" rx="3.2" fill="none" stroke="#e8eaed" stroke-width="1.6"/><g stroke="#8a919c" stroke-width="1.5" stroke-linecap="round"><path d="M9 5V2M15 5V2M9 22v-3M15 22v-3M5 9H2M5 15H2M22 9h-3M22 15h-3"/></g>
-      <rect x="9" y="9" width="6" height="6" rx="1.4" fill="url(#lg)"/></svg>pcb-harness</div>
+    <div class="logo"><svg viewBox="0 0 24 24"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbeec9"/><stop offset=".45" stop-color="#d9b56c"/><stop offset="1" stop-color="#9c6e2c"/></linearGradient></defs>
+      <path d="M13.6 2 4.8 13.4h5.6L9.2 22l9.9-12.6h-6L13.6 2z" fill="url(#lg)" stroke="rgba(255,240,205,.5)" stroke-width=".5" stroke-linejoin="round"/></svg>
+      <span class="wm">Zeus</span><span class="tag">AI PCB Harness</span></div>
     <div class="crumb">/ <span id="folder">board</span> / <b id="name">—</b></div>
     <div class="seg" id="seg"><button class="on" data-v="layout">Layout</button><button data-v="v3d">3D</button><button data-v="schem">Schematic</button><button data-v="parts">Parts</button></div>
     <span class="pill" id="pill"><span class="dot"></span><span id="pilltext">Loading</span></span>
@@ -197,9 +199,9 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     <div class="shimmer"></div><div class="spot"></div>
     <div class="loupe" id="loupe"><svg id="lpsvg"><use href="#lroot"/></svg><span class="lz">4×</span></div>
     <div class="float prog" id="prog">
-      <svg class="ring" viewBox="0 0 54 54"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c3c8ff"/><stop offset="1" stop-color="#7b86ff"/></linearGradient></defs>
+      <svg class="ring" viewBox="0 0 54 54"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f3dfae"/><stop offset="1" stop-color="#b8893f"/></linearGradient></defs>
         <circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="4"/>
-        <circle id="ringarc" cx="27" cy="27" r="22" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" transform="rotate(-90 27 27)" stroke-dasharray="0 140" style="transition:stroke-dasharray .8s; filter:drop-shadow(0 0 4px rgba(139,149,255,.6))"/>
+        <circle id="ringarc" cx="27" cy="27" r="22" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" transform="rotate(-90 27 27)" stroke-dasharray="0 140" style="transition:stroke-dasharray .8s; filter:drop-shadow(0 0 4px rgba(212,179,115,.55))"/>
         <text id="ringpct" x="27" y="31" text-anchor="middle" fill="#e8eaed" font-size="11" font-family="IBM Plex Mono">0%</text></svg>
       <div><div class="t1" id="pt1">Routing</div><div class="t2" id="pt2"></div></div>
       <div class="eta"><b id="peta">—</b><span>left, about</span></div>
@@ -333,7 +335,10 @@ function drawLayout() {
       const isTop = L === topL(), fill = made ? "#1d6b46" : COLOR[L];
       const poured = B.pours.some(p => p.net === c.net && p.layer === L);
       const op = made ? .95 : glow ? (poured ? (isTop ? .16 : .09) : (isTop ? .9 : .4)) : (isTop ? .8 : .45);
-      const p = el("path", { d: polyPath(c.poly), fill, "fill-rule": "evenodd", "data-net": c.net, opacity: op }, g);
+      const pourLine = glow && poured;                  // (a pour: a line of light round its edge, barely filled)
+      const p = el("path", { d: polyPath(c.poly), fill, "fill-rule": "evenodd", "data-net": c.net, opacity: pourLine ? (isTop ? .06 : .04) : op,
+        ...(pourLine ? {} : {}) }, g);
+      if (pourLine) el("path", { d: polyPath(c.poly), fill: "none", stroke: fill, "stroke-width": 0.07, opacity: isTop ? .55 : .3, "pointer-events": "none" }, g);
       hover(p, `<span class="m">${esc(c.net)}</span> · ${L}.Cu`, c.net);
       p.addEventListener("click", () => selectNet(c.net));
     }
@@ -373,7 +378,7 @@ function buildUp(host, root) {
   const [x0, y0, x1, y1] = B.bounds, L = flipped ? -x1 - 2 : x0 - 2, W = x1 - x0 + 4, T = -y1 - 2, H = y1 - y0 + 4;
   const d = host.querySelector("defs"), cp = el("clipPath", { id: "wipe" }, d), r = el("rect", { x: L, y: T, width: 0, height: H }, cp);
   const g2 = el("linearGradient", { id: "sweepg", x1: 0, y1: 0, x2: 1, y2: 0 }, d);
-  [["0", "rgba(139,149,255,0)"], [".7", "rgba(180,187,255,.35)"], ["1", "rgba(255,255,255,.9)"]].forEach(([o, c]) => el("stop", { offset: o, "stop-color": c }, g2));
+  [["0", "rgba(212,179,115,0)"], [".7", "rgba(240,220,174,.35)"], ["1", "rgba(255,248,230,.95)"]].forEach(([o, c]) => el("stop", { offset: o, "stop-color": c }, g2));
   root.setAttribute("clip-path", "url(#wipe)");
   const beam = el("rect", { x: L, y: T, width: 3, height: H, fill: "url(#sweepg)", style: "pointer-events:none" }, host);
   const t0 = performance.now(), dur = 1300;
@@ -531,12 +536,20 @@ function drawPartList() {
 function drawParts() {
   if (!B || B.error) return; drawPartList();
   const svg = $("#psvg"); svg.innerHTML = ""; const c = B.comps.find(x => x.ref === curPart); if (!c) return;
-  const R_ = svg.getBoundingClientRect(), W = R_.width || 900, H = R_.height || 600, pad = 26, gap = 70, cw = (W - 2 * pad - gap) / 2, ch = H - 2 * pad;
-  const L = { x: pad, y: pad, w: cw, h: ch }, Rt = { x: pad + cw + gap, y: pad, w: cw, h: ch };
+  const R_ = svg.getBoundingClientRect(), W = R_.width || 900, H = R_.height || 600, pad = 26, gap = 90, cw = Math.min(560, (W - 2 * pad - gap) / 2);
+  let ch = H - 2 * pad;                                  // (the cards as tall as the symbol needs, centred)
+  if (c.symbol && c.symbol.pins.length) { const ys = c.symbol.pins.map(p => p.at[1]).concat(c.symbol.body.flatMap(r => [r[1], r[3]])),
+      xs = c.symbol.pins.map(p => p.at[0]).concat(c.symbol.body.flatMap(r => [r[0], r[2]]));
+    const sw = Math.max(...xs) - Math.min(...xs), shh = Math.max(...ys) - Math.min(...ys), kk = Math.min((cw - 180) / Math.max(sw, 1), 16);
+    ch = Math.min(H - 2 * pad, Math.max(380, shh * kk + 200)); }
+  const x0c = (W - (2 * cw + gap)) / 2, y0c = (H - ch) / 2;
+  const L = { x: x0c, y: y0c, w: cw, h: ch }, Rt = { x: x0c + cw + gap, y: y0c, w: cw, h: ch };
   const defs = el("defs", {}, svg), sh = el("filter", { id: "cardsh", x: "-10%", y: "-10%", width: "120%", height: "130%" }, defs);
   el("feDropShadow", { dx: 0, dy: 10, stdDeviation: 14, "flood-color": "#000", "flood-opacity": .45 }, sh);
   // the paper card: the symbol
-  el("rect", { x: L.x, y: L.y, width: L.w, height: L.h, rx: 14, fill: "#f3f0e8", filter: "url(#cardsh)" }, svg);
+  const gp = el("pattern", { id: "paper", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);
+  el("rect", { width: 16, height: 16, fill: "#f4f1e9" }, gp); el("path", { d: "M16 0H0V16", fill: "none", stroke: "rgba(120,100,60,.08)", "stroke-width": 1 }, gp);
+  el("rect", { x: L.x, y: L.y, width: L.w, height: L.h, rx: 14, fill: "url(#paper)", filter: "url(#cardsh)" }, svg);
   el("text", { x: L.x + 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 2 }, svg)
     .textContent = ("SYMBOL · " + (c.symbol ? c.symbol.pins.length + " PINS" : "NONE")).toUpperCase();
   el("text", { x: L.x + L.w - 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 1.5, "text-anchor": "end" }, svg)
@@ -611,6 +624,25 @@ function drawParts() {
   $("#pcount").textContent = c.symbol ? `${n} / ${total}` : `${Object.keys(padXY).length} pads`;
   $("#pnow").textContent = c.symbol ? (n === total ? "every pin has a pad" : "pins without pads: " + Object.keys(pinXY).filter(k => !padXY[k]).join(", ")) : "no symbol to check against";
   $("#pverify").style.display = c.symbol ? "" : "none";
+  if (c.symbol) annotateDatasheet(c, pinXY, L);
+}
+const DS = {};
+async function annotateDatasheet(c, pinXY, L) {
+  const svg = $("#psvg"), ref = c.ref;
+  const cap = el("text", { x: L.x + 22, y: L.y + L.h - 22, fill: "#8a8578", "font-size": 11, "font-family": FONT, "letter-spacing": 1 }, svg);
+  cap.textContent = "DATASHEET · READING THE PIN TABLE…";
+  const d = DS[ref] || (DS[ref] = await getJ("/api/datasheet?ref=" + encodeURIComponent(ref)));
+  if (curPart !== ref || !cap.isConnected) return;
+  if (!d || d.error) { cap.textContent = "DATASHEET · NOT READ" + (d && d.error ? " (" + d.error.slice(0, 40) + ")" : ""); return; }
+  cap.textContent = `DATASHEET · ${d.agree} / ${d.total} PINS AGREE · PAGE ${d.page}`;
+  cap.setAttribute("fill", d.agree === d.total ? "#8a6a2c" : "#b2412f");
+  const link = el("a", { href: d.datasheet, target: "_blank" }, svg);
+  el("text", { x: L.x + L.w - 22, y: L.y + L.h - 22, fill: "#9a7a3a", "font-size": 11, "font-family": FONT, "text-anchor": "end", style: "cursor:pointer" }, link).textContent = "open PDF ↗";
+  for (const q of d.pins) { const a = pinXY[q.num]; if (!a) continue; const ok = q.status === "agrees";
+    const g = el("g", {}, svg), x = a[0] + (a[2].rot === 0 ? -16 : a[2].rot === 180 ? 16 : 0), y = a[1] + (a[2].rot === 90 ? 16 : a[2].rot === 270 ? -16 : 0);
+    el("circle", { cx: x, cy: y, r: 5.5, fill: ok ? "#c9a45f" : "#d6553f" }, g);
+    el("path", { d: ok ? `M${x - 2.6},${y} l1.8,1.9 l3.4,-3.6` : `M${x - 2.2},${y - 2.2} l4.4,4.4 M${x + 2.2},${y - 2.2} l-4.4,4.4`, fill: "none", stroke: "#fff", "stroke-width": 1.4, "stroke-linecap": "round" }, g);
+    hover(g, ok ? `pin ${q.num} ${q.name}: the datasheet agrees` : `pin ${q.num} ${q.name}: ${q.status}` + (q.datasheet.length ? ` (the datasheet lists ${q.datasheet.join(", ")})` : "")); }
 }
 function hiThread(num, on) { const t = window._threads && window._threads[num]; if (t) t.classList.toggle("hi", on);
   const c = B.comps.find(x => x.ref === curPart), p = c && c.symbol && c.symbol.pins.find(q => q.num === num);

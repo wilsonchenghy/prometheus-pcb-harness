@@ -215,7 +215,7 @@ def main(argv=None) -> int:
     if argv[:1] == ["part"]:                             # (a part's symbol: pins, datasheet, footprint, the check)
         import parts
         if len(argv) < 2:
-            print("usage: pcb-harness part Lib:Symbol   e.g. pcb-harness part Driver_Motor:DRV8833PWP", file=sys.stderr)
+            print("usage: zeus part Lib:Symbol   e.g. zeus part Driver_Motor:DRV8833PWP", file=sys.stderr)
             return 2
         try:
             print(parts.describe(argv[1]))
@@ -256,7 +256,7 @@ def main(argv=None) -> int:
     ap.add_argument("--datasheets", action="store_true", help="also read each symbol part's datasheet and check its "
                     "pins against the datasheet's pin table (fetched once, then cached)")
     ap.add_argument("--view", action="store_true", help="open the board in a browser while the run goes (its stage, "
-                    "the try it is on, about how long is left) and keep it open after; 'pcb-harness view OUT' later")
+                    "the try it is on, about how long is left) and keep it open after; 'zeus view OUT' later")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
         real_stdout, sys.stdout = sys.stdout, sys.stderr

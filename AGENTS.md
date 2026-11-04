@@ -1,17 +1,17 @@
-# Using pcb-harness as an agent
+# Using Zeus as an agent
 
 The harness does the geometry; the agent does the design. An agent's job is to write a board script, run it,
 read the findings, and edit the script until the run is clean.
 
 ## The loop
 
-0. **Check the machine once**: `pcb-harness doctor`. Missing KiCad, Java or FreeRouting? `pcb-harness setup` adds
+0. **Check the machine once**: `zeus doctor`. Missing KiCad, Java or FreeRouting? `zeus setup` adds
    FreeRouting (no root); for the rest show the user `docs/setup.md` and install only with their approval. Each is
    optional: without them the harness uses its own router and checks (see the table in `docs/setup.md`).
 1. **Write `board.py`** with a `build()` that returns a `pcb.Board`: the outline, the parts (`place(ref,
    "Lib:Footprint", at, rot, value, mpn, lcsc=...)`; `at=None` lets the placer choose), the nets with their
    current (`net(name, pins, amps=...)`), the pours. Or start from a KiCad netlist (`.net`).
-2. **Run** `pcb-harness board.py out/ --json`. It places what has no position, routes, runs the design check and
+2. **Run** `zeus board.py out/ --json`. It places what has no position, routes, runs the design check and
    the house check, and writes the order files. Stdout is one JSON object; it is also saved as `out/result.json`.
 3. **Read `clean`.** If true, stop: `out/` holds the Gerbers, assembly files, parts cart and `report.html`.
 4. **Otherwise read `findings`.** Each has `kind`, `pins`, `at` (mm) and a `hint`:
@@ -31,7 +31,7 @@ read the findings, and edit the script until the run is clean.
 Place a chip with its KiCad symbol and wire it by pin name, not by remembered pin numbers:
 `b.place("U1", None, None, 0, "DRV8833", symbol="Driver_Motor:DRV8833PWP")` (the footprint is the symbol's own
 unless you give one), then `b.net("AIN2", [("U1", "AIN2"), ...])`; a name used by several pins (GND) takes them all.
-`pcb-harness part Driver_Motor:DRV8833PWP` prints the pin table, the datasheet link and the footprint. The
+`zeus part Driver_Motor:DRV8833PWP` prints the pin table, the datasheet link and the footprint. The
 instant placement check then matches every symbol pin to a pad and every pad to a pin, and the critic runs an ERC
 on the pins' electrical types (an input left open, a power pin unconnected or unsupplied, two outputs tied, a
 no-connect pin wired). Prefer this for every IC: a wrong pin number is the one mistake the other checks cannot see.
@@ -54,7 +54,7 @@ the shorter net, kept only when the check finds nothing new).
 
 ## Showing the user
 
-For a person following along, add `--view` to the run (or run `pcb-harness view out/` after): a local page with
+For a person following along, add `--view` to the run (or run `zeus view out/` after): a local page with
 the layout, a 3D view, the schematic and the findings, and live progress with an estimate of the time left. Give
 them the address it prints. Leave it off in unattended runs: with `--view` the command waits for Ctrl-C at the end.
 

@@ -1,4 +1,4 @@
-# pcb-harness
+# Zeus — AI PCB Harness
 
 Design printed circuit boards in Python, the way you would design them by hand: parts on real KiCad footprints, nets,
 routed copper and pours, then a first-order design review against IPC-2221 before anything goes to the fab.
@@ -41,9 +41,9 @@ What it does (`pcb.py`, its docstring has the details):
 
 - **Parts and ERC**: `place(..., symbol="Driver_Motor:DRV8833PWP")` takes a part's KiCad symbol: nets name its
   pins by name, every pin is matched to a pad and every pad to a pin, and an ERC runs on the pin types;
-  `pcb-harness part Lib:Symbol` shows a symbol's pins, datasheet and footprint.
-- **Viewer**: `pcb-harness board.py out/ --view` opens the board in your browser while it runs (the stage, the
-  try it is on, about how long is left) and keeps it open after; `pcb-harness view out/` opens a finished run.
+  `zeus part Lib:Symbol` shows a symbol's pins, datasheet and footprint.
+- **Viewer**: `zeus board.py out/ --view` opens the board in your browser while it runs (the stage, the
+  try it is on, about how long is left) and keeps it open after; `zeus view out/` opens a finished run.
   Layout with layers to switch, an interactive 3D view (and KiCad's photoreal render when KiCad is installed), a
   net-label schematic, and every finding: click one and the board zooms to it.
 
@@ -52,7 +52,7 @@ parts cart, KiCad project, report; `--step` adds the 3D board; exit 0 when every
 
 ```
 python -m pcb_cli bench/esp32_sensor.py out/ --boards 10 --rules jlcpcb-2
-pcb-harness bench/esp32_sensor.py out/          # the same, as installed by pip
+zeus bench/esp32_sensor.py out/          # the same, as installed by pip
 ```
 
 Already have a KiCad schematic? Export its netlist (Eeschema: File > Export > Netlist) and give the board's size;
@@ -63,7 +63,7 @@ python -m pcb_cli examples/netlist/blinker_sch.net out/ --size 35x25 --at J1=4,1
 ```
 
 Setting up a machine or an agent's environment (KiCad, Java, FreeRouting, and what happens without them)?
-`docs/setup.md`; `pcb-harness doctor` says what a machine has. Driving it from an agent? `AGENTS.md` gives the loop (write the script, run with `--json`, fix the findings).
+`docs/setup.md`; `zeus doctor` says what a machine has. Driving it from an agent? `AGENTS.md` gives the loop (write the script, run with `--json`, fix the findings).
 New here? `docs/getting-started.md` walks a board from nothing to an order; `docs/ordering.md` says which file
 goes where when you order. `python bench/run.py` builds and times
 every example board.
@@ -102,21 +102,21 @@ boards yourself.
 **One command** (Python 3.10+):
 
 ```
-pip install "pcb-harness @ git+https://github.com/wilsonchenghy/pcb-harness"
-pcb-harness setup        # adds FreeRouting (needs Java), then reports what the machine has
+pip install "zeus-pcb @ git+https://github.com/wilsonchenghy/zeus"
+zeus setup        # adds FreeRouting (needs Java), then reports what the machine has
 ```
 
-or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash`, which does
-both. KiCad 9 (for KiCad's own DRC) is a system install: `pcb-harness doctor` says whether it is there, and
+or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/zeus/main/install.sh | bash`, which does
+both. KiCad 9 (for KiCad's own DRC) is a system install: `zeus doctor` says whether it is there, and
 `docs/setup.md` has the commands per OS. Everything beyond Python is optional; see the table there for what you
 get without it.
 
 **With Claude Code or another AI agent** (on your machine or in a cloud session): give it the link and the job.
 
-> Install https://github.com/wilsonchenghy/pcb-harness (follow its docs/setup.md), then design a board that ...
+> Install https://github.com/wilsonchenghy/zeus (follow its docs/setup.md), then design a board that ...
 
 In a Claude Code cloud session, add the repository to the session (or let the agent clone it). The repository
-carries a Claude Code skill (`.claude/skills/pcb-harness`) and `AGENTS.md`, so the agent follows the harness's
+carries a Claude Code skill (`.claude/skills/zeus`) and `AGENTS.md`, so the agent follows the harness's
 loop: check the machine, write the board script, run, fix the findings until clean. The agent will ask before
 installing KiCad (it needs root); approve it, or in auto mode switch to *Accept edits* first.
 

@@ -1,6 +1,6 @@
-"""``pcb-harness view out/``: a local page to look at a board - its layout (layers to switch on and off), a 3D view,
+"""``zeus view out/``: a local page to look at a board - its layout (layers to switch on and off), a 3D view,
 a net-label schematic, every finding (click one: the board zooms to it) - and, while a run is going
-(``pcb-harness board.py out/ --view``), its stage, the try it is on and about how long is left.
+(``zeus board.py out/ --view``), its stage, the try it is on and about how long is left.
 
 Python's standard library only (http.server); the 3D view's three.js (r128, MIT) ships beside the page.
 """
@@ -361,13 +361,13 @@ def serve(out_dir: str, port: int = 0, open_browser: bool = True, block: bool = 
 
 def main(argv) -> int:
     import argparse
-    ap = argparse.ArgumentParser(prog="pcb-harness view", description="look at a board run's folder in a browser")
+    ap = argparse.ArgumentParser(prog="zeus view", description="look at a board run's folder in a browser")
     ap.add_argument("out", help="the run's output folder (the one result.json is in)")
     ap.add_argument("--port", type=int, default=0)
     ap.add_argument("--no-open", action="store_true", help="do not open a browser (print the address)")
     a = ap.parse_args(argv)
     if not (Path(a.out) / "result.json").exists() and not (Path(a.out) / "progress.json").exists():
-        print(f"{a.out}: no run here yet: pcb-harness board.py {a.out} first (or add --view to that run)", file=sys.stderr)
+        print(f"{a.out}: no run here yet: zeus board.py {a.out} first (or add --view to that run)", file=sys.stderr)
         return 2
     serve(a.out, a.port, not a.no_open)
     return 0
