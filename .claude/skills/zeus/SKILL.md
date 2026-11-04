@@ -6,14 +6,14 @@ description: Design a printed circuit board with Zeus - parts on KiCad footprint
 # Zeus
 
 1. Once per machine: `zeus doctor`. If KiCad, Java or FreeRouting is missing, run `zeus setup`
-   (FreeRouting, no root) and show the user `docs/setup.md` for the rest; install system software only with their
+   (FreeRouting, no root) and show the user the setup guide (`docs/setup.md`, https://github.com/wilsonchenghy/pcb-harness/blob/main/docs/setup.md) for the rest; install system software only with their
    approval. Everything is optional; the harness falls back to its own router and checks.
 2. Write `board.py` with a `build()` returning a `pcb.Board` (outline, parts with real KiCad footprints and pin
    numbers from the datasheet, nets with their current, pours), or start from a KiCad netlist (`.net`). Place
    every IC with its KiCad symbol (`symbol="Lib:Name"`; `zeus part Lib:Name` shows it) and wire its pins by
    name: pins are then checked against pads both ways and an ERC runs. Place
    connectors, buttons and mounting holes yourself; give other parts `at=None` for the placer.
-3. Put what the board must meet in `req.json` (size, nets' current, `near`, `pairs`, `edge`, holes: AGENTS.md) and
+3. Put what the board must meet in `req.json` (size, nets' current, `near`, `pairs`, `edge`, holes: AGENTS.md, https://github.com/wilsonchenghy/pcb-harness/blob/main/AGENTS.md) and
    run `zeus board.py out/ --spec req.json --json`. Read `clean`, `findings` (kind, pins, at, hint) and
    `critic` in the JSON. `--stage critic` reviews in milliseconds; `--stage check` / `export` reuse the last
    placement and routing (`out/board_state.pkl`).
@@ -24,4 +24,5 @@ description: Design a printed circuit board with Zeus - parts on KiCad footprint
    name any pin numbers you assumed. The order files are in `out/`: `gerbers.zip`, `bom_jlc.csv`, `cpl.csv`,
    `cart/`, `report.html`, `kicad/`.
 
-Details: `AGENTS.md`, `docs/getting-started.md`, `docs/ordering.md`, `docs/setup.md` in the Zeus repository.
+Details: `AGENTS.md`, `docs/getting-started.md`, `docs/ordering.md`, `docs/setup.md` in the Zeus repository
+(https://github.com/wilsonchenghy/pcb-harness/blob/main/; read them there when Zeus was installed with pip, not cloned).

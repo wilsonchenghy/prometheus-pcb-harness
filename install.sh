@@ -2,9 +2,13 @@
 # Zeus: install the harness, fetch FreeRouting, and report what this machine has.
 #   bash install.sh            (from a clone)
 #   curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash
+#   ... install.sh --skill     (also the Claude Code skill in ~/.claude/skills/zeus: Claude Code then uses
+#                               Zeus in any folder, not only inside a clone)
 # Installs no system software: KiCad and Java are listed by `zeus doctor` with the commands to add them
 # (docs/setup.md), for you to run or approve.
 set -euo pipefail
+SKILL=0
+for a in "$@"; do [ "$a" = "--skill" ] && SKILL=1; done
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd || true)"
 PY="${PYTHON:-python3}"
 if [ -n "$HERE" ] && [ -f "$HERE/pyproject.toml" ]; then
@@ -19,5 +23,16 @@ else
   echo "Java not found: FreeRouting skipped (the built-in router is used). Install Java 17+ to add it: docs/setup.md"
   zeus doctor
 fi
+if [ "$SKILL" = 1 ]; then
+  DEST="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/skills/zeus"
+  mkdir -p "$DEST"
+  if [ -n "$HERE" ] && [ -f "$HERE/.claude/skills/zeus/SKILL.md" ]; then
+    cp "$HERE/.claude/skills/zeus/SKILL.md" "$DEST/SKILL.md"
+  else
+    curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/.claude/skills/zeus/SKILL.md \
+      -o "$DEST/SKILL.md"
+  fi
+  echo "Claude Code skill installed: $DEST/SKILL.md (restart Claude Code to pick it up)"
+fi
 echo
-echo "Try it:  zeus <your_board.py> out/      (or a KiCad netlist: zeus design.net out/ --size 50x40)"
+echo "Try it:  zeus <your_board.py> out/ --view   (or a KiCad netlist: zeus design.net out/ --size 50x40)"

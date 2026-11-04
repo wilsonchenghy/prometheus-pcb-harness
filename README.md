@@ -123,6 +123,37 @@ carries a Claude Code skill (`.claude/skills/zeus`) and `AGENTS.md`, so the agen
 loop: check the machine, write the board script, run, fix the findings until clean. The agent will ask before
 installing KiCad (it needs root); approve it, or in auto mode switch to *Accept edits* first.
 
+### Try it in Claude Code on your machine
+
+1. Install Zeus and its skill (Python 3.10+; Java 17+ adds FreeRouting, KiCad 9 adds KiCad's DRC, both optional):
+
+   ```
+   git clone https://github.com/wilsonchenghy/pcb-harness && cd pcb-harness
+   bash install.sh --skill       # the package, FreeRouting, and the skill in ~/.claude/skills/zeus
+   zeus doctor                   # what the machine has, and what each missing piece would add
+   ```
+
+   Without a clone: `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash -s -- --skill`.
+   Inside a clone the skill is there anyway (`.claude/skills/zeus`); `--skill` makes it work in any folder.
+2. Start Claude Code in an empty folder (`mkdir myboard && cd myboard && claude`) and ask for a board. To test:
+
+   > Make me a 12 V to 5 V, 2 A buck converter board with an AP63205, screw terminals in and out, and two M3
+   > holes. Run it with zeus, open the viewer, and fix whatever it finds until it is clean.
+
+   > Here is my KiCad netlist (design.net): place and route it on a 50 x 40 mm two-layer board for JLCPCB.
+
+   > Check the pins of Driver_Motor:DRV8833PWP against its datasheet.
+
+   Claude writes `board.py`, runs `zeus board.py out/ --view` (the board opens in your browser and shows the run,
+   its checks and the time left), reads `out/result.json` and changes the design until every check is clean.
+3. What you get in `out/`: Gerbers and drill (`gerbers.zip`), the BOM and pick-and-place for JLCPCB assembly
+   (`bom_jlc.csv`, `cpl.csv`), a parts cart (`cart/buy.html`), a KiCad project (`kicad/`), a review page
+   (`report.html`) and `result.json`.
+   `zeus view out/` opens a finished run again.
+
+Claude Code asks before it installs KiCad (it needs root): approve it, or run the commands from `docs/setup.md`
+yourself. Everything works without it; only KiCad's own DRC is skipped, and the run says so.
+
 **For a cloud or container environment** that every session starts from: put `bash install.sh` (and the KiCad
 commands from `docs/setup.md`) in its setup script.
 
