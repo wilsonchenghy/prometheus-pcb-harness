@@ -1997,10 +1997,12 @@ def from_netlist(path: str, outline, name: Optional[str] = None, at: Optional[Di
     return b
 
 
-def _decap_target(c: dict, ref: str, num: str) -> bool:
-    """a pin a decoupling capacitor belongs by: a chip's supply pin (a symbol's power input), never a connector's"""
+def _decap_target(c: dict, ref: str, num: str):
+    """a pin a decoupling capacitor belongs by: a chip's supply pin (a symbol's power input). A connector's pin is
+    None: it takes its turn in the deal (so the chip's pins get as many as before) but holds no capacitor; a
+    symbol's other pins are False, out of the deal"""
     if re.match(r"^(J|P|CN|CON)\d", ref, re.I):
-        return False
+        return None
     sym = c.get("symbol")
     if sym:
         return any(q["num"] == num and q["type"] == "power_in" for q in sym["pins"])
@@ -2080,12 +2082,15 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
         if len(sup) != 1 or not any(n in poured for n in ns.values()):
             continue
         num, n = sup[0]
-        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many and _decap_target(board.comps[p_[0]], p_[0], p_[1])]
+        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many and _decap_target(board.comps[p_[0]], p_[0], p_[1])
+                   is not False]
         if not targets:
             continue
         k = deal.get(n, 0)
         deal[n] = k + 1
-        NETS[f"~decap {r}"] = {"pins": [(r, num), targets[k % len(targets)]], "amps": 5.0, "limit": 3.0}
+        tgt = targets[k % len(targets)]
+        if _decap_target(board.comps[tgt[0]], *tgt):    # (one dealt to a connector's pin is left free: the chip's
+            NETS[f"~decap {r}"] = {"pins": [(r, num), tgt], "amps": 5.0, "limit": 3.0}   # own stay as many)
     for r in sorted(mset):                               # a crystal held to its IC's oscillator pins (short, quiet
         if not re.match(r"^(Y|X)\d", r):                 # traces), its load capacitors following through their nets
             continue
