@@ -232,6 +232,33 @@ def _render3d(out: Path, script: str) -> dict:
     return {"png": "/files/render_iso.png?t=%d" % int(time.time())}
 
 
+def _model(out: Path, script: str) -> dict:
+    """the board as KiCad exports it in 3D (binary glTF): the board, copper, pads, mask, silkscreen and every part's
+    library model, for the page's 3D view; cached as out/board.glb until the KiCad board changes"""
+    import subprocess
+    import pcb
+    import pcb_cli
+    kpcbs = list((out / "kicad").glob("*.kicad_pcb"))
+    if not kpcbs:
+        return {"error": "no KiCad board in this folder yet"}
+    if not pcb.kicad_version():
+        return {"error": "KiCad is not installed: the 3D view shows the parts as simple bodies"}
+    glb = out / "board.glb"
+    if not glb.exists() or glb.stat().st_mtime < kpcbs[0].stat().st_mtime:
+        b, _ = pcb_cli.load(script)
+        models = out / "models3d"
+        pcb.kicad_models(b, str(models))
+        env = dict(os.environ)
+        for v in ("KICAD8_3DMODEL_DIR", "KICAD9_3DMODEL_DIR", "KICAD10_3DMODEL_DIR"):
+            env[v] = str(models)
+        r = subprocess.run(["kicad-cli", "pcb", "export", "glb", "--force", "--subst-models", "--include-tracks",
+                            "--include-pads", "--include-zones", "--include-silkscreen", "--include-soldermask",
+                            "-o", str(glb), str(kpcbs[0])], env=env, capture_output=True, text=True, timeout=600)
+        if r.returncode != 0 or not glb.exists():
+            return {"error": "KiCad's 3D export failed: " + (r.stderr or r.stdout)[-300:]}
+    return {"glb": "/files/board.glb?t=%d" % int(glb.stat().st_mtime)}
+
+
 def make_handler(out_dir: str):
     out = Path(out_dir).resolve()
     cache = _Cache(str(out))
@@ -273,6 +300,12 @@ def make_handler(out_dir: str):
                     return self._json(json.loads(p.read_text()) if p.exists() else {})
                 if path == "/api/board":
                     return self._json(cache.board())
+                if path == "/api/model":
+                    s = cache.script()
+                    with cache.lock:
+                        return self._json(_model(out, s) if s else {"error": "no run in this folder yet"})
+                if path == "/GLTFLoader.js":
+                    return self._send(200, (PAGE.parent / "GLTFLoader.js").read_bytes(), "text/javascript")
                 if path == "/api/render3d":
                     s = cache.script()
                     return self._json(_render3d(out, s) if s else {"error": "no run in this folder yet"})
@@ -281,7 +314,7 @@ def make_handler(out_dir: str):
                     if out not in f.parents or not f.is_file():
                         return self._send(404, b"not found", "text/plain")
                     ct = {".png": "image/png", ".html": "text/html", ".svg": "image/svg+xml",
-                          ".csv": "text/csv", ".json": "application/json"}.get(f.suffix, "application/octet-stream")
+                          ".csv": "text/csv", ".json": "application/json", ".glb": "model/gltf-binary"}.get(f.suffix, "application/octet-stream")
                     return self._send(200, f.read_bytes(), ct)
                 return self._send(404, b"not found", "text/plain")
             except Exception as e:                       # (the page shows the error; the server stays up)
