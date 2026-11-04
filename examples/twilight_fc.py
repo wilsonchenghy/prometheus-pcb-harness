@@ -32,7 +32,7 @@ import sys
 
 sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."),
                 os.path.dirname(os.path.abspath(__file__))]
-from pcb import Board, route, cached_route, route_jobs
+from pcb import Board, route, cached_route, route_jobs, nudge_vias
 import pcb_bodies as bodies
 
 W, H = 165.0, 50.0
@@ -109,7 +109,8 @@ P("U1", "Package_SO:MSOP-10_3x3mm_P0.5mm", (48.4, 32.8), 0, "INA226", "TI INA226
   "V / I monitor, I2C 0x40; under the shunt (bottom): Kelvin vias into each shunt pad's pour", side="B")
 P("C1", C06, (44.0, 30.6), 90, "100n", "GRM188R71H104KA93D", "INA226 VS", side="B")
 # 5 V buck (row along the top-left): TI TPS54360B datasheet design, 600 kHz
-P("U2", HSOP8, (30.0, 44.0), 0, "TPS54360B", "TI TPS54360BDDAR", "5 V / 3.5 A buck")
+P("U2", HSOP8, (30.0, 44.0), 0, "TPS54360B", "TI TPS54360BDDAR", "5 V / 3.5 A buck",
+  min_drill=0.3)                       # (its thermal vias at the board house's 0.3 mm minimum)
 P("L1", XAL, (39.5, 45.5), 0, "6u8", "Coilcraft XAL6060-682MEB", "6.8 uH, 8.6 A sat")
 P("D5", PDI5, (39.5, 39.5), 0, "PDS540", "Diodes PDS540-13", "5 V buck catch diode")
 P("C2", C1210, (20.5, 44.0), 90, "4u7 50V", "GRM32ER71H475KA88L", "5 V buck input")
@@ -129,7 +130,8 @@ P("J2", XT30M, (13.95, 20.0), 90, "XT30PW-M", "AMASS XT30PW-M", "servo BEC in (M
 P("D3", "Diode_SMD:D_SMB", (20.6, 8.6), 0, "SMBJ10A", "Littelfuse SMBJ10A", "BEC inlet TVS")
 P("Q2", D2PAK, (31.6, 15.0), 180, "SQM40031EL", "Vishay SQM40031EL-GE3", "BEC reverse-polarity P-FET")
 P("R8", R06, (40.0, 8.4), 0, "10k", "RC0603FR-0710KL", "Q2 gate pull-down")
-P("U3", HSOP8, (50.0, 21.0), 180, "TPS54560B", "TI TPS54560BDDAR", "6.0 V / 5 A servo buck (Mode A)")
+P("U3", HSOP8, (50.0, 21.0), 180, "TPS54560B", "TI TPS54560BDDAR", "6.0 V / 5 A servo buck (Mode A)",
+  min_drill=0.3)                       # (its thermal vias at the board house's 0.3 mm minimum)
 P("D6", PDI5, (46.5, 15.5), 180, "PDS540", "Diodes PDS540-13", "6 V buck catch diode")
 P("L2", XAL, (47.5, 8.5), 0, "6u8", "Coilcraft XAL6060-682MEB", "6.8 uH; leave off for Mode B")
 P("C9", C06, (52.3, 16.4), 90, "100n", "GRM188R71H104KA93D", "U3 boot")
@@ -722,6 +724,7 @@ def build(do_route=True, solids=False):
     fc_pours(b)
     b.silk_text = [("TWILIGHT FC  REV A", (30.0, 22.0), 1.6, 0.0)]          # (clear of parts, not under the Teensy)
     probs = cached_route(b, fc_route, tag="twilight-r24", store=ROUTES) if do_route else []
+    probs += nudge_vias(b, gap=0.5) if do_route else []     # (JLCPCB keeps 0.5 mm between two nets' drills)
     return b, probs
 
 

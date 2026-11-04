@@ -198,7 +198,8 @@ def routed(outline, at, holes, keepouts=()):
     b = build(outline, at, holes, keepouts)
     store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "routes")    # routed copper, kept in git
     probs = cached_route(b, do_route, tag="ctl_v10", store=store)   # (bump the tag when do_route changes: the cache
-    return b, probs                                                 # keys the placement, not this code)
+    b.tidy()                                                        # keys the placement, not this code)
+    return b, probs
 
 
 if __name__ == "__main__":

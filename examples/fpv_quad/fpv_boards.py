@@ -11,7 +11,7 @@ import sys
 
 sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")]
 from build123d import *
-from pcb import Board, route, cached_route, route_jobs
+from pcb import Board, route, cached_route, route_jobs, repair
 from vendor_parts import kicad
 
 SP_PINS = {"SIG": "13", "S_A": "14", "S_B": "17", "S_C": "20", "S_V": "23", "GND": "18", "GND2": "33",
@@ -219,6 +219,9 @@ def esc_route(b, pours):
     b.corridor = 0.4
     b.fanout(width=0.1)
     esc_hand(b)
+    # (RB2V's ground pad sits on a scrap of back-side pour that SIG1, S2C and S2V close in once routed: its via to the
+    # front ground goes in first, small as the house allows, and the signals route round it)
+    probs += b.drop("GND", [("RB2V", "2")], via=(0.2, 0.5), width=0.1, reach=1.5, amps=0.01)
     for n in ("SIG4", "SIG3", "SIG2", "SIG1"):
         probs += route(b, n, width=0.1, keepout=ko())
     for m in (4, 3, 1, 2):
@@ -236,6 +239,9 @@ def esc_route(b, pours):
     gnd = [p for p in b.nets["GND"]["pins"] if p[0] not in ("J2",) and not p[0].startswith("Q")]
     probs += route(b, "GND", width=0.25, amps=0.3, only=gnd, keepout=ko(("GND",)))
     b.stitch("GND", [(-15.85, -15.85), (15.85, -15.85), (15.85, 15.85), (-15.85, 15.85)], pitch=1.0)
+    # (driver 4's logic ground - U4, its sense resistors and J3 - ends on a piece of pour the power copper fences off:
+    # joined back by a thin track, as the logic ground it is)
+    probs = [p for p in probs if "GND" not in p] + repair(b, width=0.1, nets=["GND"], amps=0.3)
     return probs
 
 def pour_all(b, pours):
@@ -249,6 +255,7 @@ def esc_build():
     esc_nets(b)
     pour_all(b, pours)
     rp = esc_route(b, pours)
+    b.tidy()                                             # (the via rows' vias no route went on through)
     return b, rp
 
 F4 = {"VBAT": "1", "PC14": "3", "PC15": "4", "OSC_IN": "5", "OSC_OUT": "6", "NRST": "7", "PC2": "10", "VSSA": "12",
@@ -409,6 +416,7 @@ def fc_build():
     b.pour("GND", "B", [(-18.5, -18.5), (18.5, -18.5), (18.5, 18.5), (-18.5, 18.5)], amps=1.5)
     b.pour("GND", "F", [(-18.5, -18.5), (18.5, -18.5), (18.5, 18.5), (-18.5, 18.5)], amps=1.5)
     rp = fc_route(b)
+    b.tidy()
     return b, rp
 
 

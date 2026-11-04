@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Zeus: install the harness, fetch FreeRouting, and report what this machine has.
 #   bash install.sh            (from a clone)
-#   curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/zeus/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash
 # Installs no system software: KiCad and Java are listed by `zeus doctor` with the commands to add them
 # (docs/setup.md), for you to run or approve.
 set -euo pipefail
@@ -10,8 +10,8 @@ PY="${PYTHON:-python3}"
 if [ -n "$HERE" ] && [ -f "$HERE/pyproject.toml" ]; then
   "$PY" -m pip install --quiet -e "$HERE[3d,schematic]" || "$PY" -m pip install --quiet -e "$HERE"
 else
-  "$PY" -m pip install --quiet "zeus-pcb[3d,schematic] @ git+https://github.com/wilsonchenghy/zeus" \
-    || "$PY" -m pip install --quiet "zeus-pcb @ git+https://github.com/wilsonchenghy/zeus"
+  "$PY" -m pip install --quiet "zeus-pcb[3d,schematic] @ git+https://github.com/wilsonchenghy/pcb-harness" \
+    || "$PY" -m pip install --quiet "zeus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness"
 fi
 if command -v java >/dev/null 2>&1; then
   zeus setup
