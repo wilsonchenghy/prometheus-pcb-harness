@@ -66,6 +66,12 @@ DRC and its findings come back with `stage: "kicad"`. When it is not, `result.js
 `"kicad_drc": {"run": false, "skipped": ..., "install": ...}` with the install command for the system: tell the
 user, do not install system software unasked. `--kicad-drc require` makes a missing KiCad a failure.
 
+## The schematic
+
+Every run writes `out/kicad/<name>.kicad_sch`, the board's schematic on KiCad's own symbols, and (with KiCad) reads
+it back: a `schematic` finding means its netlist differs from the board's. Place ICs with `symbol=` so they are drawn
+with their real pin names; a part without one is drawn on a generic symbol or a box of its pads.
+
 ## Rules for the agent
 
 - Never claim a board is done unless `clean` is true. Report the findings that remain, as they are.

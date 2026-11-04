@@ -336,7 +336,7 @@ def main(argv=None) -> int:
         notes.sort(key=lambda n: {"error": 0, "warning": 1, "info": 2}[n["severity"]])
     timings["critic"] = round(time.perf_counter() - t, 3)
     crit_err = [n for n in notes if n["severity"] == "error"]
-    chk, fchk, kchk, kicad, files = [], [], [], {"run": False}, {}
+    chk, fchk, kchk, schk, kicad, files = [], [], [], [], {"run": False}, {}
     routed = bool(b.tracks) or stage in ("check", "export")
     if stage in ("place", "critic"):
         chk = place                                       # (no copper yet: the placement is what can be checked)
@@ -359,6 +359,15 @@ def main(argv=None) -> int:
                 d = pcb.kicad_drc(kpaths[0])
                 kchk = d["errors"] + d["unconnected"]
                 kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+                sch = [k for k in kpaths if k.endswith(".kicad_sch")]
+                if sch:                                  # (the schematic, read back by KiCad: its nets are the board's)
+                    import kicad_sch
+                    try:
+                        schk = kicad_sch.check(b, sch[0])
+                    except RuntimeError as e:
+                        schk = [str(e)]
+                else:
+                    schk = ["the KiCad schematic was not written (see the line above)"]
             else:
                 why = f"KiCad {ver} is too old (9+ needed: the board is KiCad 9 format)" if ver else "KiCad (kicad-cli) is not installed"
                 how = pcb.KICAD_INSTALL.get(sys.platform, pcb.KICAD_INSTALL["linux"])
@@ -370,7 +379,8 @@ def main(argv=None) -> int:
             files["step"] = pcb.export_step(b, os.path.join(a.out, f"{b.name}.step"))
         timings["export"] = round(time.perf_counter() - t, 2)
     sections = [("routing", probs), ("placement" if stage in ("place", "critic") else "design check", chk),
-                ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else [])
+                ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else []) + (
+                [("schematic", schk)] if kicad["run"] else [])
     if stage in ("place", "critic"):
         sections = [s_ for s_ in sections if s_[0] != "house check"]
     if not b.tracks and not probs:                       # (nothing routed yet: no routing to call clean)
@@ -387,7 +397,7 @@ def main(argv=None) -> int:
     if files:
         print(f"wrote {a.out}: review {files['report']}, parts {files['html']}")
     print(f"({time.perf_counter() - t0:.1f} s: " + ", ".join(f"{k} {v} s" for k, v in timings.items()) + ")")
-    clean = not (probs or chk or fchk or kchk or crit_err) and (routed or stage in ("place", "critic"))
+    clean = not (probs or chk or fchk or kchk or schk or crit_err) and (routed or stage in ("place", "critic"))
     result = {"board": b.name, "script": os.path.abspath(a.script), "stage": stage, "clean": clean, "kicad_drc": kicad,
               "router": getattr(b, "router_used", "none (routed by the script)"),
               "environment": {k: r["ok"] for k, r in doctor().items()},   # (what this machine had: docs/setup.md)
@@ -395,17 +405,18 @@ def main(argv=None) -> int:
               "seconds": round(time.perf_counter() - t0, 1), "timings": timings,
               "placement": {r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")] for r, c in b.comps.items()},
               "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),
-                                                          ("kicad", kchk))
+                                                          ("kicad", kchk), ("schematic", schk))
                            for p in ps],
               "critic": notes,
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)
     if not a.no_view and not os.environ.get("CI"):       # (KiCad's 3D model ready before the page asks for it)
-        try:
-            pcb_view._model(pcb_view.Path(a.out).resolve(), a.script)
-        except Exception:
-            pass
+        for f in (pcb_view._model, pcb_view._schematic):
+            try:
+                f(pcb_view.Path(a.out).resolve(), a.script)
+            except Exception:
+                pass
     prog.finish(result["clean"])
     pcb.PROGRESS = None
     if a.json:

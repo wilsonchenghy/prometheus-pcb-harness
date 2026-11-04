@@ -534,15 +534,16 @@ function drawFiles() {
 }
 
 // ---------- the schematic ----------
-// the engineer's sheets (schem.py's out/schematic_N.svg) when the run has them; the net-label view otherwise
+// KiCad's own drawing of the board's schematic (out/kicad/<name>.kicad_sch) when KiCad is installed; the net-label
+// view otherwise
 let SHEETS = null;
 async function drawSchem() {
   const svg = $("#ssvg"); if (!B || B.error) return;
-  if (SHEETS === null) { SHEETS = [];
-    for (let i = 1; ; i++) { const r = await fetch(`/files/schematic_${i}.svg`, { cache: "no-store" }).catch(() => null);
-      if (!r || !r.ok) break; const d = new DOMParser().parseFromString(await r.text(), "image/svg+xml").documentElement;
+  if (SHEETS === null) { SHEETS = []; const r = await getJ("/api/schematic");
+    for (const url of (r && r.svgs) || []) { const t = await fetch(url, { cache: "no-store" }).then(x => x.ok ? x.text() : "").catch(() => "");
+      const d = t && new DOMParser().parseFromString(t, "image/svg+xml").documentElement; if (!d) continue;
       const vb = (d.getAttribute("viewBox") || "").split(/[ ,]+/).map(Number);
-      SHEETS.push({ url: `/files/schematic_${i}.svg?t=${Date.now()}`, w: vb[2] || parseFloat(d.getAttribute("width")), h: vb[3] || parseFloat(d.getAttribute("height")) }); } }
+      SHEETS.push({ url, w: vb[2] || parseFloat(d.getAttribute("width")), h: vb[3] || parseFloat(d.getAttribute("height")) }); } }
   svg.innerHTML = "";
   if (SHEETS.length) { let y = 0;
     for (const sh of SHEETS) { el("rect", { x: 0, y, width: sh.w, height: sh.h, fill: "#ffffff" }, svg);

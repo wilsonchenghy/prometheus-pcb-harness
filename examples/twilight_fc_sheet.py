@@ -49,10 +49,13 @@ def buck(s, b, U, at, ref_parts, vout_net, title, values):
                loc="bottom")
     s.wire(r1.absanchors["end"], (xe, yv))
     s.dot((xe, yv))
-    r2 = s.add(ren2, elm.Resistor().at((xe, a("3")[1])).left().length(1.2), TERM2, label=f"{ren2} {values['ren2']}",
-               loc="top")
-    s.gnd(r2.absanchors["end"])
-    r3 = s.add(rt, elm.Resistor().at(a("4")).left().length(1.6), TERM2, label=f"{rt} {values['rt']}", loc="top")
+    s.wire((xe, a("3")[1]), (xe - 0.8, a("3")[1]))       # (off the node first: clear of the top resistor's body)
+    r2 = s.add(ren2, elm.Resistor().at((xe - 0.8, a("3")[1])).left().length(1.2), TERM2,
+               label=f"{ren2} {values['ren2']}", loc="bottom")
+    g2 = (r2.absanchors["end"][0] - 0.6, r2.absanchors["end"][1])
+    s.wire(r2.absanchors["end"], g2)                     # (its ground out past the label below it)
+    s.gnd(g2)
+    r3 = s.add(rt, elm.Resistor().at(a("4")).left().length(1.6), TERM2, label=f"{rt} {values['rt']}", loc="bottom")
     s.gnd(r3.absanchors["end"])
     # compensation: RC + CC to ground, CC2 in parallel
     xc = a("6")[0] - 1.4

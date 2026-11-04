@@ -4132,8 +4132,9 @@ def pack(src_dir: str) -> str:
 
 
 def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.0, 100.0),
-                 place_labels: bool = True) -> List[str]:
-    """``<name>.kicad_pcb`` and ``<name>.kicad_pro`` (KiCad 9 format; KiCad 9 and later open it) for further work in
+                 place_labels: bool = True, schematic: bool = True) -> List[str]:
+    """``<name>.kicad_pcb``, ``<name>.kicad_pro`` and (``schematic``) ``<name>.kicad_sch`` on KiCad's own symbols
+    (kicad_sch.py) - KiCad 9 format; KiCad 9 and later open it - for further work in
     KiCad: every part on its library footprint (with its 3D model, MPN and note), the nets, tracks, vias, the pours as
     filled zones (solid pad connection, islands kept, as the harness fills them), keep-outs as rule areas, mounting
     holes, the outline on Edge.Cuts and the legend on the silkscreen. The project file carries the board's clearance,
@@ -4268,7 +4269,16 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     ppath = os.path.join(out_dir, f"{board.name}.kicad_pro")
     with open(ppath, "w") as f:
         json.dump(pro, f, indent=2)
-    return [path, ppath]
+    out = [path, ppath]
+    if not schematic:
+        return out
+    try:                                                 # the schematic, on KiCad's own symbols (kicad_sch.py)
+        import kicad_sch
+        out.append(kicad_sch.write(board, out_dir))
+    except Exception as e:                               # (no symbols offline: the board is still written)
+        import sys
+        print(f"KiCad schematic: not written ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr)
+    return out
 
 
 NET_COLORS ={"GND": (40, 40, 40), "VBUS": (200, 40, 40), "VIN": (230, 110, 20), "VD": (180, 80, 160),

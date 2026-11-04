@@ -30,7 +30,9 @@ What it does (`pcb.py`, its docstring has the details):
 - **Output**: a STEP of the assembled board (`export_step`, every part's KiCad 3D model by default) for the
   enclosure; Gerbers (copper, mask, paste for the stencil, silkscreen with the reference designators, outline) + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
   KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
-- **Schematics** (`schem.py`): sheets drawn from the board's netlist and checked against it (needs `schemdraw`).
+- **Schematics**: every run writes a KiCad schematic (`kicad_sch.py`, `out/kicad/<name>.kicad_sch`) on KiCad's own
+  symbols, grouped into a block per IC, every pin wired to a net label, nothing overlapping; KiCad reads it back and
+  its netlist must be the board's. Hand-drawn sheets in an IC's datasheet form: `schem.py` (needs `schemdraw`).
 - **Fab and parts** (`fab.py`): design-rule presets for JLCPCB, PCBWay and OSH Park and a check against them
   (`fab_check`); the pick-and-place file and the JLCPCB assembly BOM; a parts cart (BOM-upload CSVs for DigiKey,
   Mouser and LCSC, and a `buy.html` with a search link per line at each shop); `fab.order()` writes it all.
@@ -48,7 +50,7 @@ What it does (`pcb.py`, its docstring has the details):
   and leaves it open after, one tab per output folder (`--no-view`, or `CI` set, turns it off); `zeus view out/`
   opens a finished run.
   Layout with layers to switch, an interactive 3D view (and KiCad's photoreal render when KiCad is installed), a
-  net-label schematic, and every finding: click one and the board zooms to it.
+  the KiCad schematic as KiCad draws it, and every finding: click one and the board zooms to it.
 
 From the command line, one script to an order folder (route if unrouted, check, house check, Gerbers zip, CPL, BOM,
 parts cart, KiCad project, report; `--step` adds the 3D board; exit 0 when everything is clean):

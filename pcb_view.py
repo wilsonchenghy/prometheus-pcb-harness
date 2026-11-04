@@ -261,6 +261,25 @@ def _model(out: Path, script: str) -> dict:
     return {"glb": "/files/board.glb?t=%d" % int(glb.stat().st_mtime)}
 
 
+def _schematic(out: Path, script: str = "") -> dict:
+    """the board's KiCad schematic as KiCad draws it (``kicad-cli sch export svg``), for the page's schematic view;
+    cached as out/kicad/<name>.svg until the schematic changes"""
+    import subprocess
+    import pcb
+    schs = list((out / "kicad").glob("*.kicad_sch"))
+    if not schs:
+        return {"error": "no KiCad schematic in this folder yet"}
+    if not pcb.kicad_version():
+        return {"error": "KiCad is not installed: the schematic view shows the net labels"}
+    svg = schs[0].with_suffix(".svg")
+    if not svg.exists() or svg.stat().st_mtime < schs[0].stat().st_mtime:
+        r = subprocess.run(["kicad-cli", "sch", "export", "svg", "-o", str(schs[0].parent), str(schs[0])],
+                           capture_output=True, text=True, timeout=300)
+        if r.returncode != 0 or not svg.exists():
+            return {"error": "KiCad's schematic export failed: " + (r.stderr or r.stdout)[-300:]}
+    return {"svgs": ["/files/kicad/%s?t=%d" % (svg.name, int(svg.stat().st_mtime))]}
+
+
 def make_handler(out_dir: str):
     out = Path(out_dir).resolve()
     cache = _Cache(str(out))
@@ -318,6 +337,9 @@ def make_handler(out_dir: str):
                     s = cache.script()
                     with cache.lock:
                         return self._json(_model(out, s) if s else {"error": "no run in this folder yet"})
+                if path == "/api/schematic":
+                    with cache.lock:
+                        return self._json(_schematic(out))
                 if path == "/GLTFLoader.js":
                     return self._send(200, (PAGE.parent / "GLTFLoader.js").read_bytes(), "text/javascript")
                 if path == "/api/render3d":
