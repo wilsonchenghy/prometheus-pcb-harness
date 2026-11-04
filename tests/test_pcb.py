@@ -1124,3 +1124,42 @@ def test_stage_check_starts_from_the_saved_board(tmp_path, capsys):
     said = capsys.readouterr().out
     r = json.load(open(tmp_path / "o" / "result.json"))
     assert "from the last run" in said and r["clean"] and "route" not in r["timings"]
+
+
+def test_viewer_serves_a_run_and_its_progress(tmp_path):
+    """a run writes progress.json (stages, tries, an estimate of what is left) and result.json naming its script;
+    the viewer serves the page, three.js, the board (parts, pads, copper), the result and the progress"""
+    import json
+    import urllib.request
+    import pcb_cli
+    import pcb_view
+    here = Path(__file__).parent.parent
+    out = tmp_path / "o"
+    pcb_cli.main([str(here / "bench" / "blinker.py"), str(out), "--router", "harness", "--kicad-drc", "off"])
+    pr = json.load(open(out / "progress.json"))
+    assert pr["done"] and pr["eta"] == 0.0 and [s["name"] for s in pr["stages"]][-1] == "done"
+    assert json.load(open(out / "result.json"))["script"].endswith("blinker.py")
+    srv, url = pcb_view.serve(str(out), open_browser=False, block=False)
+    try:
+        op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        get = lambda p: op.open(url + p, timeout=120).read()
+        assert b"pcb-harness viewer" in get("")
+        assert len(get("three.min.js")) > 100000
+        b = json.loads(get("api/board"))
+        assert b["name"] == "blinker" and len(b["comps"]) == 8 and b["tracks"] and b["copper"]
+        assert all(c["pads"] for c in b["comps"]) and b["outline"]
+        assert json.loads(get("api/result"))["board"] == "blinker"
+        assert json.loads(get("api/progress"))["done"]
+    finally:
+        srv.shutdown()
+
+
+def test_progress_estimate_counts_the_tries_left(tmp_path):
+    import pcb_view
+    p = pcb_view.Progress(str(tmp_path), "board.py", parts=20)
+    p.stage("place+route")
+    p.event({"kind": "tries", "tries": 6, "workers": 4})
+    p.event({"kind": "try", "k": 0, "seconds": 10.0, "clean": False, "line": "try 1"})
+    assert abs(p.eta() - (2 * 10.0 + 2.0)) < 1e-6          # (5 tries left, 4 at a time: two batches, then export)
+    p.event({"kind": "try", "k": 1, "seconds": 10.0, "clean": True, "line": "try 2"})
+    assert p.d["tries"] == 2 and p.eta() == 2.0

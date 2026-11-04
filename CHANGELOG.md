@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- `pcb-harness view out/` and `--view`: the board in a browser - layout with layers to switch, an interactive 3D
+  view (three.js, shipped with the page; KiCad's photoreal render when KiCad is installed), a net-label schematic,
+  the findings (click one: the board zooms to it) - and, during a run, its stage, the try it is on and about how
+  long is left.
+- Found by building boards as a new user: a mistyped footprint is named with the closest names KiCad has; a
+  "within d mm" requirement is measured pad to pad; parts that do not fit stop the run at once instead of being
+  routed round; via drops keep the board's edge gap; FreeRouting's edge slips are repaired; the critic stage no
+  longer reports routing it has not done.
+
 ## v0.1.0 (2026-11-04)
 
 The first release: a printed circuit board harness for people and AI agents. Describe a board in Python (or start

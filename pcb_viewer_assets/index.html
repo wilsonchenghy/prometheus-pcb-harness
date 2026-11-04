@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pcb-harness viewer</title>
+<link rel="icon" href="data:,">
+<style>
+:root {
+  --bg: #0d1210; --panel: #141b18; --panel2: #1a231f; --line: #2a3832; --text: #e4ece7; --dim: #8fa39a;
+  --ok: #6fd39a; --bad: #ff7a6b; --warn: #f2c66d; --accent: #e6b45a;
+  --fcu: #d8574b; --bcu: #4f86e0; --pad: #e8bf62; --mask: #0f3b29; --edge: #e8e0c8;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+header { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--line);
+  background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+.badge { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; }
+.badge.ok { color: var(--ok); border-color: var(--ok); } .badge.bad { color: var(--bad); border-color: var(--bad); }
+.badge.run { color: var(--warn); border-color: var(--warn); }
+.meta { color: var(--dim); font-size: 12.5px; }
+#prog { flex: 1 1 320px; min-width: 260px; display: none; }
+#prog .bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 4px; }
+#prog .fill { height: 100%; width: 0; background: var(--warn); transition: width .6s; }
+#prog .txt { font-size: 12.5px; color: var(--dim); display: flex; justify-content: space-between; gap: 10px; }
+#prog .txt b { color: var(--text); font-weight: 600; }
+main { display: grid; grid-template-columns: 340px 1fr; height: calc(100% - 52px); }
+aside { border-right: 1px solid var(--line); overflow: auto; background: var(--panel); }
+aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 14px 14px 6px; }
+.f { margin: 0 10px 6px; padding: 8px 10px; border-radius: 6px; background: var(--panel2); cursor: pointer;
+  border-left: 3px solid var(--bad); font-size: 13px; }
+.f:hover { outline: 1px solid var(--line); } .f.sel { outline: 1px solid var(--accent); }
+.f .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .6px; }
+.f .h { font-size: 12px; color: var(--dim); margin-top: 3px; }
+.f.warning { border-left-color: var(--warn); } .f.info { border-left-color: var(--line); cursor: default; }
+.none { margin: 0 14px 6px; color: var(--ok); font-size: 13px; }
+.kv { margin: 0 14px; font-size: 12.5px; color: var(--dim); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
+.kv b { color: var(--text); font-weight: 500; }
+.tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--line); background: var(--panel); }
+.tab { padding: 7px 14px; border-radius: 6px 6px 0 0; cursor: pointer; color: var(--dim); border: 1px solid transparent;
+  border-bottom: none; user-select: none; }
+.tab.on { color: var(--text); background: var(--bg); border-color: var(--line); }
+section { position: relative; display: flex; flex-direction: column; min-width: 0; }
+.view { position: absolute; inset: 41px 0 0 0; display: none; }
+.view.on { display: block; }
+.tools { position: absolute; top: 10px; left: 10px; z-index: 5; display: flex; gap: 6px; flex-wrap: wrap;
+  background: rgba(20,27,24,.88); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); }
+.tools label { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.tools button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
+  padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.tools button:hover, .btn:hover { border-color: var(--accent); }
+svg { width: 100%; height: 100%; display: block; cursor: grab; background: var(--bg); }
+svg.drag { cursor: grabbing; }
+#tip { position: fixed; pointer-events: none; background: #000c; border: 1px solid var(--line); padding: 4px 8px;
+  border-radius: 5px; font-size: 12px; display: none; z-index: 20; }
+#three { width: 100%; height: 100%; }
+#render { position: absolute; inset: 50px 10px 10px 10px; display: none; background: #000; border-radius: 8px;
+  border: 1px solid var(--line); overflow: hidden; }
+#render img { width: 100%; height: 100%; object-fit: contain; }
+#msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--dim); text-align: center; }
+.net-hi { filter: drop-shadow(0 0 2px #fff) brightness(1.5); }
+.pulse { animation: pulse 1s ease-out 3; }
+@keyframes pulse { from { stroke-width: 0.6; opacity: 1; } to { stroke-width: 0.1; opacity: .4; } }
+.files a { display: block; margin: 0 14px 4px; color: var(--accent); font-size: 13px; text-decoration: none; }
+.files a:hover { text-decoration: underline; }
+@media (max-width: 800px) { main { grid-template-columns: 1fr; grid-template-rows: 40% 60%; } aside { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="name">pcb-harness</h1>
+  <span id="badge" class="badge run">loading</span>
+  <span id="meta" class="meta"></span>
+  <div id="prog"><div class="txt"><span id="pstage"></span><span id="peta"></span></div><div class="bar"><div class="fill" id="pfill"></div></div></div>
+</header>
+<main>
+  <aside>
+    <h2>Findings</h2><div id="findings"></div>
+    <h2>Critic</h2><div id="critic"></div>
+    <h2>Run</h2><div id="run" class="kv"></div>
+    <h2>Files</h2><div id="files" class="files"></div>
+  </aside>
+  <section>
+    <div class="tabs"><div class="tab on" data-v="layout">Layout</div><div class="tab" data-v="v3d">3D</div><div class="tab" data-v="schem">Schematic</div></div>
+    <div class="view on" id="layout">
+      <div class="tools" id="ltools">
+        <label><input type="checkbox" data-l="F" checked> F.Cu</label>
+        <label><input type="checkbox" data-l="B" checked> B.Cu</label>
+        <label><input type="checkbox" data-l="pads" checked> pads</label>
+        <label><input type="checkbox" data-l="vias" checked> vias</label>
+        <label><input type="checkbox" data-l="court"> courtyards</label>
+        <label><input type="checkbox" data-l="refs" checked> refs</label>
+        <label><input type="checkbox" data-l="marks" checked> findings</label>
+        <button id="fit">fit</button><button id="flip">view from below</button>
+      </div>
+      <svg id="lsvg"></svg>
+    </div>
+    <div class="view" id="v3d">
+      <div class="tools"><button id="krender">KiCad render (photoreal)</button><button id="k3dclose" style="display:none">back to interactive</button><span class="meta" id="k3dmsg"></span></div>
+      <div id="three"></div>
+      <div id="render"><img id="rimg" alt="KiCad 3D render"></div>
+    </div>
+    <div class="view" id="schem">
+      <div class="tools"><span class="meta">net-label view, drawn from the netlist: hover a net to see it everywhere</span><button id="sfit">fit</button></div>
+      <svg id="ssvg"></svg>
+    </div>
+    <div id="msg"></div>
+  </section>
+</main>
+<div id="tip"></div>
+<script src="/three.min.js"></script>  <!-- three.js r128, MIT (three.LICENSE.txt), served with the page: works offline -->
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+let B = null, R = null, P = null, flipped = false, threeReady = false;
+const tip = $("#tip");
+function showTip(e, t) { tip.textContent = t; tip.style.display = "block"; tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY + 12) + "px"; }
+function hideTip() { tip.style.display = "none"; }
+function hue(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
+function fmt(s) { if (s == null) return "?"; s = Math.max(0, Math.round(s)); return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + (s % 60) + " s"; }
+
+// ---------- tabs ----------
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === t.dataset.v));
+  if (t.dataset.v === "v3d") init3d();
+  if (t.dataset.v === "schem") drawSchem();                       // (drawn when shown: a hidden svg measures 0)
+  if (t.dataset.v === "layout") fitLayout();
+});
+
+// ---------- pan / zoom for an svg ----------
+function panZoom(svg) {
+  const st = { vb: [0, 0, 100, 100] };
+  const apply = () => svg.setAttribute("viewBox", st.vb.join(" "));
+  st.set = (x, y, w, h) => { const r = svg.getBoundingClientRect(), a = (r.width || 800) / (r.height || 600);
+    if (w / h < a) { const nw = h * a; x -= (nw - w) / 2; w = nw; } else { const nh = w / a; y -= (nh - h) / 2; h = nh; }
+    st.vb = [x, y, w, h]; apply(); };
+  svg.addEventListener("wheel", e => { e.preventDefault(); const r = svg.getBoundingClientRect();
+    const k = Math.exp(e.deltaY * 0.0015), [x, y, w, h] = st.vb;
+    const px = x + (e.clientX - r.left) / r.width * w, py = y + (e.clientY - r.top) / r.height * h;
+    st.vb = [px - (px - x) * k, py - (py - y) * k, w * k, h * k]; apply(); }, { passive: false });
+  let d = null;
+  svg.addEventListener("pointerdown", e => { d = [e.clientX, e.clientY, ...st.vb]; svg.classList.add("drag"); svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener("pointermove", e => { if (!d) return; const r = svg.getBoundingClientRect();
+    st.vb = [d[2] - (e.clientX - d[0]) / r.width * d[4], d[3] - (e.clientY - d[1]) / r.height * d[5], d[4], d[5]]; apply(); });
+  svg.addEventListener("pointerup", () => { d = null; svg.classList.remove("drag"); });
+  return st;
+}
+const LZ = panZoom($("#lsvg")), SZ = panZoom($("#ssvg"));
+
+// ---------- layout ----------
+const X = (x) => flipped ? -x : x, Y = (y) => -y;
+function ring(r) { return "M" + r.map(p => X(p[0]).toFixed(3) + "," + Y(p[1]).toFixed(3)).join("L") + "Z"; }
+function polyPath(polys) { return polys.map(p => p.map(ring).join("")).join(""); }
+function hiNet(net, on) { document.querySelectorAll('[data-net="' + CSS.escape(net) + '"]').forEach(e => e.classList.toggle("net-hi", on)); }
+function hover(e, node, text, net) {
+  node.addEventListener("pointerenter", ev => { showTip(ev, text); if (net) hiNet(net, true); });
+  node.addEventListener("pointermove", ev => showTip(ev, text));
+  node.addEventListener("pointerleave", () => { hideTip(); if (net) hiNet(net, false); });
+}
+function drawLayout() {
+  const svg = $("#lsvg"); svg.innerHTML = "";
+  if (!B || B.error) return;
+  const g = { };
+  const order = flipped ? ["F", "B"] : ["B", "F"];
+  el("path", { d: ring(B.outline), fill: "#0f3b29", stroke: "var(--edge)", "stroke-width": 0.15 }, svg);
+  for (const L of order) {
+    g[L] = el("g", { "data-layer": L, opacity: L === order[1] ? 0.95 : 0.75 }, svg);
+    for (const c of B.copper.filter(c => c.layer === L)) {
+      const p = el("path", { d: polyPath(c.poly), fill: L === "F" ? "var(--fcu)" : "var(--bcu)", "fill-rule": "evenodd", "data-net": c.net, opacity: 0.85 }, g[L]);
+      hover(null, p, c.net + " · " + L + ".Cu", c.net);
+    }
+  }
+  g.pads = el("g", {}, svg);
+  for (const c of B.comps) for (const p of c.pads) {
+    if (flipped ? p.layer === "F" && !p.drill : p.layer === "B" && !p.drill) continue;
+    const n = el("path", { d: polyPath(p.poly), fill: "var(--pad)", "fill-rule": "evenodd", "data-net": p.net || "", "data-pin": c.ref + "." + p.num }, g.pads);
+    hover(null, n, c.ref + "." + p.num + (p.net ? " · " + p.net : " · no net") + "  (" + c.value + ")", p.net);
+  }
+  g.vias = el("g", {}, svg);
+  for (const v of B.vias) {
+    const n = el("circle", { cx: X(v.at[0]), cy: Y(v.at[1]), r: v.dia / 2, fill: "#c9cfcc", "data-net": v.net }, g.vias);
+    el("circle", { cx: X(v.at[0]), cy: Y(v.at[1]), r: v.drill / 2, fill: "#0d1210" }, g.vias);
+    hover(null, n, "via · " + v.net, v.net);
+  }
+  for (const h of B.holes) el("circle", { cx: X(h[0]), cy: Y(h[1]), r: h[2] / 2, fill: "#0d1210", stroke: "#555", "stroke-width": 0.05 }, svg);
+  g.court = el("g", { fill: "none", stroke: "#d6d6d6", "stroke-width": 0.06, "stroke-dasharray": "0.3 0.2" }, svg);
+  for (const c of B.comps) if (c.courtyard.length) el("path", { d: polyPath(c.courtyard) }, g.court);
+  g.refs = el("g", { fill: "#f2f2ea", "font-size": 0.9, "text-anchor": "middle", "dominant-baseline": "middle", style: "pointer-events:none;font-family:monospace" }, svg);
+  for (const c of B.comps) { const t = el("text", { x: X(c.at[0]), y: Y(c.at[1]) }, g.refs); t.textContent = c.ref; }
+  g.marks = el("g", {}, svg);
+  window._marks = [];
+  (R && R.findings || []).forEach((f, i) => {
+    let at = f.at && f.stage !== "kicad" ? f.at : null;
+    if (!at && f.pins && f.pins.length) { const pad = findPad(f.pins[0]); if (pad) at = pad.at; }
+    if (!at) return;
+    const m = el("circle", { cx: X(at[0]), cy: Y(at[1]), r: 0.9, fill: "none", stroke: "var(--bad)", "stroke-width": 0.25, "data-f": i }, g.marks);
+    hover(null, m, f.text);
+    window._marks[i] = m;
+  });
+  document.querySelectorAll("#ltools input").forEach(inp => {
+    const tgt = inp.dataset.l; const node = g[tgt]; if (node) node.style.display = inp.checked ? "" : "none";
+    inp.onchange = () => { if (g[tgt]) g[tgt].style.display = inp.checked ? "" : "none"; };
+  });
+}
+function findPad(pin) { const [ref, num] = pin.split("."); const c = B && B.comps.find(c => c.ref === ref); return c && c.pads.find(p => p.num === num); }
+function fitLayout() { if (!B || B.error) return; const [x0, y0, x1, y1] = B.bounds, m = 2;
+  const xa = flipped ? -x1 : x0; LZ.set(xa - m, -y1 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m); }
+$("#fit").onclick = fitLayout;
+$("#flip").onclick = () => { flipped = !flipped; $("#flip").textContent = flipped ? "view from above" : "view from below"; drawLayout(); fitLayout(); };
+function zoomTo(f, i) {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === "layout"));
+  document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "layout"));
+  let at = f.at && f.stage !== "kicad" ? f.at : null;
+  const pads = (f.pins || []).map(findPad).filter(Boolean);
+  if (!at && pads.length) at = pads[0].at;
+  if (at) LZ.set(X(at[0]) - 6, Y(at[1]) - 4.5, 12, 9);
+  const m = window._marks && window._marks[i]; if (m) { m.classList.remove("pulse"); void m.getBBox(); m.classList.add("pulse"); }
+  document.querySelectorAll("[data-pin]").forEach(p => p.classList.toggle("net-hi", (f.pins || []).includes(p.dataset.pin)));
+}
+
+// ---------- schematic (net labels) ----------
+function drawSchem() {
+  const svg = $("#ssvg"); svg.innerHTML = "";
+  if (!B || B.error) return;
+  const rank = { ic: 0, connector: 1, inductor: 2, crystal: 2, electrolytic: 3, cap: 4, res: 5, diode: 5, led: 5, pot: 3, switch: 6, pad: 7, fuse: 5, other: 8 };
+  const comps = B.comps.filter(c => c.pads.length).slice().sort((a, b) => (rank[a.kind] - rank[b.kind]) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
+  const cols = Math.max(2, Math.ceil(Math.sqrt(comps.length * 0.9))); const CW = 260;
+  let x = 0, y = 0, rowH = 0, col = 0;
+  for (const c of comps) {
+    const pins = [...new Map(c.pads.map(p => [p.num, p])).values()].sort((a, b) => a.num.localeCompare(b.num, undefined, { numeric: true }));
+    const left = pins.slice(0, Math.ceil(pins.length / 2)), right = pins.slice(Math.ceil(pins.length / 2));
+    const h = Math.max(left.length, right.length) * 18 + 34, w = 96;
+    const gx = x + 80, gy = y;
+    const g = el("g", {}, svg);
+    el("rect", { x: gx, y: gy, width: w, height: h, rx: 4, fill: "#16201c", stroke: "#8fa39a", "stroke-width": 1 }, g);
+    const t1 = el("text", { x: gx + w / 2, y: gy + 14, fill: "#e6b45a", "font-size": 12, "text-anchor": "middle", "font-weight": 600 }, g); t1.textContent = c.ref;
+    const t2 = el("text", { x: gx + w / 2, y: gy + h - 8, fill: "#8fa39a", "font-size": 10, "text-anchor": "middle" }, g); t2.textContent = (c.value || "").slice(0, 16);
+    const pin = (p, i, side) => {
+      const py = gy + 30 + i * 18, x0 = side < 0 ? gx : gx + w, x1 = x0 + side * 22;
+      const net = p.net || "";
+      const ln = el("line", { x1: x0, y1: py, x2: x1, y2: py, stroke: net ? `hsl(${hue(net)},60%,62%)` : "#555", "stroke-width": 1.6, "data-net": net }, g);
+      const tn = el("text", { x: x0 - side * 4, y: py + 3.5, fill: "#cfd8d3", "font-size": 9, "text-anchor": side < 0 ? "start" : "end" }, g); tn.textContent = p.num;
+      if (net) { const lb = el("text", { x: x1 + side * 3, y: py + 3.5, fill: `hsl(${hue(net)},65%,68%)`, "font-size": 10.5, "text-anchor": side < 0 ? "end" : "start", "data-net": net, style: "cursor:pointer" }, g);
+        lb.textContent = net; hover(null, lb, net + ": " + B.nets[net].pins.map(p => p.join(".")).join(", "), net); hover(null, ln, net, net); }
+      else { el("text", { x: x1 + side * 3, y: py + 3.5, fill: "#666", "font-size": 9, "text-anchor": side < 0 ? "end" : "start" }, g).textContent = "nc"; }
+    };
+    left.forEach((p, i) => pin(p, i, -1)); right.forEach((p, i) => pin(p, i, 1));
+    rowH = Math.max(rowH, h); col++; x += CW;
+    if (col >= cols) { col = 0; x = 0; y += rowH + 30; rowH = 0; }
+  }
+  const bb = svg.getBBox(); SZ.set(bb.x - 20, bb.y - 20, bb.width + 40, bb.height + 40);
+}
+$("#sfit").onclick = drawSchem;
+
+// ---------- 3D ----------
+let scene, cam, ren, root, orbit = { az: -0.6, el: 0.9, dist: 80, tx: 0, ty: 0 };
+function init3d() {
+  if (threeReady || !B || B.error) { if (ren) resize3d(); return; }
+  if (typeof THREE === "undefined") { $("#k3dmsg").textContent = "the interactive view needs three.js (no internet?): try the KiCad render"; return; }
+  threeReady = true;
+  const host = $("#three");
+  ren = new THREE.WebGLRenderer({ antialias: true }); ren.setPixelRatio(window.devicePixelRatio || 1);
+  host.appendChild(ren.domElement);
+  scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d1210);
+  cam = new THREE.PerspectiveCamera(35, 1, 0.1, 2000);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x223322, 0.85));
+  const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(40, -60, 90); scene.add(dl);
+  build3d(); resize3d(); window.addEventListener("resize", resize3d);
+  let d = null;
+  ren.domElement.addEventListener("pointerdown", e => { d = { x: e.clientX, y: e.clientY, b: e.button, o: { ...orbit } }; ren.domElement.setPointerCapture(e.pointerId); });
+  ren.domElement.addEventListener("pointermove", e => { if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (d.b === 2 || e.shiftKey) { const k = orbit.dist / 600; orbit.tx = d.o.tx - dx * k * Math.cos(orbit.az) - dy * k * Math.sin(orbit.az); orbit.ty = d.o.ty - dx * k * Math.sin(orbit.az) + dy * k * Math.cos(orbit.az); }
+    else { orbit.az = d.o.az - dx * 0.008; orbit.el = Math.min(1.55, Math.max(-1.55, d.o.el + dy * 0.008)); } place3d(); });
+  ren.domElement.addEventListener("pointerup", () => d = null);
+  ren.domElement.addEventListener("contextmenu", e => e.preventDefault());
+  ren.domElement.addEventListener("wheel", e => { e.preventDefault(); orbit.dist *= Math.exp(e.deltaY * 0.0012); place3d(); }, { passive: false });
+}
+function shapeOf(rings) { const s = new THREE.Shape(rings[0].map(p => new THREE.Vector2(p[0], p[1])));
+  for (const h of rings.slice(1)) s.holes.push(new THREE.Path(h.map(p => new THREE.Vector2(p[0], p[1])))); return s; }
+function build3d() {
+  if (root) scene.remove(root);
+  root = new THREE.Group(); scene.add(root);
+  const T = B.thickness || 1.6;
+  const bs = new THREE.Shape(B.outline.map(p => new THREE.Vector2(p[0], p[1])));
+  for (const h of B.holes) { const c = new THREE.Path(); c.absarc(h[0], h[1], h[2] / 2, 0, Math.PI * 2, true); bs.holes.push(c); }
+  const bg = new THREE.ExtrudeGeometry(bs, { depth: T, bevelEnabled: false, curveSegments: 24 });
+  bg.translate(0, 0, -T);
+  root.add(new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ color: 0x0f4a2e, roughness: 0.55, metalness: 0.05 })));
+  const cuMat = (L) => new THREE.MeshStandardMaterial({ color: L === "F" ? 0x2f7a4e : 0x2a6a49, roughness: 0.45, metalness: 0.15, side: THREE.DoubleSide });
+  for (const c of B.copper) for (const p of c.poly) {
+    try { const g = new THREE.ShapeGeometry(shapeOf(p)); const m = new THREE.Mesh(g, cuMat(c.layer)); m.position.z = c.layer === "F" ? 0.02 : -T - 0.02; root.add(m); } catch (e) {}
+  }
+  const gold = new THREE.MeshStandardMaterial({ color: 0xd9aa45, roughness: 0.3, metalness: 0.85, side: THREE.DoubleSide });
+  for (const c of B.comps) for (const p of c.pads) for (const q of p.poly) {
+    try { const g = new THREE.ShapeGeometry(shapeOf(q)); for (const z of (p.drill ? [0.04, -T - 0.04] : [p.layer === "F" ? 0.04 : -T - 0.04])) { const m = new THREE.Mesh(g, gold); m.position.z = z; root.add(m); } } catch (e) {}
+  }
+  const col = { ic: 0x1c1c1e, cap: 0xb8915a, res: 0x222222, led: 0xe8f0ea, diode: 0x2a2a2a, inductor: 0x34363a, connector: 0xf2efe6,
+                electrolytic: 0x1d3b8f, pot: 0x2f62c8, switch: 0x7d7f84, crystal: 0xc7c9cc, fuse: 0xe0d2b0, other: 0x555555, pad: 0, hole: 0 };
+  for (const c of B.comps) {
+    if (c.kind === "pad" || c.kind === "hole" || !c.courtyard.length || c.unplaced) continue;
+    const xs = c.courtyard[0][0].map(p => p[0]), ys = c.courtyard[0][0].map(p => p[1]);
+    let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const sh = 0.82, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = (x1 - x0) * sh, d = (y1 - y0) * sh, h = c.height;
+    const mat = new THREE.MeshStandardMaterial({ color: col[c.kind] ?? 0x555555, roughness: c.kind === "ic" ? 0.6 : 0.4, metalness: c.kind === "electrolytic" ? 0.3 : 0.05 });
+    let mesh;
+    if (c.kind === "electrolytic") { const r = Math.min(w, d) / 2; mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 40), mat); mesh.rotation.x = Math.PI / 2; }
+    else mesh = new THREE.Mesh(new THREE.BoxGeometry(w, d, h), mat);
+    const top = c.side !== "B";
+    mesh.position.set(cx, cy, top ? h / 2 + 0.05 : -T - h / 2 - 0.05);
+    root.add(mesh);
+    if (c.kind === "electrolytic") { const cap = new THREE.Mesh(new THREE.CircleGeometry(Math.min(w, d) / 2 * 0.98, 40), new THREE.MeshStandardMaterial({ color: 0xb9c2cc, metalness: 0.7, roughness: 0.3 }));
+      cap.position.set(cx, cy, h + 0.06); root.add(cap); }
+  }
+  const [x0, y0, x1, y1] = B.bounds; orbit.tx = (x0 + x1) / 2; orbit.ty = (y0 + y1) / 2; orbit.dist = Math.max(x1 - x0, y1 - y0) * 2.1;
+  place3d();
+}
+function place3d() { if (!cam) return; const ce = Math.cos(orbit.el);
+  cam.position.set(orbit.tx + orbit.dist * ce * Math.sin(orbit.az), orbit.ty - orbit.dist * ce * Math.cos(orbit.az), orbit.dist * Math.sin(orbit.el));
+  cam.up.set(0, 0, 1); cam.lookAt(orbit.tx, orbit.ty, 0); ren.render(scene, cam); }
+function resize3d() { if (!ren) return; const h = $("#three"); const w = h.clientWidth || 800, hh = h.clientHeight || 600;
+  ren.setSize(w, hh); cam.aspect = w / hh; cam.updateProjectionMatrix(); place3d(); }
+$("#krender").onclick = async () => {
+  $("#k3dmsg").textContent = "KiCad is rendering (about 20-60 s)...";
+  const r = await (await fetch("/api/render3d")).json();
+  if (r.error) { $("#k3dmsg").textContent = r.error; return; }
+  $("#rimg").src = r.png; $("#render").style.display = "block"; $("#k3dclose").style.display = ""; $("#k3dmsg").textContent = "";
+};
+$("#k3dclose").onclick = () => { $("#render").style.display = "none"; $("#k3dclose").style.display = "none"; };
+
+// ---------- the side panel ----------
+function drawSide() {
+  const fs = $("#findings"); fs.innerHTML = "";
+  const list = (R && R.findings) || [];
+  if (!R || !R.board) fs.innerHTML = '<div class="meta" style="margin:0 14px">no result yet</div>';
+  else if (!list.length) fs.innerHTML = '<div class="none">none: every check clean</div>';
+  list.forEach((f, i) => { const d = document.createElement("div"); d.className = "f";
+    d.innerHTML = `<div class="k">${f.stage} · ${f.kind}</div><div></div><div class="h"></div>`;
+    d.children[1].textContent = f.text; d.children[2].textContent = f.hint || "";
+    d.onclick = () => { document.querySelectorAll(".f").forEach(x => x.classList.remove("sel")); d.classList.add("sel"); zoomTo(f, i); };
+    fs.appendChild(d); });
+  const cr = $("#critic"); cr.innerHTML = "";
+  const notes = (R && R.critic) || [];
+  if (R && R.board && !notes.length) cr.innerHTML = '<div class="none">no notes</div>';
+  notes.forEach(n => { const d = document.createElement("div"); d.className = "f " + (n.severity === "error" ? "" : n.severity);
+    d.innerHTML = `<div class="k">${n.severity} · ${n.kind || ""}</div><div></div>`; d.children[1].textContent = n.text;
+    if (n.refs && n.refs.length) d.onclick = () => zoomTo({ pins: [] , at: (B.comps.find(c => c.ref === n.refs[0]) || {}).at }, -1);
+    cr.appendChild(d); });
+  const run = $("#run"); run.innerHTML = "";
+  if (R && R.board) {
+    const kv = [["router", R.router], ["parts / nets", R.parts + " / " + R.nets], ["layers", R.layers], ["time", R.seconds + " s"],
+                ["KiCad DRC", R.kicad_drc && R.kicad_drc.run ? "ran (KiCad " + R.kicad_drc.version + ")" : (R.kicad_drc && R.kicad_drc.skipped) || "off"]];
+    for (const [k, v] of Object.entries(R.timings || {})) kv.push([k, v + " s"]);
+    for (const [k, v] of kv) { const a = document.createElement("span"); a.textContent = k; const b = document.createElement("b"); b.textContent = v; run.append(a, b); }
+  }
+  const fl = $("#files"); fl.innerHTML = "";
+  if (R && R.files) for (const [k, v] of Object.entries(R.files)) { const rel = String(v).split(/[\\/]/).slice(-2).join("/"); const name = rel.startsWith(R.board) ? rel : rel;
+    const a = document.createElement("a"); const p = String(v); const i = p.lastIndexOf("/" + (p.includes("/cart/") ? "cart/" : ""));
+    a.href = "/files/" + (p.includes("/cart/") ? "cart/" + p.split("/cart/")[1] : p.split("/").pop()); a.target = "_blank"; a.textContent = k + ": " + p.split("/").slice(-1)[0]; fl.appendChild(a); }
+}
+function drawHeader() {
+  $("#name").textContent = (B && B.name) || (R && R.board) || "pcb-harness";
+  const b = $("#badge");
+  if (P && !P.done) { b.className = "badge run"; b.textContent = "running"; }
+  else if (R && R.board) { b.className = "badge " + (R.clean ? "ok" : "bad"); b.textContent = R.clean ? "clean" : "not clean"; }
+  $("#meta").textContent = R && R.board ? `${R.parts} parts · ${R.nets} nets · ${R.layers} layers · ${R.router}` : "";
+}
+function drawProgress() {
+  const box = $("#prog");
+  if (!P || P.done || P.stage === "none") { box.style.display = "none"; return; }
+  box.style.display = "block";
+  let s = P.stage;
+  if ((s === "place+route" || s === "place") && P.tries) s += ` · try ${Math.min(P.tries_done + 1, P.tries)} of ${P.tries}` + (P.tries_done ? ` (${P.tries_done} done)` : "");
+  $("#pstage").innerHTML = "<b>" + s + "</b> · " + fmt(P.elapsed) + " so far";
+  $("#peta").textContent = P.eta == null ? "estimating" : "about " + fmt(P.eta) + " left";
+  const frac = P.eta == null ? 0.05 : P.elapsed / (P.elapsed + P.eta);
+  $("#pfill").style.width = Math.max(3, Math.min(98, frac * 100)) + "%";
+}
+
+// ---------- data ----------
+async function getJ(u) { try { return await (await fetch(u, { cache: "no-store" })).json(); } catch (e) { return null; } }
+async function loadAll() {
+  R = await getJ("/api/result"); B = await getJ("/api/board");
+  const msg = $("#msg");
+  if (!B || B.error) msg.textContent = (B && B.error) || "no board yet"; else msg.textContent = "";
+  drawHeader(); drawSide(); drawLayout(); fitLayout();
+  if ($("#schem").classList.contains("on")) drawSchem();
+  if (threeReady) build3d();
+}
+let wasRunning = false;
+async function poll() {
+  P = await getJ("/api/progress");
+  drawProgress(); drawHeader();
+  if (P && !P.done) wasRunning = true;
+  else if (wasRunning) { wasRunning = false; await loadAll(); }
+  setTimeout(poll, P && !P.done ? 1000 : 4000);
+}
+loadAll().then(poll);
+window.addEventListener("resize", () => { fitLayout(); });
+</script>
+</body>
+</html>

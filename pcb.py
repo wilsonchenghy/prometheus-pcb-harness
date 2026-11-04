@@ -2371,8 +2371,22 @@ def near_misses(board: Board) -> List[str]:
     return out
 
 
+PROGRESS = None    # a callable given {"kind": "tries", ...} and {"kind": "try", ...} as place_and_route goes
+
+
+def _progress(**ev):
+    if PROGRESS is not None:
+        try:
+            PROGRESS(ev)
+        except Exception:                                # (a viewer's trouble never stops a run)
+            pass
+
+
 def _one_try(board: Board, move, k: int, gap: float, route_kw, router: str, kw) -> tuple:
-    """one placement and routing of ``place_and_route``: (score, problems, placement, tracks, vias, fan, line)"""
+    """one placement and routing of ``place_and_route``: (score, problems, placement, tracks, vias, fan, line,
+    clean, router, seconds)"""
+    import time as _t
+    t0_ = _t.perf_counter()
     left = autoplace(board, move=move, gap=gap + 0.25 * min(k, 3), seed=k, **kw)   # (later tries: other seeds at
     if left:                                             # the same room, not ever more than fits; a part that
         probs = [f"{r}: no room to place it (a bigger board, smaller parts, or both sides)" for r in left]
@@ -2387,7 +2401,7 @@ def _one_try(board: Board, move, k: int, gap: float, route_kw, router: str, kw) 
                      ([f"no room for {', '.join(left)}"] if left else [])))
     return (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
             list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())), line,
-            not probs and not miss, getattr(board, "router_used", None))
+            not probs and not miss, getattr(board, "router_used", None), round(_t.perf_counter() - t0_, 2))
 
 
 def _try_worker(blob: bytes, move, k, gap, route_kw, router, kw) -> tuple:
@@ -2421,9 +2435,14 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         workers = int(os.environ.get("PCB_WORKERS") or min(4, os.cpu_count() or 1))
     workers = max(1, min(workers, tries))
     best, results = None, {}
+    _progress(kind="tries", tries=tries, workers=workers)
+
+    def _done(k):
+        print(results[k][6], flush=True)
+        _progress(kind="try", k=k, seconds=results[k][9], clean=results[k][7], line=results[k][6])
     board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (the first try alone: most
     results[0] = _one_try(board, move, 0, gap, route_kw, router, kw)              # boards are clean on it)
-    print(results[0][6], flush=True)
+    _done(0)
     if results[0][7] or tries == 1:
         workers = 0
     if workers > 1:
@@ -2438,14 +2457,14 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
                         for k in range(k0, min(tries, k0 + workers))}
                 for k in sorted(futs):
                     results[k] = futs[k].result()
-                    print(results[k][6], flush=True)
+                    _done(k)
                 if any(results[k][7] for k in futs):
                     break
     elif workers == 1:
         for k in range(1, tries):
             board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try afresh)
             results[k] = _one_try(board, move, k, gap, route_kw, router, kw)
-            print(results[k][6], flush=True)
+            _done(k)
             if results[k][7]:
                 break
     for k in sorted(results):                            # (the first clean try, else the fewest problems)

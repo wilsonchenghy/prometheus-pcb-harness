@@ -42,6 +42,12 @@ placed and routed board as `out/board_state.pkl`; `check`, `export` and `critic`
 unchanged, so they take seconds. A differential pair over its skew is length-tuned after routing (a serpentine on
 the shorter net, kept only when the check finds nothing new).
 
+## Showing the user
+
+For a person following along, add `--view` to the run (or run `pcb-harness view out/` after): a local page with
+the layout, a 3D view, the schematic and the findings, and live progress with an estimate of the time left. Give
+them the address it prints. Leave it off in unattended runs: with `--view` the command waits for Ctrl-C at the end.
+
 ## KiCad's DRC
 
 When KiCad 9+ is installed (`kicad-cli` on the PATH), every run also checks the exported board with KiCad's own
