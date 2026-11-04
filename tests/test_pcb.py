@@ -1218,3 +1218,6 @@ def test_datasheet_numbered_list_and_other_names():
            "VCC 3 Supply\nR 4 O Receiver output\nVref 5 O\nCANL 6 I/O\nCANH 7 I/O\nRS\n8\nI Mode select")
     r = parts.datasheet_check("Interface_CAN_LIN:SN65HVD230", pages=[can])
     assert r["agree"] == r["total"] == 8, [p for p in r["pins"] if p["status"] != "agrees"]
+    # no pin table (a pinout drawing only): nothing is called wrong
+    r = parts.datasheet_check("Interface_CAN_LIN:SN65HVD230", pages=["Features\nD 1 GND 2 R 4\nTypical application"])
+    assert r["page"] is None and {p["status"] for p in r["pins"]} == {"not checked"}

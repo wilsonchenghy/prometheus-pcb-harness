@@ -685,6 +685,10 @@ async function annotateDatasheet(c, pinXY, L) {
   const d = DS[ref] || (DS[ref] = await getJ("/api/datasheet?ref=" + encodeURIComponent(ref)));
   if (curPart !== ref || !cap.isConnected) return;
   if (!d || d.error) { cap.textContent = "DATASHEET · NOT READ" + (d && d.error ? " (" + d.error.slice(0, 40) + ")" : ""); return; }
+  if (d.page == null) { cap.textContent = "DATASHEET · PIN TABLE NOT FOUND · CHECK BY HAND"; cap.setAttribute("fill", "#a5621a");
+    const ln = el("a", { href: d.datasheet, target: "_blank" }, svg);
+    el("text", { x: L.x + L.w - 22, y: L.y + L.h - 22, fill: "#9a7a3a", "font-size": 11, "font-family": FONT, "text-anchor": "end", style: "cursor:pointer" }, ln).textContent = "open PDF ↗";
+    return; }
   cap.textContent = `DATASHEET · ${d.agree} / ${d.total} PINS AGREE · PAGE ${d.page}`;
   cap.setAttribute("fill", d.agree === d.total ? "#8a6a2c" : "#b2412f");
   const link = el("a", { href: d.datasheet, target: "_blank" }, svg);

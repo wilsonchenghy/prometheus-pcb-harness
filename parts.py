@@ -104,6 +104,8 @@ def resolve(comp: dict, pin: str) -> List[str]:
     if not hits:                                        # (case and overbar spelling forgiven: nsleep, SLEEP)
         low = pin.lower().lstrip("n~/")
         hits = [p["num"] for p in sym["pins"] if p["key"].lower().lstrip("n~/") == low]
+    if not hits:                                        # (one of a pin's functions: PB4 for "XTAL2/PB4")
+        hits = [p["num"] for p in sym["pins"] if low in {f.lower().lstrip("n~") for f in p["key"].split("/")}]
     return list(dict.fromkeys(hits))
 
 
@@ -197,10 +199,10 @@ def describe(name: str, board=None) -> str:
             lines += [f"  datasheet: not checked ({d['error']})"]
         else:
             if d["page"] is None:
-                lines += [f"  datasheet: its pin table not found (read {d['datasheet']} by hand)"]
-            lines += [f"  datasheet agrees: {d['agree']} of {d['total']} pins"
-                      + (f" (its pin table, page {d['page']})" if d["page"] else " (searched the first pages)")]
-            for q in d["pins"]:
+                lines += [f"  datasheet: its pin table not found, not checked (read {d['datasheet']} by hand)"]
+            else:
+                lines += [f"  datasheet agrees: {d['agree']} of {d['total']} pins (its pin table, page {d['page']})"]
+            for q in d["pins"] if d["page"] is not None else []:
                 if q["status"] != "agrees":
                     lines.append(f"    pin {q['num']} {q['name']}: {q['status']}"
                                  + (f" (the datasheet lists {', '.join(q['datasheet'])})" if q["datasheet"] else ""))
@@ -224,6 +226,10 @@ def datasheet_notes(board) -> List[dict]:
                           "text": f"{ref}: datasheet not read ({type(e).__name__})"})
             continue
         if d.get("error"):
+            continue
+        if d["page"] is None:                           # (no table found: nothing to hold the pins against)
+            notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],
+                          "text": f"{ref}: the datasheet's pin table was not found; check its pins by hand"})
             continue
         bad = [q for q in d["pins"] if q["status"] == "differs"]
         for q in bad:
@@ -256,7 +262,19 @@ def datasheet_text(url: str) -> List[str]:
 
 
 # the same pin under the names datasheets and KiCad's symbols give it
-_ALIASES = [{"VO", "VOUT", "OUT", "OUTPUT"}, {"VI", "VIN", "IN", "INPUT"}, {"GND", "GROUND", "GND/ADJ", "VSS"}]
+_ALIASES = [{"VO", "VOUT", "OUT", "OUTPUT"}, {"VI", "VIN", "IN", "INPUT"}, {"GND", "GROUND", "GND/ADJ", "VSS"},
+            {"RST", "RESET", "NRST", "NRESET"}]
+
+
+def _names(key: str) -> set:
+    """the names a datasheet may give a symbol pin: as it is, without its overbar n, each of its functions
+    ("nRESET/PB5": RESET, PB5) and their other spellings"""
+    out = {key, re.sub(r"^n", "", key), key.replace("n", "/", 1)}
+    for part in key.split("/") if "/" in key else []:
+        out |= {part, re.sub(r"^n", "", part)}
+    for a in list(out):
+        out |= next((g for g in _ALIASES if a.upper() in g), set())
+    return {a for a in out if a}
 
 
 def _numbers(variants, text, flags) -> List[str]:
@@ -284,19 +302,22 @@ def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
     # the table's pages: most of the pins named (a name a datasheet gives otherwise counts), a pin-table heading,
     # and pins given numbers there (a pinout drawing, its names and numbers apart, is not the table)
     keys = {q["key"] for q in s["pins"]}
-    names = [{k} | next((g for g in _ALIASES if k.upper() in g), set()) for k in keys]
+    names = [_names(k) for k in keys]
     named = [sum(1 for n in names if any(re.search(re.escape(k) + r"(?![A-Za-z0-9_])", t) for k in n)) for t in pages]
     hits = [sum(1 for n in names if _numbers(n, t, 0) or _numbers(n, t, re.I)) if named[i] >= 2 else 0
             for i, t in enumerate(pages)]
     tables = [i for i, t in enumerate(pages) if named[i] >= max(2, len(keys) // 2) and hits[i] >= 2
               and re.search(r"pin\s*(functions|descriptions?|configurations?|assignments|connections)", t, re.I)]
     tables.sort(key=lambda i: -hits[i])
-    text = "\n".join(pages[i] for i in (tables or range(min(len(pages), 12))))
+    if not tables:                                      # (no table: a guess from the first pages would mislead)
+        return {"datasheet": s["datasheet"], "page": None, "agree": 0, "total": len(s["pins"]),
+                "pins": [{"num": p["num"], "name": p["key"], "status": "not checked", "datasheet": []}
+                         for p in s["pins"]]}
+    text = "\n".join(pages[i] for i in tables)
     exposed = bool(re.search(r"power\s*pad|ppad|thermal\s*pad|exposed\s*pad|\bEP\b|\bPAD\b", text, re.I))
     out, agree = [], 0
     for p in sorted(s["pins"], key=lambda p: (len(p["num"]), p["num"])):
-        variants = {p["key"], re.sub(r"^n", "", p["key"]), p["key"].replace("n", "/", 1)} - {""}
-        variants |= {a for g in _ALIASES if p["key"].upper() in g for a in g}
+        variants = _names(p["key"])
         nums = _numbers(variants, text, 0) or _numbers(variants, text, re.I)   # (exact case first: "R" is not "r")
         nums = list(dict.fromkeys(nums))
         if p["num"] in nums:
