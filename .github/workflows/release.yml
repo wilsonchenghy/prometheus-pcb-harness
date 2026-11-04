@@ -1,11 +1,12 @@
 name: release
 
-# A tag vX.Y.Z makes the GitHub release: the notes are that version's section of CHANGELOG.md, and the files kept
-# on the release-assets branch under X.Y.Z/ (the rendered release video, which is not in the code's history) are
-# attached to it.
+# A tag vX.Y.Z, or a push to a branch release/vX.Y.Z (which makes the tag at that commit), makes the GitHub release:
+# the notes are that version's section of CHANGELOG.md, and the files kept on the release-assets branch under
+# X.Y.Z/ (the rendered release video, which is not in the code's history) are attached to it.
 on:
   push:
     tags: ["v*"]
+    branches: ["release/v*"]
 
 permissions:
   contents: write
@@ -15,16 +16,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: version
+        run: echo "V=${GITHUB_REF_NAME#release/}" >> "$GITHUB_ENV"
       - name: notes from the changelog
         run: |
-          v="${GITHUB_REF_NAME}"
+          v="${V}"
           awk -v h="## ${v} " 'index($0, h) == 1 {on=1; next} /^## v/ {on=0} on' CHANGELOG.md > notes.md
           test -s notes.md || echo "pcb-harness ${v}" > notes.md
       - name: assets
         run: |
           mkdir -p assets
           if git fetch --depth 1 origin release-assets; then
-            v="${GITHUB_REF_NAME#v}"
+            v="${V#v}"
             for f in $(git ls-tree --name-only "FETCH_HEAD:${v}" 2>/dev/null); do
               git show "FETCH_HEAD:${v}/${f}" > "assets/${f}"
             done
@@ -34,6 +37,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
-            gh release create "${GITHUB_REF_NAME}" --title "pcb-harness ${GITHUB_REF_NAME}" --notes-file notes.md
-          if ls assets/* >/dev/null 2>&1; then gh release upload "${GITHUB_REF_NAME}" assets/* --clobber; fi
+          gh release view "${V}" >/dev/null 2>&1 || \
+            gh release create "${V}" --target "${GITHUB_SHA}" --title "pcb-harness ${V}" --notes-file notes.md
+          if ls assets/* >/dev/null 2>&1; then gh release upload "${V}" assets/* --clobber; fi
