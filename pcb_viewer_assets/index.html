@@ -534,8 +534,20 @@ function drawFiles() {
 }
 
 // ---------- the schematic ----------
-function drawSchem() {
-  const svg = $("#ssvg"); svg.innerHTML = ""; if (!B || B.error) return;
+// the engineer's sheets (schem.py's out/schematic_N.svg) when the run has them; the net-label view otherwise
+let SHEETS = null;
+async function drawSchem() {
+  const svg = $("#ssvg"); if (!B || B.error) return;
+  if (SHEETS === null) { SHEETS = [];
+    for (let i = 1; ; i++) { const r = await fetch(`/files/schematic_${i}.svg`, { cache: "no-store" }).catch(() => null);
+      if (!r || !r.ok) break; const d = new DOMParser().parseFromString(await r.text(), "image/svg+xml").documentElement;
+      const vb = (d.getAttribute("viewBox") || "").split(/[ ,]+/).map(Number);
+      SHEETS.push({ url: `/files/schematic_${i}.svg?t=${Date.now()}`, w: vb[2] || parseFloat(d.getAttribute("width")), h: vb[3] || parseFloat(d.getAttribute("height")) }); } }
+  svg.innerHTML = "";
+  if (SHEETS.length) { let y = 0;
+    for (const sh of SHEETS) { el("rect", { x: 0, y, width: sh.w, height: sh.h, fill: "#ffffff" }, svg);
+      el("image", { href: sh.url, x: 0, y, width: sh.w, height: sh.h }, svg); y += sh.h + 40; }
+    SZ.set(-20, -20, Math.max(...SHEETS.map(s => s.w)) + 40, y + 0); return; }
   const rank = { ic: 0, connector: 1, inductor: 2, crystal: 2, electrolytic: 3, pot: 3, cap: 4, res: 5, diode: 5, led: 5, fuse: 5, switch: 6, pad: 7, other: 8 };
   const comps = B.comps.filter(c => c.pads.length).slice().sort((a, b) => ((rank[a.kind] ?? 8) - (rank[b.kind] ?? 8)) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
   const cols = Math.max(2, Math.ceil(Math.sqrt(comps.length * 0.9))), CW = 270; let x = 0, y = 0, rowH = 0, col = 0;
@@ -736,7 +748,7 @@ function init3d() {
     for (const [cx, w, a] of [[260, 220, .95], [760, 160, .6]]) { const s = x.createRadialGradient(cx, 120, 10, cx, 120, w); s.addColorStop(0, `rgba(255,248,235,${a})`); s.addColorStop(1, "rgba(255,248,235,0)"); x.fillStyle = s; x.fillRect(0, 0, 1024, 512); }
     const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping; t.encoding = THREE.sRGBEncoding;
     const pm = new THREE.PMREMGenerator(ren); scene.environment = pm.fromEquirectangular(t).texture; }
-  build3d(); resize3d(); window.addEventListener("resize", resize3d); loadModel();
+  build3d(); resize3d(); window.addEventListener("resize", resize3d);
   let d = null; const c = ren.domElement;
   c.addEventListener("pointerdown", e => { spin = false; d = { x: e.clientX, y: e.clientY, b: e.button, o: { ...orbit } }; c.setPointerCapture(e.pointerId); });
   c.addEventListener("pointermove", e => { if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y;
@@ -765,22 +777,9 @@ function build3d() {
   const gold = new THREE.MeshStandardMaterial({ color: 0xe8b75a, roughness: 0.22, metalness: 0.92, side: THREE.DoubleSide });
   for (const c of B.comps) for (const p of c.pads) for (const q of p.poly) { try { const g = new THREE.ShapeGeometry(shapeOf(q));
     for (const z of (p.drill ? [0.045, -T - 0.045] : [p.layer === "F" ? 0.045 : -T - 0.045])) { const m = new THREE.Mesh(g, gold); m.position.z = z; root.add(m); } } catch (e) {} }
-  const col = { ic: 0x17181b, cap: 0xc29a62, res: 0x1c1c1c, led: 0xf1f6f0, diode: 0x242424, inductor: 0x2c2e32, connector: 0xf3efe4,
-                electrolytic: 0x16306f, pot: 0x2a62d8, switch: 0x80838a, crystal: 0xd0d3d6, fuse: 0xe6d8b4, other: 0x4a4a4a };
-  for (const c of B.comps) {
-    if (c.kind === "pad" || c.kind === "hole" || !c.courtyard.length || c.unplaced) continue;
-    const xs = c.courtyard[0][0].map(p => p[0]), ys = c.courtyard[0][0].map(p => p[1]);
-    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), s = 0.8;
-    const w = (x1 - x0) * s, d = (y1 - y0) * s, h = c.height, px = (x0 + x1) / 2, py = (y0 + y1) / 2, top = c.side !== "B";
-    const mat = new THREE.MeshStandardMaterial({ color: col[c.kind] ?? 0x4a4a4a, roughness: c.kind === "ic" ? 0.5 : 0.38, metalness: c.kind === "electrolytic" ? 0.35 : 0.04 });
-    let m;
-    if (c.kind === "electrolytic") { const r = Math.min(w, d) / 2; m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), mat); m.rotation.x = Math.PI / 2;
-      const lid = new THREE.Mesh(new THREE.CircleGeometry(r * 0.97, 48), new THREE.MeshStandardMaterial({ color: 0xc3ccd6, metalness: 0.8, roughness: 0.28 })); lid.position.set(px, py, h + 0.07); root.add(lid); }
-    else m = new THREE.Mesh(new THREE.BoxGeometry(w, d, h), mat);
-    m.position.set(px, py, top ? h / 2 + 0.06 : -T - h / 2 - 0.06); root.add(m);
-  }
+  simple.visible = false; $("#msg").textContent = "Loading KiCad 3D models…";   // (KiCad's parts or nothing: no stand-in boxes)
   root = _root; orbit.tx = cx; orbit.ty = cy; orbit.dist = span * 2.4;
-  if (modelState === "kicad") { modelState = ""; loadModel(); }
+  modelState = ""; loadModel();
   place3d();
 }
 // KiCad's glTF keeps the board's colours (written as display colours: converted here) but not the parts': each part's
@@ -840,7 +839,9 @@ async function loadModel() {
   if (!THREE.GLTFLoader) return;
   $("#mtag").textContent = "Loading KiCad models…";
   const r = await getJ("/api/model");
-  if (!r || r.error) { $("#mtag").textContent = r && r.error ? "Simplified parts · " + r.error.split(":")[0] : "Simplified parts"; return; }
+  const bare = (why) => { root.children.filter(o => o.userData.simple).forEach(o => o.visible = true); $("#msg").textContent = "";
+    $("#mtag").textContent = "Board only · " + why; place3d(); };
+  if (!r || r.error) { bare(r && r.error ? r.error.split(":")[0] : "no model"); return; }
   new THREE.GLTFLoader().load(r.glb, (gltf) => {
     const m = gltf.scene;
     m.rotation.x = Math.PI / 2;                                 // (glTF is y-up, this view z-up)
@@ -856,9 +857,9 @@ async function loadModel() {
     root.add(m); modelState = "kicad";
     MU = k === 1000 ? 0.001 : 1;
     partsOf(m).forEach((p, i) => { p.userData.z0 = p.position.y; dropIn(p, i); });
-    $("#mtag").textContent = "KiCad 3D models";
+    $("#mtag").textContent = "KiCad 3D models"; $("#msg").textContent = "";
     place3d();
-  }, undefined, () => { $("#mtag").textContent = "Simplified parts (the model did not load)"; });
+  }, undefined, () => bare("the model did not load"));
 }
 function place3d() { if (!cam) return; const ce = Math.cos(orbit.el);
   cam.position.set(orbit.tx + orbit.dist * ce * Math.sin(orbit.az), orbit.ty - orbit.dist * ce * Math.cos(orbit.az), orbit.dist * Math.sin(orbit.el));
@@ -900,7 +901,7 @@ function drawHeader() {
 // ---------- data ----------
 async function getJ(u) { try { return await (await fetch(u, { cache: "no-store" })).json(); } catch (e) { return null; } }
 async function loadAll() {
-  R = await getJ("/api/result"); B = await getJ("/api/board");
+  R = await getJ("/api/result"); B = await getJ("/api/board"); SHEETS = null;
   $("#msg").textContent = !B || B.error ? ((B && B.error) || "No board yet") : "";
   drawHeader(); drawLayers(); drawNets(); drawChecks(); drawRun(); drawFiles(); drawLayout(); fitLayout();
   if (activeView() === "schem") drawSchem(); if (activeView() === "parts") drawParts(); if (threeReady) build3d();

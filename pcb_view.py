@@ -244,7 +244,7 @@ def _model(out: Path, script: str) -> dict:
     if not kpcbs:
         return {"error": "no KiCad board in this folder yet"}
     if not pcb.kicad_version():
-        return {"error": "KiCad is not installed: the 3D view shows the parts as simple bodies"}
+        return {"error": "KiCad is not installed: the 3D view shows the bare board"}
     glb = out / "board.glb"
     if not glb.exists() or glb.stat().st_mtime < kpcbs[0].stat().st_mtime:
         b, _ = pcb_cli.load(script)

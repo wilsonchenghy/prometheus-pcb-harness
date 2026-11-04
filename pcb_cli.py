@@ -401,6 +401,11 @@ def main(argv=None) -> int:
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)
+    if not a.no_view and not os.environ.get("CI"):       # (KiCad's 3D model ready before the page asks for it)
+        try:
+            pcb_view._model(pcb_view.Path(a.out).resolve(), a.script)
+        except Exception:
+            pass
     prog.finish(result["clean"])
     pcb.PROGRESS = None
     if a.json:

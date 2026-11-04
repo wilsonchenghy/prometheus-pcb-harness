@@ -38,28 +38,35 @@ def buck(s, b, U, at, ref_parts, vout_net, title, values):
     s.wire((xi - 1.0, yv), (a("2")[0] - 0.6, yv))
     s.port((xi - 1.0, yv), "VIN")
     for i, c in enumerate(cin):
-        x = xi + 0.9 * i
+        x = xi + 1.6 * i
         s.dot((x, yv))
-        leg(s, c, elm.Capacitor(), x, yv, None, pins=TERM2 if values["cin_pin1_top"][i] else REV2, length=1.2)
-    s.text((xi - 0.6, yv - 2.4), f"{'/'.join(cin)}  {values['cin']}", size=6, halign="left")
+        leg(s, c, elm.Capacitor(), x, yv, f"{c}\n{values['cin']}", pins=TERM2 if values["cin_pin1_top"][i] else REV2,
+            length=1.2)
     xe = a("3")[0] - 1.0
     s.wire(a("3"), (xe, a("3")[1]))
     s.dot((xe, a("3")[1]))
-    r1 = s.add(ren1, elm.Resistor().at((xe, a("3")[1])).up().length(1.2), REV2)
+    r1 = s.add(ren1, elm.Resistor().at((xe, a("3")[1])).up().length(1.2), REV2, label=f"{ren1} {values['ren1']}",
+               loc="bottom")
     s.wire(r1.absanchors["end"], (xe, yv))
     s.dot((xe, yv))
-    r2 = s.add(ren2, elm.Resistor().at((xe, a("3")[1])).left().length(1.2), TERM2)
+    r2 = s.add(ren2, elm.Resistor().at((xe, a("3")[1])).left().length(1.2), TERM2, label=f"{ren2} {values['ren2']}",
+               loc="top")
     s.gnd(r2.absanchors["end"])
-    r3 = s.add(rt, elm.Resistor().at(a("4")).left().length(1.6), TERM2, label=f"{rt} {values['rt']}", loc="bottom")
+    r3 = s.add(rt, elm.Resistor().at(a("4")).left().length(1.6), TERM2, label=f"{rt} {values['rt']}", loc="top")
     s.gnd(r3.absanchors["end"])
     # compensation: RC + CC to ground, CC2 in parallel
-    xc = a("6")[0] - 0.8
+    xc = a("6")[0] - 1.4
     s.wire(a("6"), (xc, a("6")[1]))
     s.dot((xc, a("6")[1]))
-    r4 = s.add(rc, elm.Resistor().at((xc, a("6")[1])).down().length(1.0), TERM2)
-    c4 = s.add(cc, elm.Capacitor().at(r4.absanchors["end"]).down().length(1.0), TERM2)
+    r4 = s.add(rc, elm.Resistor().at((xc, a("6")[1])).down().length(1.0), TERM2, label=f"{rc} {values['rc']}",
+               loc="bottom")
+    c4 = s.add(cc, elm.Capacitor().at(r4.absanchors["end"]).down().length(1.0), TERM2, label=f"{cc} {values['cc']}",
+               loc="bottom")
     s.gnd(c4.absanchors["end"])
-    c5 = s.add(cc2, elm.Capacitor().at((xc, a("6")[1])).left().length(1.2), TERM2)
+    xc2 = xc - 1.6                                       # (CC2 down from a stub, clear of RT above it)
+    s.wire((xc, a("6")[1]), (xc2, a("6")[1]))
+    c5 = s.add(cc2, elm.Capacitor().at((xc2, a("6")[1])).down().length(1.2), TERM2, label=f"{cc2} {values['cc2']}",
+               loc="top")
     s.gnd(c5.absanchors["end"])
     # boot, switch node, catch diode, inductor, output
     xs = a("8")[0] + 1.4
@@ -76,11 +83,11 @@ def buck(s, b, U, at, ref_parts, vout_net, title, values):
     vo = ll.absanchors["end"]
     xo = vo[0]
     for i, c in enumerate(couts):
-        x = xo + 0.6 + 0.9 * i
+        x = xo + 0.6 + 1.6 * i
         s.dot((x, vo[1]))
-        leg(s, c, elm.Capacitor(), x, vo[1], None, pins=TERM2 if values["cout_pin1_top"][i] else REV2, length=1.2)
-    s.text((xo + 0.4, vo[1] - 2.4), f"{'/'.join(couts)}\n{values['cout']}", size=6, halign="left")
-    xf = xo + 0.6 + 0.9 * len(couts) + 0.4
+        leg(s, c, elm.Capacitor(), x, vo[1], f"{c}\n{values['cout']}",
+            pins=TERM2 if values["cout_pin1_top"][i] else REV2, length=1.2)
+    xf = xo + 0.6 + 1.6 * len(couts) + 0.4
     s.wire(vo, (xf + 1.6, vo[1]))
     s.port((xf + 1.6, vo[1]), vout_net)
     # feedback divider from the output; its tap runs back to FB under the power stage
