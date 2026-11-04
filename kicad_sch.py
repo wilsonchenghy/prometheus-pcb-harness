@@ -69,6 +69,8 @@ def symbol_for(ref: str, c: dict) -> str:
         return "Device:R_Potentiometer"
     if kind == "crystal":
         return "Device:Crystal" if n == 2 else "Device:Crystal_GND24" if n == 4 else _generic(n)
+    if "USB_C" in c["fp"] and n in (16, 17):
+        return "Connector:USB_C_Receptacle_USB2.0_16P"
     if kind == "pad" and n == 1:
         return "Connector:TestPoint"
     if kind == "switch" and n == 2:

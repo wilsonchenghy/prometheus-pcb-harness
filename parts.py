@@ -50,6 +50,33 @@ def _fetch(path: str) -> str:
     return data
 
 
+def _hidden(top, key: str) -> bool:
+    """whether the symbol hides its pins' names / numbers: (pin_names (hide yes)), or KiCad 6's bare (pin_names hide)"""
+    for x in top:
+        if isinstance(x, list) and x[:1] == [key]:
+            return "hide" in x[1:] or any(isinstance(y, list) and y[:2] == ["hide", "yes"] for y in x)
+    return False
+
+
+def _drawing(sub) -> List[dict]:
+    """a symbol unit's graphics, as KiCad draws them: {"t": "poly", "pts", "fill"} (lines, triangles),
+    {"t": "rect", "a", "b", "fill"}, {"t": "circle", "c", "r", "fill"}, {"t": "arc", "s", "m", "e"}; symbol mm, y up"""
+    out = []
+    xy = lambda n: (float(n[1]), float(n[2]))
+    for g in [x for x in sub if isinstance(x, list) and x and x[0] in ("polyline", "rectangle", "circle", "arc")]:
+        kid = {x[0]: x for x in g if isinstance(x, list) and x}
+        fill = next((y[1] for y in kid.get("fill", []) if isinstance(y, list) and y[:1] == ["type"]), "none")
+        if g[0] == "polyline" and "pts" in kid:
+            out.append({"t": "poly", "pts": [xy(q) for q in kid["pts"][1:] if isinstance(q, list)], "fill": fill})
+        elif g[0] == "rectangle":
+            out.append({"t": "rect", "a": xy(kid["start"]), "b": xy(kid["end"]), "fill": fill})
+        elif g[0] == "circle":
+            out.append({"t": "circle", "c": xy(kid["center"]), "r": float(kid["radius"][1]), "fill": fill})
+        elif g[0] == "arc" and "mid" in kid:
+            out.append({"t": "arc", "s": xy(kid["start"]), "m": xy(kid["mid"]), "e": xy(kid["end"])})
+    return out
+
+
 def symbol(name: str) -> dict:
     """KiCad symbol "Lib:Name" -> {"name", "lib", "footprint", "datasheet", "description", "pins": [{"num", "name",
     "key", "type", "at": (x, y), "rot", "length", "unit"}], "body": [(x0, y0, x1, y1), ...]}; a derived symbol
@@ -71,7 +98,7 @@ def symbol(name: str) -> dict:
                    description=props.get("Description") or base["description"])
         _SYM[name] = out
         return out
-    pins, body = [], []
+    pins, body, draw = [], [], []
     for sub in [x for x in top if isinstance(x, list) and x and x[0] == "symbol"]:
         unit = int(sub[1].rsplit("_", 2)[-2]) if re.search(r"_\d+_\d+$", sub[1]) else 0
         for p in [x for x in sub if isinstance(x, list) and x and x[0] == "pin"]:
@@ -85,8 +112,10 @@ def symbol(name: str) -> dict:
             s = next(x for x in r if isinstance(x, list) and x[0] == "start")
             e = next(x for x in r if isinstance(x, list) and x[0] == "end")
             body.append((float(s[1]), float(s[2]), float(e[1]), float(e[2])))
+        draw += _drawing(sub)
     out = {"name": name, "lib": lib, "footprint": props.get("Footprint", ""), "datasheet": props.get("Datasheet", ""),
-           "description": props.get("Description", ""), "value": props.get("Value", sym), "pins": pins, "body": body}
+           "description": props.get("Description", ""), "value": props.get("Value", sym), "pins": pins, "body": body,
+           "draw": draw, "hide_names": _hidden(top, "pin_names"), "hide_numbers": _hidden(top, "pin_numbers")}
     _SYM[name] = out
     return out
 

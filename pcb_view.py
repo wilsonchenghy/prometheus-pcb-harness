@@ -155,7 +155,8 @@ def board_data(b) -> dict:
                       "courtyard": _poly(cy) if cy is not None else [], "pads": by_ref.get(ref, []),
                       "height": height_of(c["fp"]), "kind": kind_of(ref, c["fp"]),
                       "unplaced": bool(c.get("unplaced")),
-                      "symbol": ({k: c["symbol"][k] for k in ("name", "description", "datasheet", "pins", "body")}
+                      "symbol": ({k: c["symbol"].get(k, []) for k in ("name", "description", "datasheet", "pins", "body", "draw",
+                                                            "hide_names", "hide_numbers")}
                                  if c.get("symbol") else None)})
     cu = b.copper()
     copper = [{"net": n, "layer": L, "poly": _poly(g, 0.01)} for (n, L), g in sorted(cu.items()) if g is not None]
@@ -388,20 +389,25 @@ def launch(out_dir: str) -> Optional[str]:
     import subprocess
     import urllib.request
     f = Path(out_dir) / "viewer.json"
+    here = Path(__file__).resolve().parent              # (the harness's code: a viewer started on older code is
+    code = max(q.stat().st_mtime for q in [*here.glob("*.py"), PAGE])  # replaced, not reused)
     try:
-        url = json.loads(f.read_text())["url"]
-        urllib.request.urlopen(url, timeout=1)
-        return url
+        v = json.loads(f.read_text())
+        if v.get("code") == code:
+            urllib.request.urlopen(v["url"], timeout=1)
+            return v["url"]
+        if v.get("pid"):
+            os.kill(v["pid"], 15)
     except Exception:
         pass
     with socket.socket() as s:                           # (a free port, so the address is known before it starts)
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     url = f"http://127.0.0.1:{port}/"
-    subprocess.Popen([sys.executable, "-m", "pcb_cli", "view", str(Path(out_dir).resolve()), "--port", str(port)],
-                     cwd=os.path.dirname(os.path.abspath(__file__)), start_new_session=True,
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    f.write_text(json.dumps({"url": url}))
+    pr = subprocess.Popen([sys.executable, "-m", "pcb_cli", "view", str(Path(out_dir).resolve()), "--port", str(port)],
+                          cwd=os.path.dirname(os.path.abspath(__file__)), start_new_session=True,
+                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    f.write_text(json.dumps({"url": url, "pid": pr.pid, "code": code}))
     return url
 
 

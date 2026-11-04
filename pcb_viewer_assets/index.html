@@ -150,7 +150,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .loupe svg { width: 100%; height: 100%; }
 .loupe .lz { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font: 500 10px var(--mono); color: var(--text2); background: rgba(255,255,255,.85); padding: 2px 7px; }
 #parts { display: none; } #parts.on { display: grid; grid-template-columns: 220px 1fr; grid-template-rows: 1fr 60px; }
-.plist { grid-row: 1 / 3; overflow: auto; padding: 48px 0 14px; border-right: 1px solid var(--line); background: rgba(255,255,255,.75); z-index: 2; }
+.plist { grid-row: 1 / 3; overflow: auto; padding: 0 0 14px; margin-top: 48px; border-top: 1px solid var(--line2); border-right: 1px solid var(--line); background: rgba(255,255,255,.75); z-index: 2; }
 .plist .pi { padding: 9px 16px; cursor: pointer; color: var(--text); border-bottom: 1px solid var(--line2); }
 .plist .pi:hover { background: var(--tint); } .plist .pi.on { background: var(--tint); box-shadow: inset 3px 0 0 var(--ink); }
 .plist .pi b { font: 600 13px var(--mono); } .plist .pi span { display: block; font-size: 11px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -594,8 +594,15 @@ function drawPartList() {
   const comps = B.comps.filter(c => c.pads.length).slice().sort((a, b) => (!!b.symbol - !!a.symbol) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
   if (!curPart) curPart = (comps.find(c => c.symbol) || comps[0] || {}).ref;
   for (const c of comps) { const [cls, txt] = partStatus(c), d = document.createElement("div"); d.className = "pi" + (c.ref === curPart ? " on" : "");
-    d.innerHTML = `<i class="${cls}">${esc(txt)}</i><b>${esc(c.ref)}</b><span>${esc(c.symbol ? c.symbol.name.split(":")[1] : c.value || c.fp.split(":")[1])}</span>`;
+    d.innerHTML = `<i class="${cls}">${esc(txt)}</i><b>${esc(c.ref)}</b><span>${esc(c.value || (c.symbol ? c.symbol.name.split(":")[1] : c.fp.split(":")[1]))}</span>`;
     d.onclick = () => { curPart = c.ref; drawParts(); }; box.appendChild(d); }
+}
+// a card's text trimmed to the room it has (an ellipsis, never over the card's edge or the next text)
+function fitText(t, w) {
+  if (!t || !t.getComputedTextLength || w <= 0) return t;
+  let s = t.textContent; if (t.getComputedTextLength() <= w) return t;
+  while (s.length > 1 && t.getComputedTextLength() > w) { s = s.slice(0, -1); t.textContent = s.trimEnd() + "…"; }
+  return t;
 }
 function drawParts() {
   if (!B || B.error) return; drawPartList();
@@ -614,12 +621,16 @@ function drawParts() {
   const gp = el("pattern", { id: "paper", width: 16, height: 16, patternUnits: "userSpaceOnUse" }, defs);
   el("rect", { width: 16, height: 16, fill: "#f4f1e9" }, gp); el("path", { d: "M16 0H0V16", fill: "none", stroke: "rgba(120,100,60,.08)", "stroke-width": 1 }, gp);
   el("rect", { x: L.x, y: L.y, width: L.w, height: L.h, rx: 14, fill: "url(#paper)", filter: "url(#cardsh)" }, svg);
-  el("text", { x: L.x + 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 2 }, svg)
-    .textContent = ("SYMBOL · " + (c.symbol ? c.symbol.pins.length + " PINS" : "NONE")).toUpperCase();
-  el("text", { x: L.x + L.w - 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 1.5, "text-anchor": "end" }, svg)
-    .textContent = c.symbol ? "KICAD · " + c.symbol.name.split(":")[0].toUpperCase() : "";
-  el("text", { x: L.x + 22, y: L.y + 62, fill: "#1d1b17", "font-size": 24, "font-family": "IBM Plex Sans", "font-weight": 500, "letter-spacing": -.4 }, svg).textContent = c.ref + " · " + (c.value || "");
-  if (c.symbol && c.symbol.description) el("text", { x: L.x + 22, y: L.y + 82, fill: "#6d685d", "font-size": 12, "font-family": "IBM Plex Sans" }, svg).textContent = c.symbol.description;
+  const hl = el("text", { x: L.x + 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 2 }, svg);
+  hl.textContent = ("SYMBOL · " + (c.symbol ? c.symbol.pins.length + " PINS" : "NONE")).toUpperCase();
+  const hr = el("text", { x: L.x + L.w - 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 1.5, "text-anchor": "end" }, svg);
+  hr.textContent = c.symbol ? "KICAD · " + c.symbol.name.split(":")[0].toUpperCase() : "";
+  fitText(hl, L.w - 44);
+  if (hr.textContent && hl.getComputedTextLength() + hr.getComputedTextLength() + 16 > L.w - 44) hr.remove();   // (no room: the library tag gives way)
+  const ti = el("text", { x: L.x + 22, y: L.y + 62, fill: "#1d1b17", "font-size": 24, "font-family": "IBM Plex Sans", "font-weight": 500, "letter-spacing": -.4 }, svg);
+  ti.textContent = c.ref + " · " + (c.value || ""); fitText(ti, L.w - 44);
+  if (c.symbol && c.symbol.description) { const t = el("text", { x: L.x + 22, y: L.y + 82, fill: "#6d685d", "font-size": 12, "font-family": "IBM Plex Sans" }, svg);
+    t.textContent = c.symbol.description; fitText(t, L.w - 44); }
   // the dark card: the land pattern
   el("rect", { x: Rt.x, y: Rt.y, width: Rt.w, height: Rt.h, rx: 14, fill: "#0c1220", stroke: "rgba(255,255,255,.08)", filter: "url(#cardsh)" }, svg);
   el("text", { x: Rt.x + 22, y: Rt.y + 30, fill: "#7b8499", "font-size": 10.5, "font-family": FONT, "letter-spacing": 2 }, svg).textContent = "LAND · " + partPins(c).pads.length + " PADS";
@@ -631,23 +642,45 @@ function drawParts() {
     const xs = [], ys = [];
     for (const p of c.symbol.pins) { xs.push(p.at[0]); ys.push(p.at[1]); }
     for (const r of c.symbol.body) { xs.push(r[0], r[2]); ys.push(r[1], r[3]); }
+    for (const g of c.symbol.draw || []) for (const q of g.pts || [g.a, g.b, g.s, g.m, g.e].filter(Boolean)) { xs.push(q[0]); ys.push(q[1]); }
     const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
     const area = { x: L.x + 90, y: L.y + 120, w: L.w - 180, h: L.h - 160 }, k = Math.min(area.w / Math.max(x1 - x0, 1), area.h / Math.max(y1 - y0, 1), 16);
     const ox = area.x + (area.w - (x1 - x0) * k) / 2, oy = area.y + (area.h - (y1 - y0) * k) / 2;
     const SX = (x) => ox + (x - x0) * k, SY = (y) => oy + (y1 - y) * k;
-    for (const r of c.symbol.body) el("rect", { x: SX(Math.min(r[0], r[2])), y: SY(Math.max(r[1], r[3])), width: Math.abs(r[2] - r[0]) * k, height: Math.abs(r[3] - r[1]) * k, fill: "#fbf3dc", stroke: "#9a5b2e", "stroke-width": 1.6, rx: 2 }, svg);
+    // KiCad's own drawing of the symbol: its lines, boxes, circles and arcs (filled as KiCad fills them)
+    const ink = "#9a5b2e", paint = (f) => f === "outline" ? ink : f === "background" ? "#fbf3dc" : "none";
+    const sw = Math.max(1.4, Math.min(2.4, k * 0.16));
+    for (const g of c.symbol.draw || []) {
+      if (g.t === "poly") el("polyline", { points: g.pts.map(q => SX(q[0]) + "," + SY(q[1])).join(" "), fill: paint(g.fill), stroke: ink, "stroke-width": sw, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+      else if (g.t === "rect") el("rect", { x: SX(Math.min(g.a[0], g.b[0])), y: SY(Math.max(g.a[1], g.b[1])), width: Math.abs(g.b[0] - g.a[0]) * k, height: Math.abs(g.b[1] - g.a[1]) * k, fill: paint(g.fill), stroke: ink, "stroke-width": sw }, svg);
+      else if (g.t === "circle") el("circle", { cx: SX(g.c[0]), cy: SY(g.c[1]), r: g.r * k, fill: paint(g.fill), stroke: ink, "stroke-width": sw }, svg);
+      else if (g.t === "arc") {                          // (through three points: the circle they lie on)
+        const [ax, ay] = [SX(g.s[0]), SY(g.s[1])], [bx, by] = [SX(g.m[0]), SY(g.m[1])], [cx, cy] = [SX(g.e[0]), SY(g.e[1])];
+        const d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
+        if (Math.abs(d) < 1e-9) { el("line", { x1: ax, y1: ay, x2: cx, y2: cy, stroke: ink, "stroke-width": sw }, svg); continue; }
+        const ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d;
+        const uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d;
+        const r = Math.hypot(ax - ux, ay - uy), side = (px, py) => (cx - ax) * (py - ay) - (cy - ay) * (px - ax);
+        const big = side(bx, by) * side(ux, uy) > 0 ? 1 : 0;           // (the mid point on the centre's side: > 180°)
+        const sweep = side(bx, by) < 0 ? 1 : 0;                         // (A, B, C clockwise on the screen)
+        el("path", { d: `M${ax},${ay} A${r},${r} 0 ${big} ${sweep} ${cx},${cy}`, fill: "none", stroke: ink, "stroke-width": sw }, svg);
+      }
+    }
+    if (!(c.symbol.draw || []).length)
+      for (const r of c.symbol.body) el("rect", { x: SX(Math.min(r[0], r[2])), y: SY(Math.max(r[1], r[3])), width: Math.abs(r[2] - r[0]) * k, height: Math.abs(r[3] - r[1]) * k, fill: "#fbf3dc", stroke: "#9a5b2e", "stroke-width": 1.6, rx: 2 }, svg);
     for (const p of c.symbol.pins) {
       const a = p.rot * Math.PI / 180, ex = p.at[0] + Math.cos(a) * p.length, ey = p.at[1] + Math.sin(a) * p.length;
       const g = el("g", { "data-pin": p.num, style: "cursor:pointer" }, svg);
       el("line", { x1: SX(p.at[0]), y1: SY(p.at[1]), x2: SX(ex), y2: SY(ey), stroke: "#7a4a26", "stroke-width": 1.3 }, g);
       el("circle", { cx: SX(p.at[0]), cy: SY(p.at[1]), r: 3, fill: "#f3f0e8", stroke: "#7a4a26", "stroke-width": 1.2 }, g);
       const horiz = Math.abs(Math.cos(a)) > .5, inside = { x: SX(ex) + Math.cos(a) * 6, y: SY(ey) - Math.sin(a) * 6 };
+      const showName = !c.symbol.hide_names && p.key && p.key !== "~", showNum = true;   // (names as KiCad shows them; numbers always: they are what is checked)
       if (horiz) {
-        el("text", { x: inside.x, y: inside.y + 4, fill: "#2a2620", "font-size": 11.5, "font-family": FONT, "text-anchor": Math.cos(a) > 0 ? "start" : "end" }, g).textContent = p.key;
-        el("text", { x: (SX(p.at[0]) + SX(ex)) / 2, y: SY(p.at[1]) - 4, fill: "#8a8578", "font-size": 9.5, "font-family": FONT, "text-anchor": "middle" }, g).textContent = p.num;
+        if (showName) el("text", { x: inside.x, y: inside.y + 4, fill: "#2a2620", "font-size": 11.5, "font-family": FONT, "text-anchor": Math.cos(a) > 0 ? "start" : "end" }, g).textContent = p.key;
+        if (showNum) el("text", { x: (SX(p.at[0]) + SX(ex)) / 2, y: SY(p.at[1]) - 4, fill: "#8a8578", "font-size": 9.5, "font-family": FONT, "text-anchor": "middle" }, g).textContent = p.num;
       } else {
-        const t = el("text", { x: inside.x + 4, y: inside.y, fill: "#2a2620", "font-size": 11.5, "font-family": FONT, transform: `rotate(-90 ${inside.x + 4} ${inside.y})`, "text-anchor": Math.sin(a) > 0 ? "end" : "start" }, g); t.textContent = p.key;
-        el("text", { x: SX(p.at[0]) - 6, y: (SY(p.at[1]) + SY(ey)) / 2, fill: "#8a8578", "font-size": 9.5, "font-family": FONT, "text-anchor": "end" }, g).textContent = p.num;
+        if (showName) el("text", { x: inside.x + 4, y: inside.y, fill: "#2a2620", "font-size": 11.5, "font-family": FONT, transform: `rotate(-90 ${inside.x + 4} ${inside.y})`, "text-anchor": Math.sin(a) > 0 ? "end" : "start" }, g).textContent = p.key;
+        if (showNum) el("text", { x: SX(p.at[0]) - 6, y: (SY(p.at[1]) + SY(ey)) / 2, fill: "#8a8578", "font-size": 9.5, "font-family": FONT, "text-anchor": "end" }, g).textContent = p.num;
       }
       pinXY[p.num] = pinXY[p.num] || [SX(p.at[0]), SY(p.at[1]), p];
       hover(g, `<b>pin ${esc(p.num)}</b> · ${esc(p.key)} <span style="color:#a3a9b3">${esc(p.type.replace("_", " "))}</span>`);
@@ -694,15 +727,15 @@ const DS = {};
 async function annotateDatasheet(c, pinXY, L) {
   const svg = $("#psvg"), ref = c.ref;
   const cap = el("text", { x: L.x + 22, y: L.y + L.h - 22, fill: "#8a8578", "font-size": 11, "font-family": FONT, "letter-spacing": 1 }, svg);
-  cap.textContent = "DATASHEET · READING THE PIN TABLE…";
+  cap.textContent = "DATASHEET · READING THE PIN TABLE…"; fitText(cap, L.w - 44);
   const d = DS[ref] || (DS[ref] = await getJ("/api/datasheet?ref=" + encodeURIComponent(ref)));
   if (curPart !== ref || !cap.isConnected) return;
-  if (!d || d.error) { cap.textContent = "DATASHEET · NOT READ" + (d && d.error ? " (" + d.error.slice(0, 40) + ")" : ""); return; }
-  if (d.page == null) { cap.textContent = "DATASHEET · PIN TABLE NOT FOUND · CHECK BY HAND"; cap.setAttribute("fill", "#a5621a");
+  if (!d || d.error) { cap.textContent = "DATASHEET · NOT READ" + (d && d.error ? " (" + d.error.slice(0, 40) + ")" : ""); fitText(cap, L.w - 44); return; }
+  if (d.page == null) { cap.textContent = "DATASHEET · PIN TABLE NOT FOUND · CHECK BY HAND"; cap.setAttribute("fill", "#a5621a"); fitText(cap, L.w - 44 - 90);
     const ln = el("a", { href: d.datasheet, target: "_blank" }, svg);
     el("text", { x: L.x + L.w - 22, y: L.y + L.h - 22, fill: "#9a7a3a", "font-size": 11, "font-family": FONT, "text-anchor": "end", style: "cursor:pointer" }, ln).textContent = "open PDF ↗";
     return; }
-  cap.textContent = `DATASHEET · ${d.agree} / ${d.total} PINS AGREE · PAGE ${d.page}`;
+  cap.textContent = `DATASHEET · ${d.agree} / ${d.total} PINS AGREE · PAGE ${d.page}`; fitText(cap, L.w - 44 - 90);
   cap.setAttribute("fill", d.agree === d.total ? "#8a6a2c" : "#b2412f");
   const link = el("a", { href: d.datasheet, target: "_blank" }, svg);
   el("text", { x: L.x + L.w - 22, y: L.y + L.h - 22, fill: "#9a7a3a", "font-size": 11, "font-family": FONT, "text-anchor": "end", style: "cursor:pointer" }, link).textContent = "open PDF ↗";

@@ -455,6 +455,19 @@ class Board:
             if not value:
                 value = sym["value"]
         pads = footprint(fp)["pads"]
+        if sym is None:                                  # (no symbol given: KiCad's generic one for a passive or a
+            try:                                         #  connector - Device:R, Device:C ... - when its pins are the
+                import kicad_sch                         #  pads exactly; a chip needs its own: symbol=)
+                import parts
+                import pcb_view
+                if pcb_view.kind_of(ref, fp) == "ic":
+                    raise LookupError("a chip: no generic symbol")
+                name = kicad_sch.symbol_for(ref, {"fp": fp, "pads": pads, "value": value, "mpn": mpn, "note": note})
+                cand = parts.symbol(name)
+                if {q["num"] for q in cand["pins"]} == {n for n in pads if n}:
+                    sym = dict(cand, auto=True)
+            except Exception:                            # (offline, or no such symbol: the part goes without one)
+                sym = None
         if min_drill is None and self.rules is not None:
             import fab
             min_drill = (fab.RULES[self.rules] if isinstance(self.rules, str) else self.rules).get("pth_drill")
@@ -2063,7 +2076,7 @@ def _decap_target(c: dict, ref: str, num: str):
     if re.match(r"^(J|P|CN|CON)\d", ref, re.I):
         return None
     sym = c.get("symbol")
-    if sym:
+    if sym and not sym.get("auto"):                      # (a generic symbol says nothing of a chip's supply pins)
         return any(q["num"] == num and q["type"] == "power_in" for q in sym["pins"])
     return True
 
