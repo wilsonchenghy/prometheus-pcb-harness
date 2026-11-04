@@ -247,7 +247,15 @@ def main(argv=None) -> int:
     import critic
     spec = critic.load_spec(a.spec) if a.spec else {}
     os.makedirs(a.out, exist_ok=True)
-    b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
+    try:
+        b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
+    except pcb.FootprintNotFound as e:                   # (a mistyped footprint: one clear line, not a traceback)
+        print(f"error: {e}", file=sys.stderr)
+        if a.json:
+            sys.stdout = real_stdout
+            print(json.dumps({"clean": False, "error": "footprint", "footprint": e.name,
+                              "suggestions": e.suggestions, "text": str(e)}, indent=1))
+        return 2
     for note in getattr(b, "import_notes", []):
         print("note:", note)
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers  [stage: {a.stage}]")

@@ -79,6 +79,54 @@ def _fp_file(name: str) -> Path:
     return CACHE / "kicad_fp" / f"{fp}.kicad_mod"
 
 
+class FootprintNotFound(ValueError):
+    """a footprint name KiCad's library does not have; ``suggestions`` the closest names it does"""
+
+    def __init__(self, name: str, suggestions: Sequence[str] = ()):
+        self.name, self.suggestions = name, list(suggestions)
+        lib = name.split(":")[0]
+        hint = f"; did you mean: {', '.join(lib + ':' + s_ for s_ in self.suggestions)}" if self.suggestions else ""
+        super().__init__(f"footprint {name} is not in KiCad's library{hint} (the library: "
+                         f"https://gitlab.com/kicad/libraries/kicad-footprints/-/tree/master/{lib}.pretty)")
+
+
+def _close_footprints(lib: str, fp: str, n: int = 5) -> List[str]:
+    """the names in KiCad's footprint library ``lib`` closest to ``fp`` (its file list, fetched once and cached)"""
+    import difflib
+    import json
+    import urllib.parse
+    import urllib.request
+    from vendor_parts import CACHE
+    cache = CACHE / "kicad_fp_lists" / f"{lib}.json"
+    names = None
+    if cache.exists():
+        names = json.loads(cache.read_text())
+    else:
+        try:
+            names, page = [], 1
+            while page < 30:
+                q = urllib.parse.urlencode({"path": f"{lib}.pretty", "per_page": 100, "page": page})
+                url = f"https://gitlab.com/api/v4/projects/kicad%2Flibraries%2Fkicad-footprints/repository/tree?{q}"
+                with urllib.request.urlopen(url, timeout=30) as r:
+                    got = json.loads(r.read())
+                names += [g["name"][:-10] for g in got if g["name"].endswith(".kicad_mod")]
+                if len(got) < 100:
+                    break
+                page += 1
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(names))
+        except Exception:                                # (offline: no suggestions, the error still names it)
+            return []
+    if not names:
+        return []
+    low = {n_.lower(): n_ for n_ in names}
+    hits = difflib.get_close_matches(fp.lower(), list(low), n=n, cutoff=0.5)
+    key = re.split(r"[_\-]", fp)                         # (and the names sharing its maker / series word)
+    more = [n_ for n_ in names if any(k and len(k) > 3 and k.lower() in n_.lower() for k in key[1:3])]
+    out = list(dict.fromkeys([low[h] for h in hits] + more))
+    return out[:n]
+
+
 def _download_fp(name: str) -> Path:
     """fetch footprint "Lib:Name" from KiCad's library into the cache (the project library needs no fetch)"""
     lib, fp = name.split(":")
@@ -94,6 +142,8 @@ def _download_fp(name: str) -> Path:
                     data = r.read()
                 break
             except urllib.error.HTTPError as e:
+                if e.code == 404:                        # (a name the library does not have: say so, with the
+                    raise FootprintNotFound(name, _close_footprints(lib, fp)) from None   # nearest it does)
                 if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
                     raise
                 time.sleep(float(e.headers.get("Retry-After") or 0) or 1.5 * 2 ** attempt)
@@ -530,6 +580,7 @@ class Board:
                              [Point(v["at"]).buffer(v["drill"] / 2 + self.hole_gap + via[0] / 2, 12) for v in self.vias]
                              or [Point(0, 0).buffer(0)])
         inside = self.outline.buffer(-(via[1] / 2 + 0.3))
+        edge_in = self.outline.buffer(-(self.edge + 0.02))   # (the stub as well as its via keeps the edge gap)
         bare = unary_union([Point(x, y).buffer(d / 2, 12) for x, y, d in self.npth()] +
                            [Point(x, y).buffer(d / 2, 12) for x, y, d in self.holes] or [Point(0, 0).buffer(0)])
         kz = unary_union([__import__("shapely.geometry", fromlist=["Polygon"]).Polygon(k["poly"])
@@ -561,7 +612,8 @@ class Board:
                     if any(disk.intersects(others[l]) for l in self.layers):
                         continue
                     trk = LineString([(p0.x, p0.y), (q.x, q.y)]).buffer(w_ / 2 + self.clear + 0.04, 8)
-                    if trk.intersects(others[L]) or trk.buffer(HOLE_CLEAR - self.clear).intersects(bare):
+                    if trk.intersects(others[L]) or trk.buffer(HOLE_CLEAR - self.clear).intersects(bare) or \
+                            not edge_in.contains(LineString([(p0.x, p0.y), (q.x, q.y)]).buffer(w_ / 2, 8)):
                         continue
                     best = q
                     break
@@ -2014,7 +2066,12 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
                   if pa and pb and pnet.get((a_, pa)) and pnet.get((a_, pa)) == pnet.get((b_, pb))]
         shared.sort(key=lambda q: pnet.get((a_, q[0])) in poured)
         pa, pb = shared[0] if shared else (None, None)
-        NETS[f"~near {a_} {b_}"] = {"pins": [(a_, pa), (b_, pb)], "amps": 5.0, "limit": max(0.5, dmax - 0.5)}
+        def _half(ref, num):                             # (the pad's smaller half-size: centre to its edge)
+            ps = board.comps[ref]["pads"].get(num) or []
+            return min(min(p_["size"]) for p_ in ps) / 2 if ps else 0.0
+        # the requirement is pad to pad; the spring measures pin centres: the pads' half-sizes are allowed for
+        lim_ = dmax + _half(a_, pa) + _half(b_, pb) - 0.15
+        NETS[f"~near {a_} {b_}"] = {"pins": [(a_, pa), (b_, pb)], "amps": 5.0, "limit": max(0.5, lim_)}
     wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in NETS.items()}
     nets_of: Dict[str, List[str]] = {}
     for n, d in NETS.items():
@@ -2317,8 +2374,11 @@ def near_misses(board: Board) -> List[str]:
 def _one_try(board: Board, move, k: int, gap: float, route_kw, router: str, kw) -> tuple:
     """one placement and routing of ``place_and_route``: (score, problems, placement, tracks, vias, fan, line)"""
     left = autoplace(board, move=move, gap=gap + 0.25 * min(k, 3), seed=k, **kw)   # (later tries: other seeds at
-    probs = [f"{r}: no room to place it" for r in left] + route_board(board, router, **(route_kw or {}))  # the same
-    probs += [p for p in board.check() if p not in probs]                         # room, not ever more than fits)
+    if left:                                             # the same room, not ever more than fits; a part that
+        probs = [f"{r}: no room to place it (a bigger board, smaller parts, or both sides)" for r in left]
+    else:                                                # found no room is not routed round: said at once)
+        probs = route_board(board, router, **(route_kw or {}))
+        probs += [p for p in board.check() if p not in probs]
     miss = near_misses(board)
     score = severity(probs) + 50 * len(left) + 5 * len(miss)   # (a part left off the board is worse than any miss;
     # a short worse than a slip; a requirement's "within d mm" missed counts)
@@ -2398,8 +2458,7 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         board.comps[r]["at"], board.comps[r]["rot"] = at, rot
         board.comps[r].pop("unplaced", None)
     board.tracks, board.vias, board._fan = best[3], best[4], best[5]
-    if best[8]:
-        board.router_used = best[8]
+    board.router_used = best[8] or "not routed: parts without room"
     board.__dict__.pop("_pads_memo", None)
     board.__dict__.pop("_cu_memo", None)
     return best[1]
