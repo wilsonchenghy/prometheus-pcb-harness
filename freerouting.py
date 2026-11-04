@@ -63,7 +63,7 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
     skip = set(skip_nets)
     L_ = list(board.layers)
     lines = [f"(pcb {_q(os.path.basename(path))}",
-             '  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "pcb-harness") (host_version "1"))',
+             '  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "Zeus") (host_version "1"))',
              "  (resolution um 10)", "  (unit um)", "  (structure"]
     for i, L in enumerate(L_):
         lines.append(f"    (layer {_layer_name(L)} (type signal) (property (index {i})))")
@@ -248,10 +248,15 @@ def run(dsn: str, ses: str, passes: int = 100, timeout: int = 1800, threads: int
         raise RuntimeError("FreeRouting jar not found: set FREEROUTING_JAR or put it in ~/.cache/prometheus/freerouting")
     cmd = ["java", "-Djava.awt.headless=true", "-jar", jar, "-de", dsn, "-do", ses, "-mp", str(passes),
            "-mt", str(threads), "--gui.enabled=false"]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    if not os.path.exists(ses):
-        raise RuntimeError("FreeRouting wrote no session:\n" + (r.stdout + r.stderr)[-3000:])
-    return r.stdout + r.stderr
+    log = ""
+    for attempt in range(3):                            # (run alongside other copies, FreeRouting now and then
+        if os.path.exists(ses):                         # routes and exits leaving its session empty: a run that
+            os.remove(ses)                              # gives no session is run again)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        log += r.stdout + r.stderr
+        if os.path.exists(ses) and "(session" in open(ses, errors="replace").read(4096):
+            return log
+    raise RuntimeError("FreeRouting wrote no session (3 runs):\n" + log[-3000:])
 
 
 def route(board, passes: int = 100, finish: bool = True, keep: Optional[str] = None, **kw) -> List[str]:
@@ -296,7 +301,9 @@ def _repair(board, fr_t, fr_v, probs, kw):
         for msg in board.check():
             m = re.match(r"\S+\.Cu: (.+?) and (.+?) (short|[\d.]+ mm apart)", msg) or \
                 re.match(r"via (\S+) and via (\S+) drills", msg) or \
-                re.match(r"via (\S+) and (hole) drills", msg)            # (FreeRouting has no hole-to-hole rule)
+                re.match(r"via (\S+) and (hole) drills", msg) or \
+                re.match(r"track (\S+) near .* comes within .* of the (board) edge", msg)   # (no hole-to-hole
+            # rule in FreeRouting, and its edge clearance is not the house's)
             if m:
                 bad |= {n for n in (m.group(1), m.group(2)) if n in board.nets}
         is_fr = lambda t: (t["net"], t["layer"], tuple(map(tuple, t["pts"]))) in fr_t   # (by shape: a cached

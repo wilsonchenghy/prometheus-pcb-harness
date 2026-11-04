@@ -79,6 +79,54 @@ def _fp_file(name: str) -> Path:
     return CACHE / "kicad_fp" / f"{fp}.kicad_mod"
 
 
+class FootprintNotFound(ValueError):
+    """a footprint name KiCad's library does not have; ``suggestions`` the closest names it does"""
+
+    def __init__(self, name: str, suggestions: Sequence[str] = ()):
+        self.name, self.suggestions = name, list(suggestions)
+        lib = name.split(":")[0]
+        hint = f"; did you mean: {', '.join(lib + ':' + s_ for s_ in self.suggestions)}" if self.suggestions else ""
+        super().__init__(f"footprint {name} is not in KiCad's library{hint} (the library: "
+                         f"https://gitlab.com/kicad/libraries/kicad-footprints/-/tree/master/{lib}.pretty)")
+
+
+def _close_footprints(lib: str, fp: str, n: int = 5) -> List[str]:
+    """the names in KiCad's footprint library ``lib`` closest to ``fp`` (its file list, fetched once and cached)"""
+    import difflib
+    import json
+    import urllib.parse
+    import urllib.request
+    from vendor_parts import CACHE
+    cache = CACHE / "kicad_fp_lists" / f"{lib}.json"
+    names = None
+    if cache.exists():
+        names = json.loads(cache.read_text())
+    else:
+        try:
+            names, page = [], 1
+            while page < 30:
+                q = urllib.parse.urlencode({"path": f"{lib}.pretty", "per_page": 100, "page": page})
+                url = f"https://gitlab.com/api/v4/projects/kicad%2Flibraries%2Fkicad-footprints/repository/tree?{q}"
+                with urllib.request.urlopen(url, timeout=30) as r:
+                    got = json.loads(r.read())
+                names += [g["name"][:-10] for g in got if g["name"].endswith(".kicad_mod")]
+                if len(got) < 100:
+                    break
+                page += 1
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(names))
+        except Exception:                                # (offline: no suggestions, the error still names it)
+            return []
+    if not names:
+        return []
+    low = {n_.lower(): n_ for n_ in names}
+    hits = difflib.get_close_matches(fp.lower(), list(low), n=n, cutoff=0.5)
+    key = re.split(r"[_\-]", fp)                         # (and the names sharing its maker / series word)
+    more = [n_ for n_ in names if any(k and len(k) > 3 and k.lower() in n_.lower() for k in key[1:3])]
+    out = list(dict.fromkeys([low[h] for h in hits] + more))
+    return out[:n]
+
+
 def _download_fp(name: str) -> Path:
     """fetch footprint "Lib:Name" from KiCad's library into the cache (the project library needs no fetch)"""
     lib, fp = name.split(":")
@@ -94,6 +142,8 @@ def _download_fp(name: str) -> Path:
                     data = r.read()
                 break
             except urllib.error.HTTPError as e:
+                if e.code == 404:                        # (a name the library does not have: say so, with the
+                    raise FootprintNotFound(name, _close_footprints(lib, fp)) from None   # nearest it does)
                 if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
                     raise
                 time.sleep(float(e.headers.get("Retry-After") or 0) or 1.5 * 2 ** attempt)
@@ -365,14 +415,27 @@ class Board:
     # declarations
     def place(self, ref: str, fp: str, at: Optional[Tuple[float, float]] = None, rot: float = 0.0, value: str = "", mpn: str = "",
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
-              overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None):
+              overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None,
+              symbol: Optional[str] = None):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
         KiCad 3D model path (vendor_parts.kicad; default: the one the footprint names) or ``body`` a build123d shape in
         the footprint frame for one KiCad lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
         pads go to B.Cu, its model hangs under the board. ``lcsc``: the LCSC / JLCPCB part number (C-number) for
         assembly and the cart (``fab``). ``min_drill``: the thermal vias in an exposed pad (a plated hole whose pad
         number also has SMD copper) drilled smaller than this are enlarged to it, keeping their copper ring (default:
-        the board's fab preset's plated-drill minimum; a part's pin holes are never changed: its leads must fit)"""
+        the board's fab preset's plated-drill minimum; a part's pin holes are never changed: its leads must fit).
+        ``symbol``: its KiCad symbol "Lib:Name" (``parts.symbol``): nets may then name its pins by name, the check
+        matches every pin to a pad and the critic runs an ERC on its pin types; with ``fp=None`` the symbol's own
+        footprint is used"""
+        sym = None
+        if symbol:
+            import parts
+            sym = parts.symbol(symbol)
+            fp = fp or sym["footprint"]
+            if not fp:
+                raise ValueError(f"{ref}: symbol {symbol} names no footprint: give one")
+            if not value:
+                value = sym["value"]
         pads = footprint(fp)["pads"]
         if min_drill is None and self.rules is not None:
             import fab
@@ -403,6 +466,8 @@ class Board:
                            "pads_key": f"{min_drill}" if min_drill else ""}    # (the pads differ from the footprint's)
         if at is None:                                   # (autoplace() puts it somewhere)
             self.comps[ref].update(at=(0.0, 0.0), unplaced=True)
+        if sym:
+            self.comps[ref]["symbol"] = sym
 
     def courtyard(self, ref: str):
         """a part's courtyard outline in board coordinates (flipped for a bottom-side part), or None"""
@@ -421,7 +486,16 @@ class Board:
         """a net: its pins (ref, pad number), the current it carries (sets how wide its copper must be) and its
         voltage (what its drop is measured against); ``width``: its track width when routed (default: as wide as
         its current needs, at least 0.2 mm)"""
-        self.nets[name] = {"pins": [(r, str(p)) for r, p in pins], "amps": amps, "volts": volts}
+        out = []
+        for r, p in pins:                                # (a pin by name, through its part's symbol: "AIN2" -> 15)
+            p, c = str(p), self.comps.get(r)
+            if c is not None and p not in c["pads"] and c.get("symbol"):
+                import parts
+                nums = parts.resolve(c, p)
+                out += [(r, n) for n in nums] if nums else [(r, p)]
+            else:
+                out.append((r, p))
+        self.nets[name] = {"pins": list(dict.fromkeys(out)), "amps": amps, "volts": volts}
         if width is not None:
             self.nets[name]["width"] = width
 
@@ -530,6 +604,7 @@ class Board:
                              [Point(v["at"]).buffer(v["drill"] / 2 + self.hole_gap + via[0] / 2, 12) for v in self.vias]
                              or [Point(0, 0).buffer(0)])
         inside = self.outline.buffer(-(via[1] / 2 + 0.3))
+        edge_in = self.outline.buffer(-(self.edge + 0.02))   # (the stub as well as its via keeps the edge gap)
         bare = unary_union([Point(x, y).buffer(d / 2, 12) for x, y, d in self.npth()] +
                            [Point(x, y).buffer(d / 2, 12) for x, y, d in self.holes] or [Point(0, 0).buffer(0)])
         kz = unary_union([__import__("shapely.geometry", fromlist=["Polygon"]).Polygon(k["poly"])
@@ -561,7 +636,8 @@ class Board:
                     if any(disk.intersects(others[l]) for l in self.layers):
                         continue
                     trk = LineString([(p0.x, p0.y), (q.x, q.y)]).buffer(w_ / 2 + self.clear + 0.04, 8)
-                    if trk.intersects(others[L]) or trk.buffer(HOLE_CLEAR - self.clear).intersects(bare):
+                    if trk.intersects(others[L]) or trk.buffer(HOLE_CLEAR - self.clear).intersects(bare) or \
+                            not edge_in.contains(LineString([(p0.x, p0.y), (q.x, q.y)]).buffer(w_ / 2, 8)):
                         continue
                     best = q
                     break
@@ -1361,6 +1437,9 @@ class Board:
                     continue                                 # top and bottom parts may overlap in plan
                 if cy[refs[i]].intersection(cy[refs[j]]).area > 0.05:
                     probs.append(f"courtyards of {refs[i]} and {refs[j]} overlap")
+        if any(c.get("symbol") for c in self.comps.values()):  # (every symbol pin has a pad, every pad a pin)
+            import parts
+            probs += parts.pin_check(self)
         return probs
 
     # outputs
@@ -1918,6 +1997,18 @@ def from_netlist(path: str, outline, name: Optional[str] = None, at: Optional[Di
     return b
 
 
+def _decap_target(c: dict, ref: str, num: str):
+    """a pin a decoupling capacitor belongs by: a chip's supply pin (a symbol's power input). A connector's pin is
+    None: it takes its turn in the deal (so the chip's pins get as many as before) but holds no capacitor; a
+    symbol's other pins are False, out of the deal"""
+    if re.match(r"^(J|P|CN|CON)\d", ref, re.I):
+        return None
+    sym = c.get("symbol")
+    if sym:
+        return any(q["num"] == num and q["type"] == "power_in" for q in sym["pins"])
+    return True
+
+
 def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1.0, seed: int = 0,
               effort: float = 1.0, rotations: Sequence[int] = (0, 90, 180, 270)) -> List[str]:
     """place parts for you: a short total of wire (each net's half-perimeter, ground and other poured nets weighted
@@ -1991,12 +2082,15 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
         if len(sup) != 1 or not any(n in poured for n in ns.values()):
             continue
         num, n = sup[0]
-        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many]
+        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many and _decap_target(board.comps[p_[0]], p_[0], p_[1])
+                   is not False]
         if not targets:
             continue
         k = deal.get(n, 0)
         deal[n] = k + 1
-        NETS[f"~decap {r}"] = {"pins": [(r, num), targets[k % len(targets)]], "amps": 5.0, "limit": 3.0}
+        tgt = targets[k % len(targets)]
+        if _decap_target(board.comps[tgt[0]], *tgt):    # (one dealt to a connector's pin is left free: the chip's
+            NETS[f"~decap {r}"] = {"pins": [(r, num), tgt], "amps": 5.0, "limit": 3.0}   # own stay as many)
     for r in sorted(mset):                               # a crystal held to its IC's oscillator pins (short, quiet
         if not re.match(r"^(Y|X)\d", r):                 # traces), its load capacitors following through their nets
             continue
@@ -2014,7 +2108,12 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
                   if pa and pb and pnet.get((a_, pa)) and pnet.get((a_, pa)) == pnet.get((b_, pb))]
         shared.sort(key=lambda q: pnet.get((a_, q[0])) in poured)
         pa, pb = shared[0] if shared else (None, None)
-        NETS[f"~near {a_} {b_}"] = {"pins": [(a_, pa), (b_, pb)], "amps": 5.0, "limit": max(0.5, dmax - 0.5)}
+        def _half(ref, num):                             # (the pad's smaller half-size: centre to its edge)
+            ps = board.comps[ref]["pads"].get(num) or []
+            return min(min(p_["size"]) for p_ in ps) / 2 if ps else 0.0
+        # the requirement is pad to pad; the spring measures pin centres: the pads' half-sizes are allowed for
+        lim_ = dmax + _half(a_, pa) + _half(b_, pb) - 0.15
+        NETS[f"~near {a_} {b_}"] = {"pins": [(a_, pa), (b_, pb)], "amps": 5.0, "limit": max(0.5, lim_)}
     wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in NETS.items()}
     nets_of: Dict[str, List[str]] = {}
     for n, d in NETS.items():
@@ -2314,11 +2413,28 @@ def near_misses(board: Board) -> List[str]:
     return out
 
 
+PROGRESS = None    # a callable given {"kind": "tries", ...} and {"kind": "try", ...} as place_and_route goes
+
+
+def _progress(**ev):
+    if PROGRESS is not None:
+        try:
+            PROGRESS(ev)
+        except Exception:                                # (a viewer's trouble never stops a run)
+            pass
+
+
 def _one_try(board: Board, move, k: int, gap: float, route_kw, router: str, kw) -> tuple:
-    """one placement and routing of ``place_and_route``: (score, problems, placement, tracks, vias, fan, line)"""
+    """one placement and routing of ``place_and_route``: (score, problems, placement, tracks, vias, fan, line,
+    clean, router, seconds)"""
+    import time as _t
+    t0_ = _t.perf_counter()
     left = autoplace(board, move=move, gap=gap + 0.25 * min(k, 3), seed=k, **kw)   # (later tries: other seeds at
-    probs = [f"{r}: no room to place it" for r in left] + route_board(board, router, **(route_kw or {}))  # the same
-    probs += [p for p in board.check() if p not in probs]                         # room, not ever more than fits)
+    if left:                                             # the same room, not ever more than fits; a part that
+        probs = [f"{r}: no room to place it (a bigger board, smaller parts, or both sides)" for r in left]
+    else:                                                # found no room is not routed round: said at once)
+        probs = route_board(board, router, **(route_kw or {}))
+        probs += [p for p in board.check() if p not in probs]
     miss = near_misses(board)
     score = severity(probs) + 50 * len(left) + 5 * len(miss)   # (a part left off the board is worse than any miss;
     # a short worse than a slip; a requirement's "within d mm" missed counts)
@@ -2327,7 +2443,7 @@ def _one_try(board: Board, move, k: int, gap: float, route_kw, router: str, kw) 
                      ([f"no room for {', '.join(left)}"] if left else [])))
     return (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
             list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())), line,
-            not probs and not miss, getattr(board, "router_used", None))
+            not probs and not miss, getattr(board, "router_used", None), round(_t.perf_counter() - t0_, 2))
 
 
 def _try_worker(blob: bytes, move, k, gap, route_kw, router, kw) -> tuple:
@@ -2361,9 +2477,14 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         workers = int(os.environ.get("PCB_WORKERS") or min(4, os.cpu_count() or 1))
     workers = max(1, min(workers, tries))
     best, results = None, {}
+    _progress(kind="tries", tries=tries, workers=workers)
+
+    def _done(k):
+        print(results[k][6], flush=True)
+        _progress(kind="try", k=k, seconds=results[k][9], clean=results[k][7], line=results[k][6])
     board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (the first try alone: most
     results[0] = _one_try(board, move, 0, gap, route_kw, router, kw)              # boards are clean on it)
-    print(results[0][6], flush=True)
+    _done(0)
     if results[0][7] or tries == 1:
         workers = 0
     if workers > 1:
@@ -2372,20 +2493,24 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
         board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)
         blob = pickle.dumps(board)
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as ex:
-            for k0 in range(1, tries, workers):
-                futs = {k: ex.submit(_try_worker, blob, move, k, gap, route_kw, router, kw)
-                        for k in range(k0, min(tries, k0 + workers))}
+        for k0 in range(1, tries, workers):              # (each try in a process of its own, forked afresh: a
+            wave = range(k0, min(tries, k0 + workers))  # pool's worker carried its memos from one try into the
+            exs = {k: ProcessPoolExecutor(max_workers=1, mp_context=ctx) for k in wave}   # next, so which try
+            try:                                         # ran where changed the boards)
+                futs = {k: exs[k].submit(_try_worker, blob, move, k, gap, route_kw, router, kw) for k in wave}
                 for k in sorted(futs):
                     results[k] = futs[k].result()
-                    print(results[k][6], flush=True)
-                if any(results[k][7] for k in futs):
-                    break
+                    _done(k)
+            finally:
+                for ex in exs.values():
+                    ex.shutdown(wait=True)
+            if any(results[k][7] for k in wave):
+                break
     elif workers == 1:
         for k in range(1, tries):
             board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try afresh)
             results[k] = _one_try(board, move, k, gap, route_kw, router, kw)
-            print(results[k][6], flush=True)
+            _done(k)
             if results[k][7]:
                 break
     for k in sorted(results):                            # (the first clean try, else the fewest problems)
@@ -2398,8 +2523,7 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         board.comps[r]["at"], board.comps[r]["rot"] = at, rot
         board.comps[r].pop("unplaced", None)
     board.tracks, board.vias, board._fan = best[3], best[4], best[5]
-    if best[8]:
-        board.router_used = best[8]
+    board.router_used = best[8] or "not routed: parts without room"
     board.__dict__.pop("_pads_memo", None)
     board.__dict__.pop("_cu_memo", None)
     return best[1]
