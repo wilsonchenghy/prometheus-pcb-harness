@@ -1163,3 +1163,28 @@ def test_progress_estimate_counts_the_tries_left(tmp_path):
     assert abs(p.eta() - (2 * 10.0 + 2.0)) < 1e-6          # (5 tries left, 4 at a time: two batches, then export)
     p.event({"kind": "try", "k": 1, "seconds": 10.0, "clean": True, "line": "try 2"})
     assert p.d["tries"] == 2 and p.eta() == 2.0
+
+
+def test_parts_symbol_pin_names_pin_check_and_erc():
+    """a part placed with its KiCad symbol: nets name its pins by name (all of a name's pads), the check matches
+    pins to pads both ways, and the ERC finds an open input, an unconnected power pin and two outputs tied"""
+    import parts
+    import pcb
+    s = parts.symbol("Driver_Motor:DRV8833PWP")
+    assert {p["key"]: p["num"] for p in s["pins"]}["AIN2"] == "15" and s["datasheet"].endswith(".pdf")
+    b = pcb.Board("ps", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("U1", None, (15, 10), 0, symbol="Driver_Motor:DRV8833PWP")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (4, 10), 0)
+    b.net("GND", [("U1", "GND"), ("J1", "1")])
+    b.net("VM", [("U1", "VM"), ("J1", "2")])
+    b.net("AIN2", [("U1", "AIN2"), ("J1", "3")])
+    b.net("OUT", [("U1", "AOUT1"), ("U1", "BOUT1")])
+    assert sorted(b.nets["GND"]["pins"]) == [("J1", "1"), ("U1", "13"), ("U1", "17")]
+    assert parts.pin_check(b) == []
+    text = [n["text"] for n in parts.erc(b) if n["severity"] == "error"]
+    assert any("U1.16 (AIN1, input) is left open" in t for t in text), text
+    assert any("U1.14 (VINT, power in) is not connected" in t for t in text), text
+    assert any("net OUT: outputs" in t for t in text), text
+    w = pcb.Board("pw", [(0, 0), (30, 0), (30, 20), (0, 20)])            # (the wrong footprint for the symbol)
+    w.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (15, 10), 0, symbol="Driver_Motor:DRV8833PWP")
+    assert any("symbol pin 16 (AIN1) has no pad" in p for p in w.check_placement())

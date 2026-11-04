@@ -415,14 +415,27 @@ class Board:
     # declarations
     def place(self, ref: str, fp: str, at: Optional[Tuple[float, float]] = None, rot: float = 0.0, value: str = "", mpn: str = "",
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
-              overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None):
+              overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None,
+              symbol: Optional[str] = None):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
         KiCad 3D model path (vendor_parts.kicad; default: the one the footprint names) or ``body`` a build123d shape in
         the footprint frame for one KiCad lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
         pads go to B.Cu, its model hangs under the board. ``lcsc``: the LCSC / JLCPCB part number (C-number) for
         assembly and the cart (``fab``). ``min_drill``: the thermal vias in an exposed pad (a plated hole whose pad
         number also has SMD copper) drilled smaller than this are enlarged to it, keeping their copper ring (default:
-        the board's fab preset's plated-drill minimum; a part's pin holes are never changed: its leads must fit)"""
+        the board's fab preset's plated-drill minimum; a part's pin holes are never changed: its leads must fit).
+        ``symbol``: its KiCad symbol "Lib:Name" (``parts.symbol``): nets may then name its pins by name, the check
+        matches every pin to a pad and the critic runs an ERC on its pin types; with ``fp=None`` the symbol's own
+        footprint is used"""
+        sym = None
+        if symbol:
+            import parts
+            sym = parts.symbol(symbol)
+            fp = fp or sym["footprint"]
+            if not fp:
+                raise ValueError(f"{ref}: symbol {symbol} names no footprint: give one")
+            if not value:
+                value = sym["value"]
         pads = footprint(fp)["pads"]
         if min_drill is None and self.rules is not None:
             import fab
@@ -453,6 +466,8 @@ class Board:
                            "pads_key": f"{min_drill}" if min_drill else ""}    # (the pads differ from the footprint's)
         if at is None:                                   # (autoplace() puts it somewhere)
             self.comps[ref].update(at=(0.0, 0.0), unplaced=True)
+        if sym:
+            self.comps[ref]["symbol"] = sym
 
     def courtyard(self, ref: str):
         """a part's courtyard outline in board coordinates (flipped for a bottom-side part), or None"""
@@ -471,7 +486,16 @@ class Board:
         """a net: its pins (ref, pad number), the current it carries (sets how wide its copper must be) and its
         voltage (what its drop is measured against); ``width``: its track width when routed (default: as wide as
         its current needs, at least 0.2 mm)"""
-        self.nets[name] = {"pins": [(r, str(p)) for r, p in pins], "amps": amps, "volts": volts}
+        out = []
+        for r, p in pins:                                # (a pin by name, through its part's symbol: "AIN2" -> 15)
+            p, c = str(p), self.comps.get(r)
+            if c is not None and p not in c["pads"] and c.get("symbol"):
+                import parts
+                nums = parts.resolve(c, p)
+                out += [(r, n) for n in nums] if nums else [(r, p)]
+            else:
+                out.append((r, p))
+        self.nets[name] = {"pins": list(dict.fromkeys(out)), "amps": amps, "volts": volts}
         if width is not None:
             self.nets[name]["width"] = width
 
@@ -1413,6 +1437,9 @@ class Board:
                     continue                                 # top and bottom parts may overlap in plan
                 if cy[refs[i]].intersection(cy[refs[j]]).area > 0.05:
                     probs.append(f"courtyards of {refs[i]} and {refs[j]} overlap")
+        if any(c.get("symbol") for c in self.comps.values()):  # (every symbol pin has a pad, every pad a pin)
+            import parts
+            probs += parts.pin_check(self)
         return probs
 
     # outputs

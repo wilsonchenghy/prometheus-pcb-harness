@@ -212,6 +212,17 @@ def main(argv=None) -> int:
         return report()
     if argv[:1] == ["setup"]:
         return setup()
+    if argv[:1] == ["part"]:                             # (a part's symbol: pins, datasheet, footprint, the check)
+        import parts
+        if len(argv) < 2:
+            print("usage: pcb-harness part Lib:Symbol   e.g. pcb-harness part Driver_Motor:DRV8833PWP", file=sys.stderr)
+            return 2
+        try:
+            print(parts.describe(argv[1]))
+        except parts.SymbolNotFound as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        return 0
     if argv[:1] == ["view"]:
         import pcb_view
         return pcb_view.main(argv[1:])

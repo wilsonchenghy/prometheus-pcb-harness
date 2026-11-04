@@ -194,6 +194,9 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
             notes.append(_note("info", "assembly", f"{len(missing)} of {len(board.comps)} parts have no LCSC number "
                                "(JLCPCB assembly)", missing))
     order = {"error": 0, "warning": 1, "info": 2}
+    if any(cc.get("symbol") for cc in board.comps.values()):   # (the ERC, from the parts' symbols' pin types)
+        import parts
+        notes += parts.erc(board)
     return sorted(notes, key=lambda n: order[n["severity"]])
 
 
