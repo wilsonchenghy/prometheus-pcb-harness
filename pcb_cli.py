@@ -318,6 +318,10 @@ def main(argv=None) -> int:
         timings["route"] = round(time.perf_counter() - t, 2)
         print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({timings['route']} s)")
     probs = probs or []
+    if b.tracks and ("route" in timings or "place+route" in timings):
+        n_ = b.tidy()                                    # (dead vias the routing left: KiCad warns of them)
+        if n_:
+            print(f"tidied: {n_} via{'s' if n_ > 1 else ''} that joined nothing")
     if stage in ("place", "route", "all") and timings:
         save_state(b, a.out, key)
     t = time.perf_counter()

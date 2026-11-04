@@ -90,32 +90,33 @@ routes):
 | cube_main | 25 | 2 | about 60 s | clean (JLCPCB) |
 | ripple_main | 67 | 2 | about 50 s | clean (JLCPCB) |
 | qdd_main | 70 | 2 | about 55 s | clean (JLCPCB) |
-| controller_main | 47 | 2 | about 26 s | routed clean; two mounting holes sit 0.3 mm from the shell's 7.2 mm cut-outs (the shell's geometry) |
+| controller_main | 47 | 2 | about 55 s | clean (JLCPCB), KiCad DRC clean; its two rear screw holes at x = ±20.75, 0.25 mm inboard of where the shell had them, to keep 0.5 mm from the 7.2 mm cut-outs (move the shell's bosses to match) |
 | fpv_fc (STM32F405) | 42 | 2 | about 60 s | clean (PCBWay: 0.1 mm tracks) |
-| fpv_esc (4-in-1) | 104 | 2 | about 110 s | not clean: ground in three pieces (RB2V.2, and motor 4's low-side FET sources walled off by its phase pours): a layout fix, not yet made |
-| twilight_fc | 199 | 4 | committed routes | routed and checked clean; its regulators' 0.2 mm thermal vias need a house's small-via option |
+| fpv_esc (4-in-1) | 104 | 2 | about 2 min | clean (PCBWay), KiCad DRC clean |
+| twilight_fc | 199 | 4 | committed routes | clean (JLCPCB 4-layer), KiCad DRC clean |
 
-Not yet: KiCad's own DRC is not run by the tests (run it on the exported project if you have KiCad), CPL rotations
-are KiCad's (check them in the house's placement preview), and placement is for small boards: place big or dense
-boards yourself.
+KiCad's DRC finds no errors and no unconnected items on any of them; it still warns of a few dangling track ends
+(three on the ESC, two on the FC: overshot stubs lying on tracks of their own net) and silkscreen overlaps. Not
+yet: CPL rotations are KiCad's (check them in the house's placement preview), and placement is for small boards:
+place big or dense boards yourself.
 
 ## Install
 
 **One command** (Python 3.10+):
 
 ```
-pip install "zeus-pcb @ git+https://github.com/wilsonchenghy/zeus"
+pip install "zeus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness"
 zeus setup        # adds FreeRouting (needs Java), then reports what the machine has
 ```
 
-or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/zeus/main/install.sh | bash`, which does
+or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash`, which does
 both. KiCad 9 (for KiCad's own DRC) is a system install: `zeus doctor` says whether it is there, and
 `docs/setup.md` has the commands per OS. Everything beyond Python is optional; see the table there for what you
 get without it.
 
 **With Claude Code or another AI agent** (on your machine or in a cloud session): give it the link and the job.
 
-> Install https://github.com/wilsonchenghy/zeus (follow its docs/setup.md), then design a board that ...
+> Install https://github.com/wilsonchenghy/pcb-harness (follow its docs/setup.md), then design a board that ...
 
 In a Claude Code cloud session, add the repository to the session (or let the agent clone it). The repository
 carries a Claude Code skill (`.claude/skills/zeus`) and `AGENTS.md`, so the agent follows the harness's
