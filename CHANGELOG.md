@@ -1,0 +1,46 @@
+# Changelog
+
+## v0.1.0 (2026-11-04)
+
+The first release: a printed circuit board harness for people and AI agents. Describe a board in Python (or start
+from a KiCad netlist), and it places, routes, checks and writes everything a board house needs to make and
+assemble it.
+
+**Design**
+- Parts on real KiCad footprints (fetched on first use), nets with their current, pours, keep-outs, mounting
+  holes, 2 or 4 layers, any board outline; a KiCad netlist (`.net`) as a starting point.
+- Placement: `place_and_route` places the parts you leave without a position (short wire, decoupling held by its
+  pins, crystals by their chip, the requirements' "within d mm" kept), routes, and tries other placements when the
+  routing is not clean; tries run in parallel, and the same input always gives the same board.
+
+**Routing**
+- FreeRouting, the router KiCad users use, through KiCad's own Specctra export and import when KiCad is
+  installed, with fan-out stubs for fine-pitch parts (0.4 mm QFN) and a clearance repair after it; the harness's
+  own grid router when FreeRouting is not installed, and to finish the poured nets.
+- Track widths from each net's current (IPC-2221), necking down only at a pin narrower than the track.
+- Differential pairs length-tuned (a serpentine on the shorter net).
+
+**Checks**
+- The design check: every net joined (by KiCad's rules), no shorts, clearance, current, voltage drop, drill gaps,
+  bare holes, courtyards, dangling copper.
+- The board house's rules (JLCPCB 2 / 4 layer, PCBWay, OSH Park).
+- KiCad 9's own DRC on the exported board, when KiCad is installed.
+- A design critic against a requirements file (`--spec`: size, currents, distances, pairs, connectors at the edge,
+  holes) and the usual review points, in milliseconds.
+
+**Outputs**
+- Gerbers and drill, pick-and-place, the JLCPCB assembly BOM, parts carts for DigiKey, Mouser and LCSC, a KiCad
+  project, a review page, a STEP of the assembled board, schematics drawn from the netlist.
+
+**For agents**
+- `pcb-harness board.py out/ --json`: one JSON result with each finding's kind, pins, location and a hint;
+  `--stage critic | place | route | check | export` runs one step from the last run's saved board.
+- `pcb-harness doctor` and `pcb-harness setup`; a Claude Code skill and `AGENTS.md` in the repository.
+
+**Boards** (`bench/`, `examples/`): eight bench boards placed and routed from scratch and clean, KiCad DRC
+included (a blinker, a USB LDO, an ESP32 sensor, an addressable LED ring, a LiPo power bank, a dual motor driver,
+a CAN node, an RP2040 board), and eight example boards from robot projects. Known open: the FPV 4-in-1 ESC's
+ground is in three pieces, and the game controller's mounting holes sit 0.3 mm from its shell's cut-outs.
+
+**Release video**: `media/release-video/` (a 67 s film drawn from the RP2040 board's real routing, with a
+synthesised soundtrack); the rendered film is attached to this release.

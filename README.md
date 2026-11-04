@@ -146,6 +146,11 @@ ASSUMED in the scripts are from datasheets as remembered: verify before you orde
 `viewer/PCB.tsx` is a React component for showing a board's layers in a web app (kept for reference; it expects the
 host app's API).
 
+## Contributing
+
+`CONTRIBUTING.md` (set up, the tests and benches to run, the principles); `CHANGELOG.md` for what each release
+holds.
+
 ## Licence
 
 Apache-2.0 (`LICENSE`). KiCad's footprint and 3D-model libraries, which this downloads, are CC-BY-SA 4.0 with the
