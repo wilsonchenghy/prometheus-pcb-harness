@@ -26,6 +26,15 @@
 - Decoupling capacitors are held to a chip's supply pins (a symbol's power inputs), never to a connector's pin.
 - The ERC lists a chip's unused pins in one note, not one note a pin.
 - The release video is Zeus, with a scene of the viewer (74 s).
+- The known open boards are clean: the FPV 4-in-1 ESC's ground is whole (RB2V's ground via goes in before the
+  signals close its scrap of pour in; driver 4's logic ground joined by a thin track), the game controller's two
+  screw holes moved 0.25 mm inboard to x = 20.75 (0.54 mm from the 7.2 mm cut-outs; the shell's bosses move with
+  them), Twilight's buck regulators' thermal vias drilled at JLCPCB's 0.3 mm and two via pairs parted to 0.5 mm.
+  Every bench and example board passes; KiCad's DRC finds no errors or unconnected items on them.
+- pcb.nudge_vias(board, gap): two nets' vias closer than the house's drill gap are parted by the shortfall, their
+  tracks' ends with them, when every clearance holds.
+- A near-rule can name a pin: ["C4", "U1.VDDA", 3.0] (by number or symbol name), in the placer, the misses and the
+  critic.
 - Parallel place-and-route tries are repeatable: each runs in a process forked afresh (a pool's worker carried
   its memos from one try into the next), and a FreeRouting run that exits without writing its session (it does,
   now and then, beside other copies) is run again instead of being read as a routing that reached nothing.

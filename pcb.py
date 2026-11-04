@@ -2072,7 +2072,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     pnet = board.pad_net()
     many = {r for r, c in board.comps.items() if len(c["pads"]) >= 6}
     deal: Dict[str, int] = {}
-    told = {x for a_, b_, _ in getattr(board, "near", []) for x in (a_, b_)}    # (a requirement says where it goes)
+    told = {x.partition(".")[0] for a_, b_, _ in getattr(board, "near", []) for x in (a_, b_)}    # (a requirement says where it goes)
     for r in sorted(mset, key=lambda r: (len(r), r)):
         c = board.comps[r]
         if r in told or not r.upper().startswith("C") or len([n for n in c["pads"] if n]) != 2:
@@ -2101,11 +2101,17 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             ic_pins = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in many and p_[0] != r]
             if ic_pins:
                 NETS[f"~xtal {r}.{num}"] = {"pins": [(r, num), ic_pins[0]], "amps": 5.0, "limit": 5.0}
-    for a_, b_, dmax in getattr(board, "near", []):     # the requirements' "within d mm of": a spring that turns
-        if a_ not in board.comps or b_ not in board.comps:     # stiff past d (pins on a shared net, else the centres)
+    for a0, b0, dmax in getattr(board, "near", []):     # the requirements' "within d mm of": a spring that turns
+        ta, tb = near_target(board, a0), near_target(board, b0)   # stiff past d (pins on a shared net, else the
+        if not ta or not tb:                                      # centres; "U1.9": that pin)
             continue
-        shared = [(pa, pb) for pa in board.comps[a_]["pads"] for pb in board.comps[b_]["pads"]
+        a_, b_ = ta[0], tb[0]
+        pas = ta[1] or list(board.comps[a_]["pads"])
+        pbs = tb[1] or list(board.comps[b_]["pads"])
+        shared = [(pa, pb) for pa in pas for pb in pbs
                   if pa and pb and pnet.get((a_, pa)) and pnet.get((a_, pa)) == pnet.get((b_, pb))]
+        if not shared and (ta[1] or tb[1]):              # (a pin named: it, whatever its net)
+            shared = [(pas[0], pbs[0])]
         shared.sort(key=lambda q: pnet.get((a_, q[0])) in poured)
         pa, pb = shared[0] if shared else (None, None)
         def _half(ref, num):                             # (the pad's smaller half-size: centre to its edge)
@@ -2113,7 +2119,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             return min(min(p_["size"]) for p_ in ps) / 2 if ps else 0.0
         # the requirement is pad to pad; the spring measures pin centres: the pads' half-sizes are allowed for
         lim_ = dmax + _half(a_, pa) + _half(b_, pb) - 0.15
-        NETS[f"~near {a_} {b_}"] = {"pins": [(a_, pa), (b_, pb)], "amps": 5.0, "limit": max(0.5, lim_)}
+        NETS[f"~near {a0} {b0}"] = {"pins": [(a_, pa), (b_, pb)], "amps": 5.0, "limit": max(0.5, lim_)}
     wt = {n: (0.15 if n in poured else 1.0) * (1.0 + min(d.get("amps", 0.1), 5.0) / 2.0) for n, d in NETS.items()}
     nets_of: Dict[str, List[str]] = {}
     for n, d in NETS.items():
@@ -2395,22 +2401,44 @@ def severity(probs: Sequence[str]) -> int:
     return w
 
 
-def near_misses(board: Board) -> List[str]:
-    """the parts further apart than ``board.near`` asks (the requirements' "within d mm", pad to pad)"""
+def near_target(board: Board, name: str):
+    """a near-rule's end: a part ("U1") -> ("U1", None), or one of its pins ("U1.9", "U1.VDDA", by number or by its
+    symbol's name) -> ("U1", [pad numbers]); None when the board has no such part or pin"""
+    if name in board.comps:
+        return name, None
+    ref, _, pin = name.partition(".")
+    if not pin or ref not in board.comps:
+        return None
+    import parts
+    nums = parts.resolve(board.comps[ref], pin)
+    return (ref, nums) if nums else None
+
+
+def near_gaps(board: Board, near=None) -> List[tuple]:
+    """(a, b, dmax, gap) for each near-rule (``board.near``, or the ones given): the gap pad to pad, mm, between
+    the parts or pins it names; a rule naming what the board lacks is left out"""
     from shapely.ops import unary_union
-    out = []
-    near = getattr(board, "near", [])
+    near = getattr(board, "near", []) if near is None else near
     if not near:
-        return out
-    by = {}
+        return []
+    by, pad_by = {}, {}
     for ref, num, L, g, _ in board.pad_shapes():
         by.setdefault(ref, []).append(g)
+        pad_by.setdefault((ref, num), []).append(g)
+
+    def shape(t):
+        return unary_union(by[t[0]] if t[1] is None else [g for n in t[1] for g in pad_by.get((t[0], n), [])])
+    out = []
     for a, b, dmax in near:
-        if a in by and b in by:
-            d = unary_union(by[a]).distance(unary_union(by[b]))
-            if d > dmax:
-                out.append(f"{a} is {d:.1f} mm from {b} (within {dmax})")
+        ta, tb = near_target(board, a), near_target(board, b)
+        if ta and tb and ta[0] in by and tb[0] in by:
+            out.append((a, b, dmax, shape(ta).distance(shape(tb))))
     return out
+
+
+def near_misses(board: Board) -> List[str]:
+    """the parts (or pins) further apart than ``board.near`` asks (the requirements' "within d mm", pad to pad)"""
+    return [f"{a} is {d:.1f} mm from {b} (within {dmax})" for a, b, dmax, d in near_gaps(board) if d > dmax]
 
 
 PROGRESS = None    # a callable given {"kind": "tries", ...} and {"kind": "try", ...} as place_and_route goes
@@ -2527,6 +2555,69 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     board.__dict__.pop("_pads_memo", None)
     board.__dict__.pop("_cu_memo", None)
     return best[1]
+
+
+def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -> List[str]:
+    """vias of two nets whose drills are closer than ``gap`` (default: the board's ``hole_gap``; a house's rule,
+    e.g. 0.5 mm for JLCPCB, tightens it): the via with fewer tracks on it moves away from the other by the shortfall
+    (at most ``reach``), the ends of its tracks with it, when every clearance still holds where it lands. Returns
+    the pairs it could not part."""
+    import math
+    from shapely.geometry import LineString, Point
+    from shapely.ops import unary_union
+    gap = board.hole_gap if gap is None else gap
+    same = 0.254                                         # (one net's drills: the houses' same-net gap)
+    left: List[str] = []
+
+    def ends(v):
+        return [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)
+                if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < 0.02]
+
+    def short(a, b):
+        d = math.hypot(a["at"][0] - b["at"][0], a["at"][1] - b["at"][1]) - a["drill"] / 2 - b["drill"] / 2
+        return d < (gap if a["net"] != b["net"] else same) - 1e-6, d
+    for _ in range(2):
+        bad = [(a, b) for i, a in enumerate(board.vias) for b in board.vias[i + 1:] if short(a, b)[0]]
+        if not bad:
+            break
+        fixed = board.copper(pours=False)
+        for a, b in bad:
+            if not short(a, b)[0]:
+                continue
+            moved = False
+            for v, o in sorted(((a, b), (b, a)), key=lambda p: len(ends(p[0]))):
+                d = short(v, o)[1]
+                want = (gap if v["net"] != o["net"] else same) - d + 0.01
+                if want > reach:
+                    continue
+                dx, dy = v["at"][0] - o["at"][0], v["at"][1] - o["at"][1]
+                n = math.hypot(dx, dy) or 1.0
+                at = (round(v["at"][0] + dx / n * want, 4), round(v["at"][1] + dy / n * want, 4))
+                others = {L: unary_union([g for (nt, l), g in fixed.items() if l == L and nt != v["net"]] or [Point(0, 0).buffer(0)])
+                          for L in board.layers}
+                ok = all(Point(at).buffer(v["dia"] / 2).distance(others[L]) >= board.clear - 1e-6 for L in board.layers)
+                for t, i in ends(v) if ok else []:
+                    pts = list(t["pts"]); pts[i] = at
+                    seg = LineString(pts[-2:] if i == -1 else pts[:2]).buffer(t["w"] / 2)
+                    ok = ok and seg.distance(others[t["layer"]]) >= board.clear - 1e-6
+                if ok:                                   # (and no other drill too near where it lands)
+                    for w in board.vias:
+                        if w is not v:
+                            g_ = gap if w["net"] != v["net"] else same
+                            ok = ok and math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - v["drill"] / 2 - w["drill"] / 2 >= g_ - 1e-6
+                    for x, y, dd in board.all_holes():
+                        ok = ok and math.hypot(at[0] - x, at[1] - y) - v["drill"] / 2 - dd / 2 >= gap - 1e-6
+                if ok:
+                    for t, i in ends(v):
+                        t["pts"] = list(t["pts"]); t["pts"][i] = at
+                    v["at"] = at
+                    moved = True
+                    board.__dict__.pop("_cu_memo", None)
+                    fixed = board.copper(pours=False)
+                    break
+            if not moved:
+                left.append(f"vias {a['net']} at {a['at']} and {b['net']} at {b['at']}: no room to part them")
+    return left
 
 
 def repair(board: Board, width: float = 0.25, nets: Optional[Sequence[str]] = None, **kw) -> List[str]:

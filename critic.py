@@ -15,7 +15,8 @@ info is worth knowing. The requirements file (JSON) may give any of:
       "house": "jlcpcb-2",                   the fab preset the board must be made to
       "nets": {"VBUS": {"amps": 2.0}},       at least this current on that net (sets the check's width)
       "pairs": [["USB_DP", "USB_DM", 0.5]],  differential pairs and their allowed length mismatch (mm)
-      "near": [["C1", "U1", 3.0]],           this part within this distance (pad to pad, mm) of that one
+      "near": [["C1", "U1", 3.0]],           this part within this distance (pad to pad, mm) of that one (or of
+                                             one pin: "U1.9", "U1.VDDA")
       "edge": ["J1", "J2"],                  these parts at the board edge (within 2 mm)
       "holes": {"count": 4, "d": 3.2},       mounting holes
       "assembly": true,                      every part needs an LCSC number (JLCPCB assembly)
@@ -94,12 +95,11 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
             notes.append(_note("error", "pair", f"pair {p} / {q} is not declared, so its lengths are not checked",
                                hint=f"b.pair(\"{p}\", \"{q}\", max_skew={pr[2] if len(pr) > 2 else 0.5})"))
     if placed:
-        for a, b, dmax in spec.get("near") or []:
-            if a in board.comps and b in board.comps:
-                d = _part_gap(pads, a, b)
-                if d is not None and d > dmax:
-                    notes.append(_note("error", "near", f"{a} is {d:.1f} mm from {b}; the requirement is within {dmax} mm",
-                                       [a, b], hint=f"move {a} toward {b}"))
+        import pcb as _pcb
+        for a, b, dmax, d in _pcb.near_gaps(board, spec.get("near") or []):     # (a part, or one pin: "U1.9")
+            if d > dmax:
+                notes.append(_note("error", "near", f"{a} is {d:.1f} mm from {b}; the requirement is within {dmax} mm",
+                                   [a.partition(".")[0], b.partition(".")[0]], hint=f"move {a} toward {b}"))
         for r in spec.get("edge") or []:
             if r in board.comps:
                 g = board.courtyard(r)

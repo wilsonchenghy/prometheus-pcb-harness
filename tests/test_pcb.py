@@ -1221,3 +1221,20 @@ def test_datasheet_numbered_list_and_other_names():
     # no pin table (a pinout drawing only): nothing is called wrong
     r = parts.datasheet_check("Interface_CAN_LIN:SN65HVD230", pages=["Features\nD 1 GND 2 R 4\nTypical application"])
     assert r["page"] is None and {p["status"] for p in r["pins"]} == {"not checked"}
+
+
+def test_nudge_vias_parts_two_nets_drills():
+    """two nets' vias 0.45 mm apart (drill wall to wall) under a 0.5 mm rule: the one with the fewer tracks moves away
+    by the shortfall, its track's end with it, and nothing else changes"""
+    import pcb
+    b = pcb.Board("nudge", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.via("A", (10.0, 10.0), 0.3, 0.6)
+    b.via("B", (10.75, 10.0), 0.3, 0.6)
+    b.tracks.append({"net": "B", "layer": "F", "pts": [(10.75, 10.0), (14.0, 10.0)], "w": 0.2, "amps": 0.1})
+    b.tracks.append({"net": "A", "layer": "F", "pts": [(10.0, 10.0), (10.0, 6.0)], "w": 0.2, "amps": 0.1})
+    b.tracks.append({"net": "A", "layer": "B", "pts": [(10.0, 10.0), (6.0, 10.0)], "w": 0.2, "amps": 0.1})
+    assert pcb.nudge_vias(b, gap=0.5) == []
+    a, v = b.vias
+    assert a["at"] == (10.0, 10.0)                                   # (two tracks on it: it stays)
+    gapnow = math.hypot(v["at"][0] - a["at"][0], v["at"][1] - a["at"][1]) - 0.3
+    assert 0.5 <= gapnow < 0.53 and b.tracks[0]["pts"][0] == v["at"]
