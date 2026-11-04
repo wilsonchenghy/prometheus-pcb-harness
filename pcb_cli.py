@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import os
 import runpy
+from pathlib import Path
 import sys
 import time
 
@@ -29,6 +30,9 @@ def load(path: str):
     """the Board a script makes, and the routing problems it reports (None when it did not route)"""
     import pcb
     sys.path[:0] = [os.path.dirname(os.path.abspath(path))]
+    own = Path(os.path.dirname(os.path.abspath(path))) / "footprints"   # (footprints made for this board: fpgen.py)
+    if own.is_dir() and own not in pcb.FP_DIRS:
+        pcb.FP_DIRS.insert(0, own)
     g = runpy.run_path(path, run_name="pcb_cli")
     if callable(g.get("build")):
         got = g["build"]()
@@ -223,6 +227,9 @@ def main(argv=None) -> int:
             print(f"error: {e}", file=sys.stderr)
             return 2
         return 0
+    if argv[:1] == ["footprint"]:
+        import fpgen
+        return fpgen.main(argv[1:])
     if argv[:1] == ["view"]:
         import pcb_view
         return pcb_view.main(argv[1:])
