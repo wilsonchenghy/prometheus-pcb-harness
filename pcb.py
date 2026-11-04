@@ -2493,15 +2493,19 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         ctx = mp.get_context("fork") if "fork" in mp.get_all_start_methods() else None
         board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)
         blob = pickle.dumps(board)
-        with ProcessPoolExecutor(max_workers=workers, mp_context=ctx) as ex:
-            for k0 in range(1, tries, workers):
-                futs = {k: ex.submit(_try_worker, blob, move, k, gap, route_kw, router, kw)
-                        for k in range(k0, min(tries, k0 + workers))}
+        for k0 in range(1, tries, workers):              # (each try in a process of its own, forked afresh: a
+            wave = range(k0, min(tries, k0 + workers))  # pool's worker carried its memos from one try into the
+            exs = {k: ProcessPoolExecutor(max_workers=1, mp_context=ctx) for k in wave}   # next, so which try
+            try:                                         # ran where changed the boards)
+                futs = {k: exs[k].submit(_try_worker, blob, move, k, gap, route_kw, router, kw) for k in wave}
                 for k in sorted(futs):
                     results[k] = futs[k].result()
                     _done(k)
-                if any(results[k][7] for k in futs):
-                    break
+            finally:
+                for ex in exs.values():
+                    ex.shutdown(wait=True)
+            if any(results[k][7] for k in wave):
+                break
     elif workers == 1:
         for k in range(1, tries):
             board.tracks, board.vias, board._fan = list(tracks0), list(vias0), set(fan0)   # (each try afresh)

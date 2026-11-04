@@ -248,10 +248,15 @@ def run(dsn: str, ses: str, passes: int = 100, timeout: int = 1800, threads: int
         raise RuntimeError("FreeRouting jar not found: set FREEROUTING_JAR or put it in ~/.cache/prometheus/freerouting")
     cmd = ["java", "-Djava.awt.headless=true", "-jar", jar, "-de", dsn, "-do", ses, "-mp", str(passes),
            "-mt", str(threads), "--gui.enabled=false"]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-    if not os.path.exists(ses):
-        raise RuntimeError("FreeRouting wrote no session:\n" + (r.stdout + r.stderr)[-3000:])
-    return r.stdout + r.stderr
+    log = ""
+    for attempt in range(3):                            # (run alongside other copies, FreeRouting now and then
+        if os.path.exists(ses):                         # routes and exits leaving its session empty: a run that
+            os.remove(ses)                              # gives no session is run again)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        log += r.stdout + r.stderr
+        if os.path.exists(ses) and "(session" in open(ses, errors="replace").read(4096):
+            return log
+    raise RuntimeError("FreeRouting wrote no session (3 runs):\n" + log[-3000:])
 
 
 def route(board, passes: int = 100, finish: bool = True, keep: Optional[str] = None, **kw) -> List[str]:

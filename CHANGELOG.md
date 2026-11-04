@@ -26,6 +26,9 @@
 - Decoupling capacitors are held to a chip's supply pins (a symbol's power inputs), never to a connector's pin.
 - The ERC lists a chip's unused pins in one note, not one note a pin.
 - The release video is Zeus, with a scene of the viewer (74 s).
+- Parallel place-and-route tries are repeatable: each runs in a process forked afresh (a pool's worker carried
+  its memos from one try into the next), and a FreeRouting run that exits without writing its session (it does,
+  now and then, beside other copies) is run again instead of being read as a routing that reached nothing.
 
 ## v0.1.0 (2026-11-04)
 
