@@ -142,6 +142,21 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .loupe svg { width: 100%; height: 100%; }
 .loupe::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 28px rgba(0,0,0,.6); }
 .loupe .lz { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font: 500 10px var(--mono); color: var(--text2); background: rgba(10,11,13,.8); padding: 2px 7px; border-radius: 9px; }
+/* parts: the symbol on paper, the land pattern on its dark card, a thread from each pin to its pad */
+#parts { display: none; } #parts.on { display: grid; grid-template-columns: 200px 1fr; grid-template-rows: 1fr 56px; }
+.plist { grid-row: 1 / 3; overflow: auto; padding: 14px 10px; border-right: 1px solid var(--line); background: rgba(14,16,19,.6); z-index: 2; }
+.plist .pi { padding: 8px 10px; border-radius: 8px; cursor: pointer; margin-bottom: 3px; }
+.plist .pi:hover { background: var(--panel2); } .plist .pi.on { background: var(--hover); box-shadow: inset 0 0 0 1px var(--line2); }
+.plist .pi b { font-weight: 600; font-size: 13px; } .plist .pi span { display: block; font-size: 11px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plist .pi i { float: right; font-style: normal; font: 500 10px var(--mono); padding: 1px 6px; border-radius: 8px; }
+.plist .pi i.ok { background: rgba(61,220,151,.12); color: var(--green); } .plist .pi i.no { background: var(--panel2); color: var(--text3); }
+.plist .pi i.bad { background: rgba(255,93,93,.14); color: var(--red); }
+#psvg { width: 100%; height: 100%; display: block; }
+.pfoot { display: flex; align-items: center; gap: 14px; padding: 0 22px; font: 400 12px var(--mono); color: var(--text3); z-index: 2; }
+.pfoot b { font: 300 22px var(--sans); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+.pfoot #pnow { color: var(--text2); } .pfoot .btn { margin-left: auto; }
+.thread { fill: none; stroke-width: 1.4; opacity: .5; transition: opacity .2s, stroke-width .2s; }
+.thread.hi { opacity: 1; stroke-width: 2.4; }
 .flow { stroke-dasharray: 0.6 0.9; animation: flow .9s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -1.5; } }
 .netdim { opacity: .18; transition: opacity .2s; }
@@ -149,6 +164,8 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .pin circle.halo { animation: halo 2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes halo { from { transform: scale(.6); opacity: .9; } to { transform: scale(2.2); opacity: 0; } }
 ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 5px; border: 3px solid var(--bg2); }
+.app.focus { grid-template-columns: 0 1fr 0; } .app.focus .left, .app.focus .right { display: none; }
+.app { transition: grid-template-columns .35s cubic-bezier(.2,.8,.2,1); }
 @media (max-width: 1000px) { .app { grid-template-columns: 0 1fr 300px; } .left { display: none; } }
 </style>
 </head>
@@ -159,7 +176,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
       <rect x="5" y="5" width="14" height="14" rx="3.2" fill="none" stroke="#e8eaed" stroke-width="1.6"/><g stroke="#8a919c" stroke-width="1.5" stroke-linecap="round"><path d="M9 5V2M15 5V2M9 22v-3M15 22v-3M5 9H2M5 15H2M22 9h-3M22 15h-3"/></g>
       <rect x="9" y="9" width="6" height="6" rx="1.4" fill="url(#lg)"/></svg>pcb-harness</div>
     <div class="crumb">/ <span id="folder">board</span> / <b id="name">—</b></div>
-    <div class="seg" id="seg"><button class="on" data-v="layout">Layout</button><button data-v="v3d">3D</button><button data-v="schem">Schematic</button></div>
+    <div class="seg" id="seg"><button class="on" data-v="layout">Layout</button><button data-v="v3d">3D</button><button data-v="schem">Schematic</button><button data-v="parts">Parts</button></div>
     <span class="pill" id="pill"><span class="dot"></span><span id="pilltext">Loading</span></span>
     <a class="btn" id="report" href="/files/report.html" target="_blank">Report</a>
     <a class="btn primary" id="gerbers" href="/files/gerbers.zip">Download Gerbers</a>
@@ -175,6 +192,8 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     <div class="view on" id="layout"><svg id="lsvg" class="pan"></svg></div>
     <div class="view" id="v3d"><div id="three" style="position:absolute;inset:0"></div><div class="float" id="mtagbox" style="left:14px;top:14px;padding:6px 11px;font-size:12px;color:var(--text2)"><span id="mtag"></span></div><div id="render"><img id="rimg" alt="KiCad 3D render"></div></div>
     <div class="view" id="schem"><svg id="ssvg" class="pan"></svg></div>
+    <div class="view" id="parts"><div class="plist" id="plist"></div><svg id="psvg"></svg>
+      <div class="pfoot"><b id="pcount"></b><span id="pnow"></span><button class="btn" id="pverify">Verify pins</button></div></div>
     <div class="shimmer"></div><div class="spot"></div>
     <div class="loupe" id="loupe"><svg id="lpsvg"><use href="#lroot"/></svg><span class="lz">4×</span></div>
     <div class="float prog" id="prog">
@@ -233,7 +252,11 @@ $$("#seg button").forEach(b => b.onclick = () => {
   $("#flip").style.display = b.dataset.v === "layout" ? "" : "none";
   $("#loupeb").style.display = b.dataset.v === "layout" ? "" : "none"; $("#explode").style.display = b.dataset.v === "v3d" ? "" : "none";
   if (b.dataset.v !== "layout") setLoupe(false);
+  $("#tools").style.display = b.dataset.v === "parts" ? "none" : "";
+  $(".app").classList.toggle("focus", b.dataset.v === "parts");          // (a part's figure gets the whole width)
+  if (b.dataset.v === "parts") setTimeout(drawParts, 380);
   if (b.dataset.v === "v3d") init3d(); if (b.dataset.v === "schem") drawSchem(); if (b.dataset.v === "layout") fitLayout();
+  if (b.dataset.v === "parts") drawParts();
 });
 $$(".tabs2 button").forEach(b => b.onclick = () => { $$(".tabs2 button").forEach(x => x.classList.toggle("on", x === b)); $$(".pane").forEach(p => p.classList.toggle("on", p.id === "p-" + b.dataset.p)); });
 $$("#looks button").forEach(b => b.onclick = () => { look = b.dataset.m; $$("#looks button").forEach(x => x.classList.toggle("on", x === b)); drawLayout(); });
@@ -485,6 +508,126 @@ function drawSchem() {
   if (selNet) focusNet(selNet, true);
 }
 
+// ---------- parts: every pin to its pad ----------
+let curPart = null, verifying = null;
+function partPins(c) {
+  const pads = [...new Map(c.pads.map(p => [p.num, p])).values()];
+  return { pads, pins: c.symbol ? c.symbol.pins : pads.map(p => ({ num: p.num, key: p.net || "", type: "", at: null })) };
+}
+function partStatus(c) {
+  if (!c.symbol) return ["no", "no symbol"];
+  const pads = new Set(c.pads.map(p => p.num)), nums = new Set(c.symbol.pins.map(p => p.num));
+  const ok = [...nums].every(n => pads.has(n)) && [...pads].every(n => !n || nums.has(n));
+  return ok ? ["ok", nums.size + "/" + nums.size] : ["bad", "mismatch"];
+}
+function drawPartList() {
+  const box = $("#plist"); box.innerHTML = "";
+  const comps = B.comps.filter(c => c.pads.length).slice().sort((a, b) => (!!b.symbol - !!a.symbol) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
+  if (!curPart) curPart = (comps.find(c => c.symbol) || comps[0] || {}).ref;
+  for (const c of comps) { const [cls, txt] = partStatus(c), d = document.createElement("div"); d.className = "pi" + (c.ref === curPart ? " on" : "");
+    d.innerHTML = `<i class="${cls}">${esc(txt)}</i><b>${esc(c.ref)}</b><span>${esc(c.symbol ? c.symbol.name.split(":")[1] : c.value || c.fp.split(":")[1])}</span>`;
+    d.onclick = () => { curPart = c.ref; drawParts(); }; box.appendChild(d); }
+}
+function drawParts() {
+  if (!B || B.error) return; drawPartList();
+  const svg = $("#psvg"); svg.innerHTML = ""; const c = B.comps.find(x => x.ref === curPart); if (!c) return;
+  const R_ = svg.getBoundingClientRect(), W = R_.width || 900, H = R_.height || 600, pad = 26, gap = 70, cw = (W - 2 * pad - gap) / 2, ch = H - 2 * pad;
+  const L = { x: pad, y: pad, w: cw, h: ch }, Rt = { x: pad + cw + gap, y: pad, w: cw, h: ch };
+  const defs = el("defs", {}, svg), sh = el("filter", { id: "cardsh", x: "-10%", y: "-10%", width: "120%", height: "130%" }, defs);
+  el("feDropShadow", { dx: 0, dy: 10, stdDeviation: 14, "flood-color": "#000", "flood-opacity": .45 }, sh);
+  // the paper card: the symbol
+  el("rect", { x: L.x, y: L.y, width: L.w, height: L.h, rx: 14, fill: "#f3f0e8", filter: "url(#cardsh)" }, svg);
+  el("text", { x: L.x + 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 2 }, svg)
+    .textContent = ("SYMBOL · " + (c.symbol ? c.symbol.pins.length + " PINS" : "NONE")).toUpperCase();
+  el("text", { x: L.x + L.w - 22, y: L.y + 30, fill: "#8a8578", "font-size": 10.5, "font-family": FONT, "letter-spacing": 1.5, "text-anchor": "end" }, svg)
+    .textContent = c.symbol ? "KICAD · " + c.symbol.name.split(":")[0].toUpperCase() : "";
+  el("text", { x: L.x + 22, y: L.y + 62, fill: "#1d1b17", "font-size": 24, "font-family": "IBM Plex Sans", "font-weight": 500, "letter-spacing": -.4 }, svg).textContent = c.ref + " · " + (c.value || "");
+  if (c.symbol && c.symbol.description) el("text", { x: L.x + 22, y: L.y + 82, fill: "#6d685d", "font-size": 12, "font-family": "IBM Plex Sans" }, svg).textContent = c.symbol.description;
+  // the dark card: the land pattern
+  el("rect", { x: Rt.x, y: Rt.y, width: Rt.w, height: Rt.h, rx: 14, fill: "#0c1220", stroke: "rgba(255,255,255,.08)", filter: "url(#cardsh)" }, svg);
+  el("text", { x: Rt.x + 22, y: Rt.y + 30, fill: "#7b8499", "font-size": 10.5, "font-family": FONT, "letter-spacing": 2 }, svg).textContent = "LAND · " + partPins(c).pads.length + " PADS";
+  const fpn = c.fp.split(":")[1], fpz = Math.min(15, (Rt.w - 44) / Math.max(fpn.length, 1) / 0.6);
+  el("text", { x: Rt.x + 22, y: Rt.y + Rt.h - 22, fill: "#c9d0de", "font-size": fpz, "font-family": FONT, "letter-spacing": .3 }, svg).textContent = fpn;
+  const { pads, pins } = partPins(c), pinXY = {}, padXY = {};
+  // symbol geometry, fitted into its card
+  if (c.symbol && c.symbol.pins.length) {
+    const xs = [], ys = [];
+    for (const p of c.symbol.pins) { xs.push(p.at[0]); ys.push(p.at[1]); }
+    for (const r of c.symbol.body) { xs.push(r[0], r[2]); ys.push(r[1], r[3]); }
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const area = { x: L.x + 90, y: L.y + 120, w: L.w - 180, h: L.h - 160 }, k = Math.min(area.w / Math.max(x1 - x0, 1), area.h / Math.max(y1 - y0, 1), 16);
+    const ox = area.x + (area.w - (x1 - x0) * k) / 2, oy = area.y + (area.h - (y1 - y0) * k) / 2;
+    const SX = (x) => ox + (x - x0) * k, SY = (y) => oy + (y1 - y) * k;
+    for (const r of c.symbol.body) el("rect", { x: SX(Math.min(r[0], r[2])), y: SY(Math.max(r[1], r[3])), width: Math.abs(r[2] - r[0]) * k, height: Math.abs(r[3] - r[1]) * k, fill: "#fbf3dc", stroke: "#9a5b2e", "stroke-width": 1.6, rx: 2 }, svg);
+    for (const p of c.symbol.pins) {
+      const a = p.rot * Math.PI / 180, ex = p.at[0] + Math.cos(a) * p.length, ey = p.at[1] + Math.sin(a) * p.length;
+      const g = el("g", { "data-pin": p.num, style: "cursor:pointer" }, svg);
+      el("line", { x1: SX(p.at[0]), y1: SY(p.at[1]), x2: SX(ex), y2: SY(ey), stroke: "#7a4a26", "stroke-width": 1.3 }, g);
+      el("circle", { cx: SX(p.at[0]), cy: SY(p.at[1]), r: 3, fill: "#f3f0e8", stroke: "#7a4a26", "stroke-width": 1.2 }, g);
+      const horiz = Math.abs(Math.cos(a)) > .5, inside = { x: SX(ex) + Math.cos(a) * 6, y: SY(ey) - Math.sin(a) * 6 };
+      if (horiz) {
+        el("text", { x: inside.x, y: inside.y + 4, fill: "#2a2620", "font-size": 11.5, "font-family": FONT, "text-anchor": Math.cos(a) > 0 ? "start" : "end" }, g).textContent = p.key;
+        el("text", { x: (SX(p.at[0]) + SX(ex)) / 2, y: SY(p.at[1]) - 4, fill: "#8a8578", "font-size": 9.5, "font-family": FONT, "text-anchor": "middle" }, g).textContent = p.num;
+      } else {
+        const t = el("text", { x: inside.x + 4, y: inside.y, fill: "#2a2620", "font-size": 11.5, "font-family": FONT, transform: `rotate(-90 ${inside.x + 4} ${inside.y})`, "text-anchor": Math.sin(a) > 0 ? "end" : "start" }, g); t.textContent = p.key;
+        el("text", { x: SX(p.at[0]) - 6, y: (SY(p.at[1]) + SY(ey)) / 2, fill: "#8a8578", "font-size": 9.5, "font-family": FONT, "text-anchor": "end" }, g).textContent = p.num;
+      }
+      pinXY[p.num] = pinXY[p.num] || [SX(p.at[0]), SY(p.at[1]), p];
+      hover(g, `<b>pin ${esc(p.num)}</b> · ${esc(p.key)} <span style="color:#a3a9b3">${esc(p.type.replace("_", " "))}</span>`);
+      g.addEventListener("pointerenter", () => hiThread(p.num, true)); g.addEventListener("pointerleave", () => hiThread(p.num, false));
+    }
+  } else el("text", { x: L.x + L.w / 2, y: L.y + L.h / 2, fill: "#8a8578", "font-size": 13, "text-anchor": "middle", "font-family": "IBM Plex Sans" }, svg)
+      .textContent = "No symbol: place it with symbol=\"Lib:Name\" to check its pins";
+  // the land pattern, in the part's own frame
+  const th = -(c.rot || 0) * Math.PI / 180, loc = (q) => { const dx = q[0] - c.at[0], dy = q[1] - c.at[1]; return [dx * Math.cos(th) - dy * Math.sin(th), dx * Math.sin(th) + dy * Math.cos(th)]; };
+  const all = []; for (const p of c.pads) for (const poly of p.poly) for (const rng of poly) for (const q of rng) all.push(loc(q));
+  if (all.length) {
+    const px0 = Math.min(...all.map(q => q[0])), px1 = Math.max(...all.map(q => q[0])), py0 = Math.min(...all.map(q => q[1])), py1 = Math.max(...all.map(q => q[1]));
+    const area = { x: Rt.x + 60, y: Rt.y + 80, w: Rt.w - 120, h: Rt.h - 160 }, k = Math.min(area.w / Math.max(px1 - px0, .5), area.h / Math.max(py1 - py0, .5));
+    const ox = area.x + (area.w - (px1 - px0) * k) / 2, oy = area.y + (area.h - (py1 - py0) * k) / 2;
+    const SX = (x) => ox + (x - px0) * k, SY = (y) => oy + (py1 - y) * k;
+    if (c.courtyard.length) el("path", { d: c.courtyard.map(poly => poly.map(r => "M" + r.map(q => { const l = loc(q); return SX(l[0]) + "," + SY(l[1]); }).join("L") + "Z").join("")).join(""),
+      fill: "none", stroke: "rgba(139,149,255,.45)", "stroke-width": 1, "stroke-dasharray": "5 4" }, svg);
+    for (const p of c.pads) {
+      const d = p.poly.map(poly => poly.map(r => "M" + r.map(q => { const l = loc(q); return SX(l[0]).toFixed(1) + "," + SY(l[1]).toFixed(1); }).join("L") + "Z").join("")).join("");
+      const g = el("g", { style: "cursor:pointer" }, svg);
+      el("path", { d, fill: "#d9594a", stroke: "#f3c9a8", "stroke-width": 1, "fill-rule": "evenodd", opacity: .92 }, g);
+      if (p.drill) { const l = loc(p.at); el("circle", { cx: SX(l[0]), cy: SY(l[1]), r: Math.max(2, p.drill / 2 * k), fill: "#0c1220" }, g); }
+      const l = loc(p.at); padXY[p.num] = padXY[p.num] || [SX(l[0]), SY(l[1]), p];
+      hover(g, `<b>pad ${esc(p.num)}</b>${p.net ? ' · <span class="m">' + esc(p.net) + "</span>" : ""}`);
+      g.addEventListener("pointerenter", () => hiThread(p.num, true)); g.addEventListener("pointerleave", () => hiThread(p.num, false));
+    }
+    const p1 = padXY["1"]; if (p1) el("path", { d: `M${p1[0] - 22},${p1[1]} l-9,-6 v12 z`, fill: "#f3f0e8", opacity: .85 }, svg);   // (pin 1)
+  }
+  // the threads: each pin to its pad
+  window._threads = {};
+  const tg = el("g", { "pointer-events": "none" }, svg);
+  for (const num of Object.keys(pinXY)) { const a = pinXY[num], b = padXY[num]; if (!b) continue;
+    const net = b[2].net, col = net ? `hsl(${hue(net)},70%,62%)` : "#c8b27a", mx = (a[0] + b[0]) / 2;
+    const path = el("path", { d: `M${a[0]},${a[1]} C${mx},${a[1]} ${mx},${b[1]} ${b[0]},${b[1]}`, class: "thread", stroke: col }, tg);
+    el("circle", { cx: a[0], cy: a[1], r: 2.6, fill: col }, tg); el("circle", { cx: b[0], cy: b[1], r: 2.6, fill: col }, tg);
+    window._threads[num] = path; }
+  const n = Object.keys(pinXY).filter(k => padXY[k]).length, total = Math.max(Object.keys(pinXY).length, Object.keys(padXY).length);
+  $("#pcount").textContent = c.symbol ? `${n} / ${total}` : `${Object.keys(padXY).length} pads`;
+  $("#pnow").textContent = c.symbol ? (n === total ? "every pin has a pad" : "pins without pads: " + Object.keys(pinXY).filter(k => !padXY[k]).join(", ")) : "no symbol to check against";
+  $("#pverify").style.display = c.symbol ? "" : "none";
+}
+function hiThread(num, on) { const t = window._threads && window._threads[num]; if (t) t.classList.toggle("hi", on);
+  const c = B.comps.find(x => x.ref === curPart), p = c && c.symbol && c.symbol.pins.find(q => q.num === num);
+  if (on && p) $("#pnow").textContent = `pin ${num} · ${p.key} → pad ${num}`; }
+$("#pverify").onclick = () => {                         // (each connection drawn in turn, counted up)
+  const ths = window._threads || {}, keys = Object.keys(ths).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  if (verifying) clearInterval(verifying);
+  keys.forEach(k => { const t = ths[k], L = t.getTotalLength(); t.style.strokeDasharray = L; t.style.strokeDashoffset = L; t.style.transition = "none"; });
+  let i = 0; const c = B.comps.find(x => x.ref === curPart);
+  verifying = setInterval(() => {
+    if (i >= keys.length) { clearInterval(verifying); verifying = null; $("#pnow").textContent = "✓ every pin has a pad"; return; }
+    const k = keys[i], t = ths[k], p = c.symbol.pins.find(q => q.num === k);
+    t.style.transition = "stroke-dashoffset .45s ease-out"; t.style.strokeDashoffset = 0; t.classList.add("hi"); setTimeout(() => t.classList.remove("hi"), 500);
+    i++; $("#pcount").textContent = `${i} / ${keys.length}`; $("#pnow").textContent = `pin ${k} · ${p ? p.key : ""} → pad ${k}`;
+  }, 180);
+};
+
 // ---------- 3D ----------
 let scene, cam, ren, root, spin = true, orbit = { az: -0.55, el: 0.8, dist: 80, tx: 0, ty: 0 };
 function init3d() {
@@ -668,7 +811,7 @@ async function loadAll() {
   R = await getJ("/api/result"); B = await getJ("/api/board");
   $("#msg").textContent = !B || B.error ? ((B && B.error) || "No board yet") : "";
   drawHeader(); drawLayers(); drawNets(); drawChecks(); drawRun(); drawFiles(); drawLayout(); fitLayout();
-  if (activeView() === "schem") drawSchem(); if (threeReady) build3d();
+  if (activeView() === "schem") drawSchem(); if (activeView() === "parts") drawParts(); if (threeReady) build3d();
 }
 let wasRunning = false;
 async function poll() {
@@ -677,9 +820,9 @@ async function poll() {
   setTimeout(poll, P && !P.done ? 1000 : 4000);
 }
 (async () => { P = await getJ("/api/progress"); await loadAll(); poll(); })();
-window.addEventListener("resize", () => fitLayout());
+window.addEventListener("resize", () => { fitLayout(); if (activeView() === "parts") drawParts(); });
 window.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return;
-  if (e.key === "f") fitLayout(true); if (e.key === "1") $$("#seg button")[0].click(); if (e.key === "2") $$("#seg button")[1].click(); if (e.key === "3") $$("#seg button")[2].click();
+  if (e.key === "f") fitLayout(true); for (const i of [1, 2, 3, 4]) if (e.key === String(i)) $$("#seg button")[i - 1].click();
   if (e.key === "Escape") { selectNet(null); setLoupe(false); }
   if (e.key === "l" && activeView() === "layout") setLoupe(!loupeOn);
   if (e.key === "e" && activeView() === "v3d") $("#explode").click(); });

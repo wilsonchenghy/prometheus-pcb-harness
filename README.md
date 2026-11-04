@@ -39,6 +39,9 @@ What it does (`pcb.py`, its docstring has the details):
   critic reviews the board against in milliseconds and what the placer holds parts to; `--stage critic | place |
   route | check | export` runs one step, starting from the last run's saved board.
 
+- **Parts and ERC**: `place(..., symbol="Driver_Motor:DRV8833PWP")` takes a part's KiCad symbol: nets name its
+  pins by name, every pin is matched to a pad and every pad to a pin, and an ERC runs on the pin types;
+  `pcb-harness part Lib:Symbol` shows a symbol's pins, datasheet and footprint.
 - **Viewer**: `pcb-harness board.py out/ --view` opens the board in your browser while it runs (the stage, the
   try it is on, about how long is left) and keeps it open after; `pcb-harness view out/` opens a finished run.
   Layout with layers to switch, an interactive 3D view (and KiCad's photoreal render when KiCad is installed), a

@@ -6,6 +6,10 @@
   view (three.js, shipped with the page; KiCad's photoreal render when KiCad is installed), a net-label schematic,
   the findings (click one: the board zooms to it) - and, during a run, its stage, the try it is on and about how
   long is left.
+- Parts from KiCad's symbol library: wire a chip by pin name, every pin matched to a pad and every pad to a pin, an
+  ERC on the pin types in the critic, `pcb-harness part`, and a Parts view drawing each pin's thread to its pad.
+- The viewer: KiCad's own 3D export with every part's real model; a professional shell; light-drawn copper with
+  current flowing on a focused net; a build-up sweep, a cursor light, a 4x loupe, parts that drop in and explode.
 - Found by building boards as a new user: a mistyped footprint is named with the closest names KiCad has; a
   "within d mm" requirement is measured pad to pad; parts that do not fit stop the run at once instead of being
   routed round; via drops keep the board's edge gap; FreeRouting's edge slips are repaired; the critic stage no

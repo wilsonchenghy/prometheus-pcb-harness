@@ -10,6 +10,8 @@ description: Design a printed circuit board with pcb-harness - parts on KiCad fo
    approval. Everything is optional; the harness falls back to its own router and checks.
 2. Write `board.py` with a `build()` returning a `pcb.Board` (outline, parts with real KiCad footprints and pin
    numbers from the datasheet, nets with their current, pours), or start from a KiCad netlist (`.net`). Place
+   every IC with its KiCad symbol (`symbol="Lib:Name"`; `pcb-harness part Lib:Name` shows it) and wire its pins by
+   name: pins are then checked against pads both ways and an ERC runs. Place
    connectors, buttons and mounting holes yourself; give other parts `at=None` for the placer.
 3. Put what the board must meet in `req.json` (size, nets' current, `near`, `pairs`, `edge`, holes: AGENTS.md) and
    run `pcb-harness board.py out/ --spec req.json --json`. Read `clean`, `findings` (kind, pins, at, hint) and

@@ -26,6 +26,16 @@ read the findings, and edit the script until the run is clean.
 
 5. **Edit and run again.** Routes are cached per design, so a run after a small edit only re-routes what moved.
 
+## Parts by symbol: pins by name, checked both ways, and an ERC
+
+Place a chip with its KiCad symbol and wire it by pin name, not by remembered pin numbers:
+`b.place("U1", None, None, 0, "DRV8833", symbol="Driver_Motor:DRV8833PWP")` (the footprint is the symbol's own
+unless you give one), then `b.net("AIN2", [("U1", "AIN2"), ...])`; a name used by several pins (GND) takes them all.
+`pcb-harness part Driver_Motor:DRV8833PWP` prints the pin table, the datasheet link and the footprint. The
+instant placement check then matches every symbol pin to a pad and every pad to a pin, and the critic runs an ERC
+on the pins' electrical types (an input left open, a power pin unconnected or unsupplied, two outputs tied, a
+no-connect pin wired). Prefer this for every IC: a wrong pin number is the one mistake the other checks cannot see.
+
 ## Requirements and one stage at a time
 
 Write what the board must meet in a requirements file and pass `--spec req.json`: `size_mm`, `layers`, `house`,

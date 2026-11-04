@@ -154,7 +154,9 @@ def board_data(b) -> dict:
                       "at": [round(c["at"][0], 3), round(c["at"][1], 3)], "rot": c["rot"], "side": c.get("side", "F"),
                       "courtyard": _poly(cy) if cy is not None else [], "pads": by_ref.get(ref, []),
                       "height": height_of(c["fp"]), "kind": kind_of(ref, c["fp"]),
-                      "unplaced": bool(c.get("unplaced"))})
+                      "unplaced": bool(c.get("unplaced")),
+                      "symbol": ({k: c["symbol"][k] for k in ("name", "description", "datasheet", "pins", "body")}
+                                 if c.get("symbol") else None)})
     cu = b.copper()
     copper = [{"net": n, "layer": L, "poly": _poly(g, 0.01)} for (n, L), g in sorted(cu.items()) if g is not None]
     holes = [[x, y, d] for x, y, d in b.all_holes()] if hasattr(b, "all_holes") else [[x, y, d] for x, y, d in b.holes]
