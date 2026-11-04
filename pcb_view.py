@@ -302,6 +302,18 @@ def make_handler(out_dir: str):
                     return self._json(json.loads(p.read_text()) if p.exists() else {})
                 if path == "/api/board":
                     return self._json(cache.board())
+                if path == "/api/datasheet":            # (?ref=U1: its pins against its datasheet)
+                    import urllib.parse as up
+                    ref = up.parse_qs(self.path.split("?", 1)[-1]).get("ref", [""])[0]
+                    import parts
+                    sym = next((c["symbol"]["name"] for c in cache.board().get("comps", [])
+                                if c["ref"] == ref and c.get("symbol")), None)
+                    if not sym:
+                        return self._json({"error": "no symbol"})
+                    try:
+                        return self._json(parts.datasheet_check(sym))
+                    except Exception as e:
+                        return self._json({"error": f"{type(e).__name__}: {str(e)[:120]}"})
                 if path == "/api/model":
                     s = cache.script()
                     with cache.lock:

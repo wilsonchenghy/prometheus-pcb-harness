@@ -1188,3 +1188,18 @@ def test_parts_symbol_pin_names_pin_check_and_erc():
     w = pcb.Board("pw", [(0, 0), (30, 0), (30, 20), (0, 20)])            # (the wrong footprint for the symbol)
     w.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (15, 10), 0, symbol="Driver_Motor:DRV8833PWP")
     assert any("symbol pin 16 (AIN1) has no pad" in p for p in w.check_placement())
+
+
+def test_datasheet_pin_table_is_held_against_the_symbol():
+    """the datasheet's pin table (its text, as pypdf reads it) confirms each symbol pin by name and number, and a
+    pin the table numbers otherwise is reported with the table's numbers"""
+    import parts
+    page = ("5 Pin Configuration and Functions Pin Functions PIN NAME WQFN HTSSOP\\n"
+            "Both the GND pin and device PowerPADGND 13 —PPAD has PowerPAD.\\nVINT 12 14 — Internal supply\\n"
+            "VM 10 12 — Device power supply\\nX7RVCP 9 11 IO High-side gate drive\\nAIN1 14 16 I Bridge A input 1\\n"
+            "AIN2 13 15 I Bridge A input 2\\nBIN1 7 9 I\\nBIN2 8 10 I\\nnSLEEP 15 1 I Sleep mode input\\n"
+            "nFAULT 16 8 OD Fault output\\nAISEN 2 3 IO\\nBISEN 5 6 IO\\nAOUT1 1 2 O\\nAOUT2 3 4 O\\nBOUT1 6 7 O\\nBOUT2 4 5 O\\n")
+    r = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=["contents", page.replace("\\\\n", "\\n")])
+    assert r["agree"] == r["total"] == 17 and r["page"] == 2, [p for p in r["pins"] if p["status"] != "agrees"]
+    bad = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=[page.replace("AIN1 14 16", "AIN1 14 99")])
+    assert [(p["name"], p["status"]) for p in bad["pins"] if p["status"] != "agrees"] == [("AIN1", "differs")]

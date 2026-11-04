@@ -187,4 +187,98 @@ def describe(name: str, board=None) -> str:
                       f"  every pad has a pin: {'yes' if not extra else 'no: ' + ', '.join(extra)}"]
         except Exception as e:
             lines += ["", f"  footprint not checked: {e}"]
+    try:                                                # (and the manufacturer's own pin table)
+        d = datasheet_check(name)
+        if d.get("error"):
+            lines += [f"  datasheet: not checked ({d['error']})"]
+        else:
+            lines += [f"  datasheet agrees: {d['agree']} of {d['total']} pins (its pin table, page {d['page']})"]
+            for q in d["pins"]:
+                if q["status"] != "agrees":
+                    lines.append(f"    pin {q['num']} {q['name']}: {q['status']}"
+                                 + (f" (the datasheet lists {', '.join(q['datasheet'])})" if q["datasheet"] else ""))
+    except Exception as e:
+        lines += [f"  datasheet: not read ({type(e).__name__}: {str(e)[:80]})"]
     return "\n".join(lines)
+
+
+def datasheet_notes(board) -> List[dict]:
+    """critic notes: each symbol part's pins against its datasheet (a pin the datasheet numbers otherwise: an error)"""
+    notes, seen = [], {}
+    for ref, c in board.comps.items():
+        sym = c.get("symbol")
+        if not sym:
+            continue
+        try:
+            d = seen.get(sym["name"]) or datasheet_check(sym["name"])
+            seen[sym["name"]] = d
+        except Exception as e:
+            notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],
+                          "text": f"{ref}: datasheet not read ({type(e).__name__})"})
+            continue
+        if d.get("error"):
+            continue
+        bad = [q for q in d["pins"] if q["status"] == "differs"]
+        for q in bad:
+            notes.append({"severity": "error", "kind": "datasheet", "refs": [ref],
+                          "text": f"{ref} pin {q['num']} ({q['name']}): the datasheet numbers it {', '.join(q['datasheet'])} "
+                                  f"(page {d['page']})"})
+        if not bad:
+            notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],
+                          "text": f"{ref}: {d['agree']} of {d['total']} pins agree with the datasheet's pin table"})
+    return notes
+
+
+# ---- the datasheet: its pin table, read and held against the symbol ----
+
+def datasheet_text(url: str) -> List[str]:
+    """the datasheet's pages as text (fetched once into the parts cache; needs pypdf)"""
+    import hashlib
+    from vendor_parts import CACHE
+    dst = CACHE / "datasheets" / (hashlib.sha1(url.encode()).hexdigest()[:16] + ".pdf")
+    if not dst.exists() or dst.stat().st_size < 2000:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (pcb-harness datasheet check)"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            data = r.read()
+        if not data.startswith(b"%PDF"):
+            raise ValueError("the datasheet link did not give a PDF")
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_bytes(data)
+    import pypdf
+    return [(p.extract_text() or "") for p in pypdf.PdfReader(str(dst)).pages]
+
+
+def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
+    """each of the symbol's pins looked up in its datasheet's pin table: the pin's name followed by its number(s)
+    (one per package the table lists). Returns {"datasheet", "page", "pins": [{"num", "name", "status": "agrees" |
+    "differs" | "not found", "datasheet": [numbers]}], "agree", "total"}"""
+    s = symbol(name)
+    if not s["datasheet"].lower().startswith("http"):
+        return {"datasheet": s["datasheet"], "error": "the symbol has no datasheet link", "pins": []}
+    pages = list(pages) if pages is not None else datasheet_text(s["datasheet"])
+    keys = {q["key"] for q in s["pins"]}                # (the pages that hold the table: most of the pin names)
+    hits = [sum(1 for k in keys if re.search(re.escape(k) + r"(?![A-Za-z0-9_])", t)) for t in pages]
+    tables = [i for i, t in enumerate(pages) if hits[i] >= max(2, len(keys) // 2)
+              and re.search(r"pin\s*(functions|descriptions?|configuration|assignments)", t, re.I)]
+    tables.sort(key=lambda i: -hits[i])
+    text = "\n".join(pages[i] for i in (tables or range(min(len(pages), 12))))
+    exposed = bool(re.search(r"power\s*pad|ppad|thermal\s*pad|exposed\s*pad|\bEP\b|\bPAD\b", text, re.I))
+    out, agree = [], 0
+    for p in sorted(s["pins"], key=lambda p: (len(p["num"]), p["num"])):
+        variants = {p["key"], re.sub(r"^n", "", p["key"]), p["key"].replace("n", "/", 1)} - {""}
+        nums = []
+        for v in variants:
+            for m in re.finditer(re.escape(v) + r"(?![A-Za-z0-9_])\s*((?:\d{1,3}(?:\s*[,/–-]\s*|\s+)){0,5}\d{1,3}|—)", text):
+                nums += re.findall(r"\d{1,3}", m.group(1))
+        nums = list(dict.fromkeys(nums))
+        if p["num"] in nums:
+            st = "agrees"
+        elif p["type"] in ("passive", "power_in") and exposed and p["num"].isdigit() \
+                and int(p["num"]) > max(int(q["num"]) for q in s["pins"] if q["num"].isdigit() and q is not p):
+            st = "agrees"                               # (the exposed pad: the table names it, not by number)
+        else:
+            st = "differs" if nums else "not found"
+        agree += st == "agrees"
+        out.append({"num": p["num"], "name": p["key"], "status": st, "datasheet": nums})
+    page = (tables[0] + 1) if tables else None
+    return {"datasheet": s["datasheet"], "page": page, "pins": out, "agree": agree, "total": len(out)}

@@ -253,6 +253,8 @@ def main(argv=None) -> int:
     ap.add_argument("--spec", help="a requirements file (JSON: size_mm, layers, house, nets, pairs, near, edge, holes, "
                                    "assembly, max_parts) the critic checks the board against")
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
+    ap.add_argument("--datasheets", action="store_true", help="also read each symbol part's datasheet and check its "
+                    "pins against the datasheet's pin table (fetched once, then cached)")
     ap.add_argument("--view", action="store_true", help="open the board in a browser while the run goes (its stage, "
                     "the try it is on, about how long is left) and keep it open after; 'pcb-harness view OUT' later")
     a = ap.parse_args(argv)
@@ -321,6 +323,10 @@ def main(argv=None) -> int:
     t = time.perf_counter()
     prog.stage("critic")
     notes = critic.review(b, spec)
+    if a.datasheets:                                     # (the manufacturer's pin table, for each symbol part)
+        import parts
+        notes += parts.datasheet_notes(b)
+        notes.sort(key=lambda n: {"error": 0, "warning": 1, "info": 2}[n["severity"]])
     timings["critic"] = round(time.perf_counter() - t, 3)
     crit_err = [n for n in notes if n["severity"] == "error"]
     chk, fchk, kchk, kicad, files = [], [], [], {"run": False}, {}
