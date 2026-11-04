@@ -12,7 +12,7 @@ module's pin positions (the stick module is drawn from its outline, not a STEP).
 """
 import os
 
-from pcb import Board, cached_route, route
+from pcb import Board, cached_route, route, route_jobs
 
 R04, C04, C06 = "Resistor_SMD:R_0402_1005Metric", "Capacitor_SMD:C_0402_1005Metric", "Capacitor_SMD:C_0805_2012Metric"
 R04M, C04M, C06M = ("Resistor_SMD.3dshapes/R_0402_1005Metric.step", "Capacitor_SMD.3dshapes/C_0402_1005Metric.step",
@@ -38,7 +38,7 @@ PAD = {"GND": ["15", "33", "30"], "VDD": "2",
 def build(outline, at, holes, keepouts=()):
     """the board. ``at``: positions of the parts the mechanics fix (switch centres, stick axes, the USB mouth,
     the bumper switches, the hall sensors, the connectors); ``holes``: (x, y, d) mounting holes"""
-    b = Board("main", outline, thickness=1.6, copper_oz=1.0, clearance=0.15)
+    b = Board("controller_main", outline, thickness=1.6, copper_oz=1.0, clearance=0.15, rules="jlcpcb-2")
     for h in holes:
         x, y, d = h[:3]
         b.hole((x, y), d, keepout=h[3] if len(h) > 3 else d / 2 + 0.6)
@@ -168,22 +168,37 @@ def do_route(b):
         x, y = b.pad(ref, num)
         b.track("GND", "F", [(x, y), (x + dx, y + dy)], width=0.3)
         b.via("GND", (x + dx, y + dy))
+    b.drop("GND", [("R2", "2")], width=0.3)                   # (boxed in once the USB-C's pegs keep their room)
+    pn = b.pad_net()                                          # a switch's paired pins (two pads of one number):
+    for ref in [r for r in b.comps if r.startswith("SW_")]:   # joined to each other first, so KiCad reads them
+        for num, lst in b.comps[ref]["pads"].items():         # as one (it joins items only where a track ends)
+            n = pn.get((ref, num))
+            if n and len(lst) == 2:
+                c = b.comps[ref]
+                pts = []
+                for pd in lst:
+                    import math as _m
+                    a_ = _m.radians(c["rot"])
+                    px, py = pd["at"]
+                    pts.append((round(c["at"][0] + px * _m.cos(a_) - py * _m.sin(a_), 4),
+                                round(c["at"][1] + px * _m.sin(a_) + py * _m.cos(a_), 4)))
+                b.track(n, "F" if lst[0]["layers"] != "B" else "B", pts, 0.3)
     b.fanout(width=0.15)
-    first = ["CC1", "CC2"]                                     # the USB-C's crowded row before anything else
-    for n in first:
-        probs += route(b, n, width=0.2)
-    for n in ("VBUS", "VBAT", "3V3"):                           # power next, while there is room for wide tracks
-        probs += route(b, n, width=0.4 if n != "3V3" else 0.3)
-    for n in [n for n in b.nets if n not in ("GND", "VBAT", "3V3", "VBUS", *first)]:
-        probs += route(b, n, width=0.2)
-    probs += route(b, "GND", width=0.3)
-    return probs
+    first = ["CC1", "CC2"]                                     # the USB-C's crowded row before anything else,
+    jobs = [(n, 0.2, None) for n in first] + \
+        [(n, 0.4 if n != "3V3" else 0.3, None) for n in ("VBUS", "VBAT", "3V3")] + \
+        [(n, 0.2, None) for n in b.nets if n not in ("GND", "VBAT", "3V3", "VBUS", *first)] + [("GND", 0.3, None)]
+    # power next while there is room for wide tracks, then the rest, ground last; in negotiated passes
+    # (pcb.route_jobs: a net that fails goes first next pass, nets round a pad still stuck are torn up and routed
+    # again, a net a later one split is joined back)
+    return probs + route_jobs(b, jobs, passes=4)
 
 
 def routed(outline, at, holes, keepouts=()):
     b = build(outline, at, holes, keepouts)
-    probs = cached_route(b, do_route, tag="ctl_v3")   # (bump the tag when do_route changes: the cache keys the placement, not this code)
-    return b, probs
+    store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "routes")    # routed copper, kept in git
+    probs = cached_route(b, do_route, tag="ctl_v10", store=store)   # (bump the tag when do_route changes: the cache
+    return b, probs                                                 # keys the placement, not this code)
 
 
 if __name__ == "__main__":

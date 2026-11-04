@@ -1,0 +1,3 @@
+{"size_mm": [50, 50], "layers": 2, "house": "jlcpcb-2",
+ "nets": {"5V": {"amps": 0.8}},
+ "near": [["C14", "U1", 4.0]], "holes": {"count": 1, "d": 3.2}}

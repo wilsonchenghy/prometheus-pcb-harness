@@ -444,7 +444,7 @@ def test_pcb_route_changes_layer_in_a_plated_hole_without_a_via():
 
 
 def test_pcb_project_footprint_library():
-    """footprints KiCad's library lacks come from footprints/ (no download): the BMP390's ten pads on
+    """footprints KiCad's library lacks come from pcb_footprints/ (no download): the BMP390's ten pads on
     Bosch's land, the servo block's 18 plated holes, numbered column by column"""
     import pytest
     pytest.importorskip("shapely")
@@ -484,8 +484,8 @@ def test_pcb_route_through_an_inner_layer():
 
 
 def test_pcb_route_seed_pins_joins_an_island_to_the_main_group():
-    """a pad sitting in a piece of its net's pour that nothing joins to the rest passes for routed, unless route()
-    is told which pads are the main group (seed_pins): then it is routed back to them"""
+    """a pad sitting in a piece of its net's pour that nothing joins to the rest is joined back to the net's main
+    group: by route() itself now (it checks the net's islands after routing), or with seed_pins named"""
     import pytest
     pytest.importorskip("shapely")
     try:
@@ -499,10 +499,12 @@ def test_pcb_route_seed_pins_joins_an_island_to_the_main_group():
     b.net("A", [("R1", "2"), ("R2", "1")], amps=0.1)
     b.net("G", [("R1", "1"), ("R2", "2")], amps=0.1, volts=0)
     b.pour("A", "F", [(20, 2), (29, 2), (29, 18), (20, 18)])        # an island of A's pour round R2 only
+    b2 = pcb.Board("i", [(0, 0), (30, 0), (30, 20), (0, 20)], clearance=0.15)
+    b2.comps, b2.nets, b2.pours = dict(b.comps), dict(b.nets), list(b.pours)
     assert pcb.route(b, "A", width=0.2, only=[("R2", "1")]) == []
-    assert len(b.islands("A")) == 2                                # (taken as reached: nothing was routed)
-    assert pcb.route(b, "A", width=0.2, only=[("R2", "1")], seed_pins=[("R1", "2")]) == []
-    assert len(b.islands("A")) == 1
+    assert len(b.islands("A")) == 1                                # (the island found and joined)
+    assert pcb.route(b2, "A", width=0.2, only=[("R2", "1")], seed_pins=[("R1", "2")]) == []
+    assert len(b2.islands("A")) == 1
 
 
 def test_pcb_check_finds_a_pour_neck_and_says_where():
@@ -720,3 +722,405 @@ def test_pcb_kicad_board_file(tmp_path):
     assert any(isinstance(f, list) and f[0] == "segment" for f in tree)
     import json
     assert json.load(open(pro_path))["net_settings"]["classes"][0]["clearance"] == b.clear
+
+
+def test_fab_order_cpl_bom_and_cart(tmp_path):
+    """fab: the pick-and-place file, the JLCPCB BOM and the cart (three shops' CSVs, buy.html) from one board"""
+    import csv as _csv
+    import fab
+    import pcb
+    b = pcb.Board("t", [(0, 0), (20, 0), (20, 10), (0, 10)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 5.0), 90, "10k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (9.0, 5.0), 0, "10k")
+    b.place("U1", "Package_TO_SOT_SMD:SOT-23", (15.0, 5.0), 0, "", "TI TLV431", side="B", lcsc="C125052")
+    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (2.0, 8.0), 0, "out")
+    b.place("D1", "LED_SMD:LED_0603_1608Metric", (12.0, 2.0), 0, "red")
+    files = fab.order(b, str(tmp_path / "order"), boards=3)
+    q = {l_["refs"][0]: l_["query"] for l_ in fab.lines(b)}
+    assert q["J2"] == "1x04 2.54mm pin header" and q["D1"] == "red 0603 LED"
+    assert "report" in files and "Design check" in open(files["report"]).read()
+    rows = list(_csv.DictReader(open(files["cpl"])))
+    rows = {r["Designator"]: r for r in rows}
+    assert sorted(rows) == ["D1", "J2", "R1", "R2", "U1"]
+    assert rows["R1"]["Rotation"] == "90.0" and rows["U1"]["Layer"] == "Bottom" and rows["R1"]["Mid X"] == "5.000mm"
+    jlc = list(_csv.DictReader(open(files["bom_jlc"])))
+    assert {r["Designator"]: r["LCSC Part #"] for r in jlc}["U1"] == "C125052"
+    dk = list(_csv.DictReader(open(files["digikey"])))
+    by = {r["Customer Reference"]: r for r in dk}
+    assert by["U1"]["Manufacturer Part Number"] == "TLV431" and by["U1"]["Manufacturer"] == "TI"
+    assert int(by["R1,R2"]["Quantity"]) == 7                        # 2 x 3 boards + 10 % spare, rounded up
+    assert "10k 0603 resistor" in by["R1,R2"]["Manufacturer Part Number"]
+    page = open(files["html"]).read()
+    assert "digikey.com" in page and "lcsc.com/search?q=C125052" in page and files["gerbers"].endswith(".zip")
+
+
+def test_fab_check_against_a_house_preset():
+    """fab.fab_check: a thin track, a small via near the edge and two vias too close are each reported, with where"""
+    import fab
+    import pcb
+    b = pcb.Board("t", [(0, 0), (30, 0), (30, 20), (0, 20)], clearance=0.1)
+    b.track("A", "F", [(5.0, 10.0), (20.0, 10.0)], width=0.1)
+    b.via("A", (0.4, 10.0), drill=0.2, dia=0.4)
+    b.via("A", (10.0, 5.0)), b.via("A", (10.5, 5.0))
+    probs = fab.fab_check(b, "jlcpcb-2")
+    txt = "\n".join(probs)
+    assert "0.100 mm wide" in txt and "clearance 0.100" in txt and "drill 0.20 < 0.30" in txt
+    assert "closer than 0.30 mm to the edge" in txt and "drills 0.10 mm apart" in txt
+    assert not [p for p in fab.fab_check(b, dict(fab.RULES["pcbway-std"], track=0.1, space=0.1, drill=0.2, via_dia=0.4,
+                                                 annular=0.1, hole_gap=0.0, edge=0.0)) if "wide" in p]
+
+
+def test_pair_skew_and_paste_layer(tmp_path):
+    """a differential pair whose tracks differ in length is reported; Gerbers carry a paste layer for SMD pads"""
+    import os
+    import pcb
+    b = pcb.Board("t", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 10.0), 0, "1k")
+    b.track("DP", "F", [(5.0, 5.0), (25.0, 5.0)], 0.2)
+    b.track("DN", "F", [(5.0, 6.0), (20.0, 6.0)], 0.2)
+    b.pair("DP", "DN", max_skew=0.5)
+    assert abs(b.net_length("DP") - 20.0) < 1e-9
+    probs = b.check()
+    assert any("pair DP / DN" in p and "5.00 mm apart" in p for p in probs), probs
+    files = [os.path.basename(f) for f in pcb.export_gerbers(b, str(tmp_path))]
+    assert "t-F_Paste.gtp" in files and "t-B_Paste.gbp" not in files
+
+
+def test_gerbers_read_back_by_an_independent_parser(tmp_path):
+    """gerbonara (an independent Gerber / Excellon reader) recognises every layer we write and their extents
+    match the board"""
+    gerbonara = pytest.importorskip("gerbonara")
+    import pcb
+    b = pcb.Board("g", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (20.0, 10.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    assert not pcb.route(b, "A", width=0.25)
+    b.via("A", (15.0, 15.0))
+    pcb.export_gerbers(b, str(tmp_path))
+    st = gerbonara.LayerStack.open(str(tmp_path))
+    names = str(st)
+    for kind in ("top copper", "top mask", "top paste", "top silk", "bottom copper", "mechanical outline"):
+        assert kind in names, names
+    out = gerbonara.GerberFile.open(str(tmp_path / "g-Edge_Cuts.gm1")).bounding_box()
+    assert abs(out[1][0] - 30.0) < 0.2 and abs(out[1][1] - 20.0) < 0.2
+
+
+def test_parts_take_their_footprints_3d_model_and_export_step(tmp_path):
+    """a part placed without a model gets the 3D model its KiCad footprint names; export_step writes the board"""
+    pytest.importorskip("build123d")
+    import os
+    import pcb
+    b = pcb.Board("s", [(0, 0), (20, 0), (20, 10), (0, 10)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10.0, 5.0), 0, "1k")
+    assert b.comps["R1"]["model"] == "Resistor_SMD.3dshapes/R_0603_1608Metric.step"
+    f = pcb.export_step(b, str(tmp_path / "s.step"), models=False)
+    assert os.path.getsize(f) > 1000
+
+
+def test_autoroute_routes_a_board_in_one_call():
+    """pcb.autoroute: every net of a small board routed (signals, then power, then the poured ground) with no
+    per-net tuning; a net's own width is used"""
+    import uuid
+    import pcb
+    out = [(0, 0), (30, 0), (30, 20), (0, 20)]
+    b = pcb.Board(f"a{uuid.uuid4().hex[:8]}", out)                  # (a fresh name: no route checkpoint reused)
+    for k, x in enumerate((6, 14, 22)):
+        b.place(f"R{k + 1}", "Resistor_SMD:R_0603_1608Metric", (x, 10.0), 90, "1k")
+    b.net("VCC", [("R1", "2"), ("R2", "2"), ("R3", "2")], amps=0.5, width=0.4)
+    b.net("S", [("R1", "1"), ("R2", "1")])
+    b.net("GND", [("R3", "1")])
+    b.pour("GND", "B", out)
+    assert pcb.autoroute(b) == [] and b.check() == []
+    assert {t["w"] for t in b.tracks if t["net"] == "VCC"} == {0.4}
+
+
+def test_kicad_board_reads_back_with_kiutils(tmp_path):
+    """the exported .kicad_pcb parses with an independent KiCad file reader (kiutils): every part, every net,
+    every segment and via, the zone"""
+    kiutils_board = pytest.importorskip("kiutils.board")
+    import pcb
+    b = pcb.Board("k", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (8.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (22.0, 10.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    b.net("GND", [("R1", "1"), ("R2", "2")])
+    b.pour("GND", "B", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    assert not pcb.route(b, "A", width=0.25) and not pcb.route(b, "GND", width=0.3)
+    path = pcb.export_kicad(b, str(tmp_path))[0]
+    kb = kiutils_board.Board.from_file(path)
+    assert len(kb.footprints) == 2 and len(kb.zones) == 1
+    assert {n.name for n in kb.nets} >= {"A", "GND"}
+    assert len(kb.traceItems) == sum(len(t["pts"]) - 1 for t in b.tracks) + len(b.vias)
+
+
+def test_thermal_vias_meet_the_fab_drill_and_stale_routes_are_not_reused():
+    """with a fab preset, an exposed pad's 0.2 mm thermal vias are drilled to the house minimum (a pin's hole is
+    left alone), and a routing saved before the change does not come back with a via now too close to them"""
+    import fab
+    import pcb
+    out = [(0, 0), (40, 0), (40, 40), (0, 40)]
+    b = pcb.Board("t", out, rules="jlcpcb-2")
+    b.place("U1", "RF_Module:ESP32-WROOM-32E", (20.0, 22.0), 0, "ESP32")
+    assert all(p["drill"] in (None, 0.3) for p in b.comps["U1"]["pads"]["39"])
+    assert not [p for p in fab.fab_check(b) if "drill" in p]
+    old = {"placement": {"U1": ("RF_Module:ESP32-WROOM-32E", (20.0, 22.0), 0, "F")}, "tracks": [], "vias": []}
+    assert "U1" in {r for r in pcb.placement(b) if pcb.placement(b)[r] != old["placement"].get(r)}
+    plain = pcb.Board("t2", out)
+    plain.place("U1", "RF_Module:ESP32-WROOM-32E", (20.0, 22.0), 0, "ESP32")
+    assert any(p["drill"] == 0.2 for p in plain.comps["U1"]["pads"]["39"])
+    assert pcb.placement(plain) == old["placement"]                # (no preset: footprint as KiCad has it)
+
+
+def test_autoplace_then_route_a_parts_list():
+    """parts given no position (at=None) are placed on the board, courtyards apart and clear of a fixed connector
+    and a mounting hole, and the board then routes clean and passes the fab preset"""
+    import uuid
+    import fab
+    import pcb
+    out = [(0, 0), (35, 0), (35, 25), (0, 25)]
+    b = pcb.Board(f"ap{uuid.uuid4().hex[:8]}", out, rules="jlcpcb-2")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (4.0, 11.0), 0, "5V in")
+    b.hole((30.0, 20.0), 3.2)
+    b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", None, 0, "NE555")
+    for r in ("R1", "R2", "R3"):
+        b.place(r, "Resistor_SMD:R_0603_1608Metric", None, 0, "1k")
+    for r in ("C1", "C2"):
+        b.place(r, "Capacitor_SMD:C_0603_1608Metric", None, 0, "100n")
+    b.place("D1", "LED_SMD:LED_0603_1608Metric", None, 0, "red")
+    assert any("no position" in p for p in b.check_placement())
+    b.net("VCC", [("J1", "1"), ("U1", "8"), ("U1", "4"), ("R1", "1"), ("C2", "1")])
+    b.net("GND", [("J1", "2"), ("U1", "1"), ("C1", "2"), ("C2", "2"), ("D1", "1")])
+    b.net("DIS", [("U1", "7"), ("R1", "2"), ("R2", "1")])
+    b.net("THR", [("U1", "6"), ("U1", "2"), ("R2", "2"), ("C1", "1")])
+    b.net("OUT", [("U1", "3"), ("R3", "1")])
+    b.net("LED", [("R3", "2"), ("D1", "2")])
+    b.pour("GND", "B", out)
+    assert pcb.place_and_route(b) == []
+    assert b.comps["J1"]["at"] == (4.0, 11.0) and b.check_placement() == []
+    from shapely.geometry import Point
+    assert all(not b.courtyard(r).intersects(Point(30, 20).buffer(1.6)) for r in b.comps)
+    assert b.check() == [] and fab.fab_check(b) == []
+
+
+def test_kicad_netlist_to_a_clean_board():
+    """a KiCad netlist (.net) becomes a board: footprints, values, MPN and LCSC fields, nets of two or more pins
+    (hierarchical '/' stripped, unconnected pins dropped), a part with no footprint noted and left out, GND poured;
+    then placed and routed clean"""
+    import uuid
+    import fab
+    import pcb
+    net = Path(__file__).parent.parent / "examples" / "netlist" / "blinker_sch.net"
+    b = pcb.from_netlist(str(net), (35, 25), at={"J1": (4, 12.5)}, rules="jlcpcb-2", name=f"nl{uuid.uuid4().hex[:8]}")
+    assert set(b.comps) == {"J1", "U1", "R1", "R2", "R3", "C1", "C2", "D1"}
+    assert any("TP1" in n for n in b.import_notes)
+    assert set(b.nets) == {"+5V", "GND", "DIS", "THR", "Net-(U1-Q)", "Net-(D1-A)"}
+    assert b.comps["U1"]["mpn"] == "TI NE555DR" and b.comps["R1"]["lcsc"] == "C21190"
+    assert [p["net"] for p in b.pours] == ["GND"]
+    assert pcb.place_and_route(b) == [] and b.check() == [] and fab.fab_check(b) == []
+
+
+def test_clearance_between_pours_tracks_and_pads():
+    """the clearance check finds a track too near another net's pad, two pours of different nets overlapping, and
+    two pours too close (the pour outlines are measured as segments, so each case is worth a test)"""
+    import pcb
+    out = [(0, 0), (30, 0), (30, 20), (0, 20)]
+    b = pcb.Board("c1", out)
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10, 10), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (20, 10), 0, "1k")
+    b.net("A", [("R1", "1"), ("R2", "1")])
+    b.net("B", [("R1", "2"), ("R2", "2")])
+    x, y = b.pad("R1", "2")
+    b.track("A", "F", [(x - 1.5, y + 0.75), (x + 3, y + 0.75)], 0.2)
+    assert any(p.startswith("F.Cu: A and B 0.18 mm apart") for p in b.check())
+    b = pcb.Board("c2", out)
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (10, 10), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (20, 10), 0, "1k")
+    b.net("A", [("R1", "1")])
+    b.net("B", [("R2", "2")])
+    b.pour("A", "F", [(0, 0), (16, 0), (16, 20), (0, 20)])
+    b.pour("B", "F", [(15, 0), (30, 0), (30, 20), (15, 20)])
+    assert any(p.startswith("F.Cu: A and B short") for p in b.check())
+    b.pours[1]["poly"] = [(16.1, 0), (30, 0), (30, 20), (16.1, 20)]
+    assert any(p.startswith("F.Cu: A and B 0.10 mm apart") for p in b.check())
+
+
+def test_cart_merges_one_part_used_under_two_values():
+    """two buttons of one part number labelled EN and BOOT are one line to buy, with both refs and both values"""
+    import fab
+    import pcb
+    b = pcb.Board("cart2", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("SW1", "Button_Switch_SMD:SW_SPST_TL3342", (8, 10), 0, "EN", "E-Switch TL3342F160QG")
+    b.place("SW2", "Button_Switch_SMD:SW_SPST_TL3342", (20, 10), 0, "BOOT", "E-Switch TL3342F160QG")
+    ls = fab.lines(b, boards=5)
+    assert len(ls) == 1 and ls[0]["refs"] == ["SW1", "SW2"] and ls[0]["need"] == 10 and ls[0]["value"] == "EN / BOOT"
+
+
+def test_microstrip_impedance_and_width():
+    """IPC-2141: a wider track is a lower impedance, a pair below its single-ended double, and width_for_z0 inverts"""
+    import pcb
+    assert pcb.microstrip_z0(0.2, 0.2) > pcb.microstrip_z0(0.4, 0.2)
+    assert 45 < pcb.microstrip_z0(0.33, 0.2) < 55
+    w = pcb.width_for_z0(90, 0.2, gap=0.15)
+    assert abs(pcb.microstrip_z0(w, 0.2, gap=0.15) - 90) < 0.5
+    assert pcb.microstrip_z0(w, 0.2, gap=0.15) < 2 * pcb.microstrip_z0(w, 0.2)
+
+
+def test_cli_findings_are_data_for_an_agent():
+    """each finding comes back with its kind, the pins and place it names, and a hint"""
+    import pcb_cli
+    f = pcb_cli.finding("routing", "route GND: could not reach RB2V.2 (blocked; move parts or widen a channel)")
+    assert f["kind"] == "unreached" and f["pins"] == ["RB2V.2"] and f["hint"]
+    f = pcb_cli.finding("design", "F.Cu: A and B 0.18 mm apart (clearance 0.2) at (10.6, 10.6)")
+    assert f["kind"] == "clearance" and f["at"] == [10.6, 10.6]
+    assert pcb_cli.finding("design", "net GP0 is split in 2: J2.1 | U1.2")["pins"] == ["J2.1", "U1.2"]
+
+
+def test_freerouting_round_trip(tmp_path):
+    """the Specctra design names every netted pad and the net widths; a session's wires and vias come back as
+    tracks and vias at the session's resolution; with FreeRouting installed, a small board routes clean through it"""
+    import freerouting
+    import pcb
+    out = [(0, 0), (30, 0), (30, 20), (0, 20)]
+    b = pcb.Board("frt", out)
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (8.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (22.0, 10.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")], width=0.3)
+    b.net("GND", [("R1", "1"), ("R2", "2")])
+    b.pour("GND", "B", out)
+    dsn = freerouting.export_dsn(b, str(tmp_path / "frt.dsn"), skip_nets=["GND"])
+    tree = freerouting._sexpr(open(dsn).read())
+    nets = {n[1]: n for n in freerouting._walk(tree, "net")}
+    assert set(nets) == {"A"} and '"R1"-"2"' in open(dsn).read()
+    assert any("300.0" in " ".join(map(str, c)) for c in freerouting._walk(tree, "rule") if "width" in str(c))
+    ses = tmp_path / "frt.ses"
+    ses.write_text('(session "frt.ses" (routes (resolution um 10) (network_out (net "A" '
+                   '(wire (path F.Cu 3000 88000 100000 150000 100000)) (via "V" 150000 100000)))))')
+    assert freerouting.import_ses(b, str(ses)) == (1, 1)
+    assert b.tracks[-1]["pts"] == [(8.8, 10.0), (15.0, 10.0)] and b.tracks[-1]["w"] == 0.3
+    assert b.vias[-1]["at"] == (15.0, 10.0)
+    if freerouting.available():
+        b2 = pcb.Board("frt2", out)
+        for r, x in (("R1", 8.0), ("R2", 22.0)):
+            b2.place(r, "Resistor_SMD:R_0603_1608Metric", (x, 10.0), 0, "1k")
+        b2.net("A", [("R1", "2"), ("R2", "1")])
+        b2.net("GND", [("R1", "1"), ("R2", "2")])
+        b2.pour("GND", "B", out)
+        assert freerouting.route(b2) == [] and b2.check() == []
+
+
+def test_footprint_bare_holes_are_obstacles_and_drilled():
+    """a USB-C's locating pegs (non-plated holes inside its footprint) are found, the check flags copper over them,
+    and the drill file drills them (KiCad's DRC caught a route across them before the harness knew of them)"""
+    import pcb
+    b = pcb.Board("peg", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (4.0, 10.0), 270,
+            "USB-C", overhang=True)
+    holes = b.npth()
+    assert len(holes) == 2 and all(abs(d - 0.65) < 1e-9 for _, _, d in holes)
+    x, y, _ = holes[0]
+    b.net("VBUS", [("J1", "A4"), ("J1", "A9")])
+    b.track("VBUS", "B", [(x - 2, y), (x + 2, y)], 0.3)
+    assert any("bare hole" in p for p in b.check())
+    import tempfile
+    out = tempfile.mkdtemp()
+    pcb.export_gerbers(b, out)
+    import glob
+    npth = open([f for f in glob.glob(out + "/*") if "NPTH" in f][0]).read()
+    assert "C0.650" in npth
+
+
+def test_doctor_reports_each_optional_piece():
+    """pcb-harness doctor names KiCad, its Python, Java and FreeRouting, each with what it gives and the fallback"""
+    import pcb_cli
+    rows = pcb_cli.doctor()
+    assert {"kicad", "kicad_python", "java", "freerouting"} <= set(rows)
+    assert all(r["gives"] and r["without"] for r in rows.values())
+
+
+def test_critic_flags_requirements_and_review_points():
+    """the critic finds a broken requirement (size, layers, current, a part too far) and the usual review points
+    (decoupling far from a supply pin, an undeclared USB pair, no ground pour) in a moment"""
+    import time
+    import critic
+    import pcb
+    b = pcb.Board("crit", [(0, 0), (40, 0), (40, 30), (0, 30)])
+    b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (10, 15), 0, "MCU")
+    b.place("C1", "Capacitor_SMD:C_0603_1608Metric", (35, 25), 0, "100n")
+    b.net("3V3", [("U1", "8"), ("C1", "1")], amps=0.2)
+    b.net("GND", [("U1", "4"), ("C1", "2")])
+    b.net("USB_DP", [("U1", "2")])
+    b.net("USB_DM", [("U1", "3")])
+    t = time.perf_counter()
+    notes = critic.review(b, {"size_mm": [30, 30], "layers": 4, "nets": {"3V3": {"amps": 1.0}}, "near": [["C1", "U1", 3]]})
+    assert time.perf_counter() - t < 1.0
+    kinds = {(n["severity"], n["kind"]) for n in notes}
+    assert {("error", "size"), ("error", "layers"), ("error", "current"), ("error", "near")} <= kinds
+    assert {("warning", "decoupling"), ("warning", "pair"), ("warning", "ground")} <= kinds
+    assert notes[0]["severity"] == "error"
+
+
+def test_cli_stages(tmp_path):
+    """--stage critic and --stage place run without routing or writing order files; all writes them"""
+    import json
+    import pcb_cli
+    here = Path(__file__).parent.parent
+    rc = pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "c"), "--stage", "critic", "--kicad-drc", "off"])
+    r = json.load(open(tmp_path / "c" / "result.json"))
+    assert r["stage"] == "critic" and r["files"] == {} and "critic" in r and rc in (0, 1)
+    pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "a"), "--kicad-drc", "off", "--router", "harness"])
+    r = json.load(open(tmp_path / "a" / "result.json"))
+    assert r["stage"] == "all" and "gerbers" in r["files"] and r["parts"] == 8
+
+
+def test_tune_pairs_lengthens_the_shorter_net():
+    """a pair over its skew gets a serpentine on the shorter net's straight stretch, within the skew after, and the
+    check finds nothing new"""
+    import pcb
+    b = pcb.Board("tp", [(0, 0), (40, 0), (40, 20), (0, 20)])
+    b.track("DP", "F", [(5.0, 5.0), (30.0, 5.0)], 0.2)
+    b.track("DN", "F", [(5.0, 12.0), (25.0, 12.0)], 0.2)
+    b.pair("DP", "DN", max_skew=0.5)
+    before = set(b.check())
+    assert pcb.tune_pairs(b) == []
+    assert abs(b.net_length("DP") - b.net_length("DN")) <= 0.5
+    assert len(b.tracks[1]["pts"]) > 2 and not (set(b.check()) - before)
+
+
+def test_placer_holds_required_parts_near_and_is_repeatable():
+    """board.near (a requirement's "within d mm") is met by autoplace, and the same seed gives the same placement"""
+    import pcb
+
+    def make():
+        out = [(0, 0), (40, 0), (40, 30), (0, 30)]
+        b = pcb.Board("nr", out, rules="jlcpcb-2")
+        b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", None, 0, "IC")
+        for r in ("R1", "R2", "R3", "R4"):
+            b.place(r, "Resistor_SMD:R_0603_1608Metric", None, 0, "1k")
+        b.place("C1", "Capacitor_SMD:C_0603_1608Metric", None, 0, "100n")
+        b.net("VCC", [("U1", "8"), ("C1", "1"), ("R1", "1"), ("R2", "1"), ("R3", "1"), ("R4", "1")])
+        b.net("GND", [("U1", "4"), ("C1", "2")])
+        for k in range(4):
+            b.net(f"S{k}", [("U1", str(k + 1 if k < 3 else 5)), (f"R{k + 1}", "2")])
+        b.near = [("C1", "U1", 2.0)]
+        return b
+    a, c = make(), make()
+    pcb.autoplace(a, seed=3)
+    pcb.autoplace(c, seed=3)
+    assert pcb.near_misses(a) == []
+    assert {r: v["at"] for r, v in a.comps.items()} == {r: v["at"] for r, v in c.comps.items()}
+
+
+def test_stage_check_starts_from_the_saved_board(tmp_path, capsys):
+    """a route run saves the board; --stage check then reuses its placement and copper without routing"""
+    import json
+    import pcb_cli
+    here = Path(__file__).parent.parent
+    out = str(tmp_path / "o")
+    pcb_cli.main([str(here / "bench" / "blinker.py"), out, "--stage", "route", "--router", "harness", "--kicad-drc", "off"])
+    assert (tmp_path / "o" / "board_state.pkl").exists()
+    capsys.readouterr()
+    pcb_cli.main([str(here / "bench" / "blinker.py"), out, "--stage", "check", "--kicad-drc", "off"])
+    said = capsys.readouterr().out
+    r = json.load(open(tmp_path / "o" / "result.json"))
+    assert "from the last run" in said and r["clean"] and "route" not in r["timings"]

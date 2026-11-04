@@ -1,5 +1,6 @@
 numpy
 shapely>=2
+matplotlib
 pillow
 build123d
 schemdraw

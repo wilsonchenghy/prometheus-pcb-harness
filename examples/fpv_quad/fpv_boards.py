@@ -11,7 +11,7 @@ import sys
 
 sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")]
 from build123d import *
-from pcb import Board, route, cached_route
+from pcb import Board, route, cached_route, route_jobs
 from vendor_parts import kicad
 
 SP_PINS = {"SIG": "13", "S_A": "14", "S_B": "17", "S_C": "20", "S_V": "23", "GND": "18", "GND2": "33",
@@ -393,17 +393,13 @@ def fc_route(b):
     order = ["GYRO_SCK", "GYRO_MISO", "GYRO_MOSI", "GYRO_CS", "GYRO_INT", "M1", "M2", "M3", "M4", "OSC_IN", "OSC_OUT", "USB_DM", "USB_DP",
              "FL_SCK", "FL_MISO", "FL_MOSI", "FL_CS", "VCAP1", "VCAP2", "RX_TX", "RX_RX",
              "VTX_TX", "VTX_RX", "VSENSE", "LED1", "LED1K", "LED2K", "BOOT0", "CC1", "CC2", "CB", "FB"]
-    for nm in order[:9]:
-        probs += route(b, nm, width=0.1)
-    probs += route(b, "3V3", width=0.2)
-    for nm in order[9:]:
-        probs += route(b, nm, width=0.1)
-    probs += route(b, "SW", width=0.5)
-    probs += route(b, "VBUS", width=0.3)
-    probs += route(b, "VBAT", width=0.4, only=[p for p in b.nets["VBAT"]["pins"][1:] if p[0] != "R4"])
-    probs += route(b, "VBAT", width=0.2, amps=0.01, only=[("R4", "1")])
-    probs += route(b, "5V", width=0.4)
-    probs += route(b, "GND", width=0.2, amps=0.3, only=[p for p in b.nets["GND"]["pins"]][1:])
+    # negotiated passes (pcb.route_jobs): a net that fails is routed first on the next pass, the best pass kept
+    jobs = [(nm, 0.1, None) for nm in order[:9]] + [("3V3", 0.2, None)] + [(nm, 0.1, None) for nm in order[9:]] + \
+        [("SW", 0.5, None), ("VBUS", 0.3, None),
+         ("VBAT", 0.4, [p for p in b.nets["VBAT"]["pins"][1:] if p[0] != "R4"]),
+         ("VBAT", 0.2, [("R4", "1")], {"amps": 0.01}),               # (the battery sense divider: no current)
+         ("5V", 0.4, None), ("GND", 0.2, None, {"amps": 0.3})]
+    probs += route_jobs(b, jobs, passes=4)
     b.stitch("GND", [(-17.5, -17.5), (17.5, -17.5), (17.5, 17.5), (-17.5, 17.5)], pitch=1.5)
     return probs
 

@@ -16,25 +16,113 @@ b.plot("layers.png"); b.bom()
 
 What it does (`pcb.py`, its docstring has the details):
 
-- **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `footprints/`.
-- **Copper**: tracks, pours, vias, stitching, 2 or 4 layers (inner planes), an autorouter (`route`, `route_jobs`) with
+- **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `pcb_footprints/`.
+- **Placement**: give parts no position (`at=None`) and `place_and_route(board)` places them (short wire, courtyards
+  apart, clear of holes and keep-outs, connectors you placed left alone) and routes the board, placing again if the
+  routing is not clean; `autoplace(board)` places only.
+- **Copper**: tracks, pours, vias, stitching, 2 or 4 layers (inner planes), an autorouter (`autoroute(board)` for the
+  whole board in one call; `route`, `route_jobs` per net) with
   routes cached by board hash (`cached_route`, optionally stored in git).
 - **Checks**: every net connected, no shorts, track and pour widths for the current (IPC-2221, external and internal),
   clearance, voltage drop, drill spacing, courtyards, dead copper.
-- **Output**: Gerbers + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
+- **Fab rules**: `Board(..., rules="jlcpcb-2")` makes the router and the check keep a house's clearance, drill gap
+  and edge gap; `b.pair("D+", "D-", max_skew=0.15)` keeps a differential pair matched in length.
+- **Output**: a STEP of the assembled board (`export_step`, every part's KiCad 3D model by default) for the
+  enclosure; Gerbers (copper, mask, paste for the stencil, silkscreen with the reference designators, outline) + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
   KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
 - **Schematics** (`schem.py`): sheets drawn from the board's netlist and checked against it (needs `schemdraw`).
+- **Fab and parts** (`fab.py`): design-rule presets for JLCPCB, PCBWay and OSH Park and a check against them
+  (`fab_check`); the pick-and-place file and the JLCPCB assembly BOM; a parts cart (BOM-upload CSVs for DigiKey,
+  Mouser and LCSC, and a `buy.html` with a search link per line at each shop); `fab.order()` writes it all.
+
+- **Requirements and stages**: `--spec req.json` (size, currents, `near`, `pairs`, `edge`, holes) is what the
+  critic reviews the board against in milliseconds and what the placer holds parts to; `--stage critic | place |
+  route | check | export` runs one step, starting from the last run's saved board.
+
+From the command line, one script to an order folder (route if unrouted, check, house check, Gerbers zip, CPL, BOM,
+parts cart, KiCad project, report; `--step` adds the 3D board; exit 0 when everything is clean):
+
+```
+python -m pcb_cli bench/esp32_sensor.py out/ --boards 10 --rules jlcpcb-2
+pcb-harness bench/esp32_sensor.py out/          # the same, as installed by pip
+```
+
+Already have a KiCad schematic? Export its netlist (Eeschema: File > Export > Netlist) and give the board's size;
+the parts are placed, routed to the fab's rules and written out for ordering (`pcb.from_netlist` in Python):
+
+```
+python -m pcb_cli examples/netlist/blinker_sch.net out/ --size 35x25 --at J1=4,12.5
+```
+
+Setting up a machine or an agent's environment (KiCad, Java, FreeRouting, and what happens without them)?
+`docs/setup.md`; `pcb-harness doctor` says what a machine has. Driving it from an agent? `AGENTS.md` gives the loop (write the script, run with `--json`, fix the findings).
+New here? `docs/getting-started.md` walks a board from nothing to an order; `docs/ordering.md` says which file
+goes where when you order. `python bench/run.py` builds and times
+every example board.
+
+## Status
+
+What a clean run means: the board's own design check and the fab house's rules both pass. Measured on this
+repository's boards (`python bench/run.py`; `PCB_REROUTE=1` routes from scratch instead of loading the committed
+routes):
+
+| Board | Parts | Layers | From scratch | Result |
+|---|---|---|---|---|
+| blinker (555 + LED) | 8 | 2 | under 1 s, also placed automatically | clean (JLCPCB) |
+| usb_ldo (USB-C to 3.3 V) | 10 | 2 | about 1 s, also placed automatically | clean (JLCPCB) |
+| esp32_sensor | 21 | 2 | 4 s; 8 s placed automatically | clean (JLCPCB) |
+| led_ring (12 WS2812B, round) | 31 | 2 | 14 s, placed, FreeRouting | clean, KiCad DRC clean |
+| motor_driver (DRV8833, 2 oz) | 15 | 2 | 14 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
+| power_bank (LiPo, 2 A paths) | 25 | 2 | 13 s, placed, FreeRouting | clean, KiCad DRC clean, its spec met |
+| can_node (STM32F103, CAN) | 24 | 2 | about 40 s, placed, FreeRouting, pair length-tuned | clean, KiCad DRC clean, its spec met |
+| rp2040_board (0.4 mm QFN-56) | 34 | 2 | about 3.5 min, placed (clean on the 6th placement tried; tries run 4 at a time), FreeRouting through KiCad (without KiCad: not clean, 2 nets left) | clean, KiCad DRC clean |
+| arm_pdb (60 A power) | 56 | 2 | about 80 s | clean (JLCPCB) |
+| cube_main | 25 | 2 | about 60 s | clean (JLCPCB) |
+| ripple_main | 67 | 2 | about 50 s | clean (JLCPCB) |
+| qdd_main | 70 | 2 | about 55 s | clean (JLCPCB) |
+| controller_main | 47 | 2 | about 26 s | routed clean; two mounting holes sit 0.3 mm from the shell's 7.2 mm cut-outs (the shell's geometry) |
+| fpv_fc (STM32F405) | 42 | 2 | about 60 s | clean (PCBWay: 0.1 mm tracks) |
+| fpv_esc (4-in-1) | 104 | 2 | about 110 s | not clean: ground in three pieces (RB2V.2, and motor 4's low-side FET sources walled off by its phase pours): a layout fix, not yet made |
+| twilight_fc | 199 | 4 | committed routes | routed and checked clean; its regulators' 0.2 mm thermal vias need a house's small-via option |
+
+Not yet: KiCad's own DRC is not run by the tests (run it on the exported project if you have KiCad), CPL rotations
+are KiCad's (check them in the house's placement preview), and placement is for small boards: place big or dense
+boards yourself.
 
 ## Install
 
+**One command** (Python 3.10+):
+
 ```
-pip install -e .                 # core: numpy, shapely, pillow
-pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypdf (schematics), pytest
-pytest -q                        # 26 tests
+pip install "pcb-harness @ git+https://github.com/wilsonchenghy/pcb-harness"
+pcb-harness setup        # adds FreeRouting (needs Java), then reports what the machine has
 ```
 
-Install from a checkout (`-e`): the project footprints in `footprints/` are read from beside `pcb.py`. KiCad
-footprints and 3D models are downloaded on first use into `~/.cache/prometheus/parts` (override with
+or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash`, which does
+both. KiCad 9 (for KiCad's own DRC) is a system install: `pcb-harness doctor` says whether it is there, and
+`docs/setup.md` has the commands per OS. Everything beyond Python is optional; see the table there for what you
+get without it.
+
+**With Claude Code or another AI agent** (on your machine or in a cloud session): give it the link and the job.
+
+> Install https://github.com/wilsonchenghy/pcb-harness (follow its docs/setup.md), then design a board that ...
+
+In a Claude Code cloud session, add the repository to the session (or let the agent clone it). The repository
+carries a Claude Code skill (`.claude/skills/pcb-harness`) and `AGENTS.md`, so the agent follows the harness's
+loop: check the machine, write the board script, run, fix the findings until clean. The agent will ask before
+installing KiCad (it needs root); approve it, or in auto mode switch to *Accept edits* first.
+
+**For a cloud or container environment** that every session starts from: put `bash install.sh` (and the KiCad
+commands from `docs/setup.md`) in its setup script.
+
+**From a clone, for development:**
+
+```
+pip install -e ".[dev]"          # + build123d (3D), schemdraw / cairosvg / pypdf (schematics), pytest, gerbonara, kiutils
+pytest -q
+```
+
+KiCad footprints and 3D models are downloaded on first use into `~/.cache/prometheus/parts` (override with
 `PROMETHEUS_PARTS_CACHE`).
 
 ## Example boards
