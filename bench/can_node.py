@@ -1,7 +1,8 @@
 """A CAN-bus node: an STM32F103C8 (LQFP-48, 0.5 mm pitch) with its 8 MHz crystal, an SN65HVD230 transceiver and a
 switchable 120 R terminator, an AMS1117 regulator from the bus's 12 V, two JST-XH bus connectors (daisy chain), a
 Cortex 10-pin SWD header, a reset and a status LED. 2 layers, 50 x 36 mm, ground poured on both sides; CANH / CANL
-declared as a pair. Pin maps are ST's and TI's datasheets as remembered: verify before fab.
+declared as a pair. The three chips come from KiCad's symbol library and are wired by pin name: every pin is held to a
+pad, the ERC runs on their pin types, and `zeus part` checks each symbol against the maker's datasheet.
 
     zeus bench/can_node.py out/ --spec bench/specs/can_node.json
 """
@@ -15,9 +16,6 @@ R06, C06, C08 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metr
 XH4 = "Connector_JST:JST_XH_B4B-XH-A_1x04_P2.50mm_Vertical"
 W, H = 50.0, 36.0
 OUT = [(0.0, 0.0), (W, 0.0), (W, H), (0.0, H)]
-# STM32F103C8 LQFP-48
-VDD = ["24", "36", "48"]
-VSS = ["23", "35", "47"]
 
 
 def build():
@@ -27,9 +25,12 @@ def build():
     b.place("J3", "Connector_PinHeader_1.27mm:PinHeader_2x05_P1.27mm_Vertical", (4.5, H - 9.0), 0, "SWD", "Cortex debug")
     for x, y in ((W - 3.5, H - 3.5), (W - 3.5, 14.0)):
         b.hole((x, y), 2.7)
-    b.place("U1", "Package_QFP:LQFP-48_7x7mm_P0.5mm", None, 0, "STM32F103C8T6", "ST STM32F103C8T6", lcsc="C8734")
-    b.place("U2", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", None, 0, "SN65HVD230", "TI SN65HVD230DR")
-    b.place("U3", "Package_TO_SOT_SMD:SOT-223-3_TabPin2", None, 0, "AMS1117-3.3", "AMS AMS1117-3.3")
+    b.place("U1", "Package_QFP:LQFP-48_7x7mm_P0.5mm", None, 0, "STM32F103C8T6", "ST STM32F103C8T6", lcsc="C8734",
+            symbol="MCU_ST_STM32F1:STM32F103C8Tx")
+    b.place("U2", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", None, 0, "SN65HVD230", "TI SN65HVD230DR",
+            symbol="Interface_CAN_LIN:SN65HVD230")
+    b.place("U3", "Package_TO_SOT_SMD:SOT-223-3_TabPin2", None, 0, "AMS1117-3.3", "AMS AMS1117-3.3",
+            symbol="Regulator_Linear:AMS1117-3.3")
     b.place("Y1", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", None, 0, "8 MHz", "Abracon ABM8-8.000MHZ")
     b.place("SW1", "Button_Switch_SMD:SW_SPST_TL3342", None, 0, "RESET", "E-Switch TL3342F160QG")
     for k in range(1, 6):
@@ -40,27 +41,27 @@ def build():
         b.place(ref, fp, None, 0, val)
     b.place("D1", "LED_SMD:LED_0603_1608Metric", None, 0, "blue", "status")
 
-    b.net("VIN", [("J1", "1"), ("J2", "1"), ("U3", "3"), ("C8", "1")], amps=0.3, volts=12.0)
-    b.net("3V3", [("U3", "2"), ("C7", "1"), ("U1", "1"), ("U1", "9"), ("C1", "1"), ("C2", "1"), ("C3", "1"),
-                  ("C4", "1"), ("C6", "1"), ("U2", "3"), ("C5", "1"), ("J3", "1"), ("R4", "1")] +
-          [("U1", p) for p in VDD], amps=0.2, volts=3.3)
-    b.net("GND", [("J1", "4"), ("J2", "4"), ("U3", "1"), ("C7", "2"), ("C8", "2"), ("U1", "8"), ("C1", "2"),
-                  ("C2", "2"), ("C3", "2"), ("C4", "2"), ("C6", "2"), ("U2", "2"), ("U2", "8"), ("C5", "2"),
+    b.net("VIN", [("J1", "1"), ("J2", "1"), ("U3", "VI"), ("C8", "1")], amps=0.3, volts=12.0)
+    b.net("3V3", [("U3", "VO"), ("C7", "1"), ("U1", "VBAT"), ("U1", "VDDA"), ("C1", "1"), ("C2", "1"), ("C3", "1"),
+                  ("C4", "1"), ("C6", "1"), ("U2", "VCC"), ("C5", "1"), ("J3", "1"), ("R4", "1"), ("U1", "VDD")],
+          amps=0.2, volts=3.3)
+    b.net("GND", [("J1", "4"), ("J2", "4"), ("U3", "GND"), ("C7", "2"), ("C8", "2"), ("U1", "VSSA"), ("C1", "2"),
+                  ("C2", "2"), ("C3", "2"), ("C4", "2"), ("C6", "2"), ("U2", "GND"), ("U2", "Rs"), ("C5", "2"),
                   ("Y1", "2"), ("Y1", "4"), ("C9", "2"), ("C10", "2"), ("J3", "3"), ("J3", "5"), ("J3", "9"),
-                  ("R2", "2"), ("SW1", "2"), ("C11", "2"), ("D1", "1")] + [("U1", p) for p in VSS], amps=0.3)
-    b.net("CANH", [("U2", "7"), ("J1", "2"), ("J2", "2"), ("R1", "1")])
-    b.net("CANL", [("U2", "6"), ("J1", "3"), ("J2", "3"), ("R1", "2")])
+                  ("R2", "2"), ("SW1", "2"), ("C11", "2"), ("D1", "1"), ("U1", "VSS")], amps=0.3)
+    b.net("CANH", [("U2", "CANH"), ("J1", "2"), ("J2", "2"), ("R1", "1")])
+    b.net("CANL", [("U2", "CANL"), ("J1", "3"), ("J2", "3"), ("R1", "2")])
     b.pair("CANH", "CANL", max_skew=2.0)
-    b.net("CAN_TX", [("U1", "33"), ("U2", "1")])                  # PA12
-    b.net("CAN_RX", [("U1", "32"), ("U2", "4")])                  # PA11
-    b.net("OSC_IN", [("U1", "5"), ("Y1", "1"), ("C9", "1")])
-    b.net("OSC_OUT", [("U1", "6"), ("Y1", "3"), ("C10", "1")])
-    b.net("NRST", [("U1", "7"), ("SW1", "1"), ("C11", "1"), ("J3", "10"), ("R4", "2")])
-    b.net("SWDIO", [("U1", "34"), ("J3", "2")])                   # PA13
-    b.net("SWCLK", [("U1", "37"), ("J3", "4")])                   # PA14
-    b.net("SWO", [("U1", "39"), ("J3", "6")])                     # PB3
-    b.net("BOOT0", [("U1", "44"), ("R2", "1")])
-    b.net("LED", [("U1", "2"), ("R3", "1")])                      # PC13
+    b.net("CAN_TX", [("U1", "PA12"), ("U2", "D")])
+    b.net("CAN_RX", [("U1", "PA11"), ("U2", "R")])
+    b.net("OSC_IN", [("U1", "PD0"), ("Y1", "1"), ("C9", "1")])
+    b.net("OSC_OUT", [("U1", "PD1"), ("Y1", "3"), ("C10", "1")])
+    b.net("NRST", [("U1", "NRST"), ("SW1", "1"), ("C11", "1"), ("J3", "10"), ("R4", "2")])
+    b.net("SWDIO", [("U1", "PA13"), ("J3", "2")])
+    b.net("SWCLK", [("U1", "PA14"), ("J3", "4")])
+    b.net("SWO", [("U1", "PB3"), ("J3", "6")])
+    b.net("BOOT0", [("U1", "BOOT0"), ("R2", "1")])
+    b.net("LED", [("U1", "PC13"), ("R3", "1")])
     b.net("LEDK", [("R3", "2"), ("D1", "2")])
     b.pour("GND", "B", OUT)
     b.pour("GND", "F", OUT)

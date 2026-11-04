@@ -139,7 +139,8 @@ def erc(board) -> List[dict]:
 
     def note(sev, text, refs):
         notes.append({"severity": sev, "kind": "erc", "text": text, "refs": sorted(set(refs))})
-    for (ref, num), t in sorted(types.items()):
+    unused: Dict[str, List[str]] = {}                   # (a chip's spare I/O: one note a chip, not one a pin)
+    for (ref, num), t in sorted(types.items(), key=lambda kv: (kv[0][0], len(kv[0][1]), kv[0][1])):
         net = pn.get((ref, num))
         label = f"{ref}.{num} ({names[(ref, num)]}, {t.replace('_', ' ')})"
         if t == "no_connect" and net:
@@ -149,7 +150,10 @@ def erc(board) -> List[dict]:
         elif not net and t in NEEDS_DRIVE:
             note("error", f"{label} is left open: tie it high or low, or drive it", [ref])
         elif not net and t not in ("no_connect", "passive", "unspecified", "free"):
-            note("info", f"{label} is not connected", [ref])
+            unused.setdefault(ref, []).append(f"{num} {names[(ref, num)]}")
+    for ref, ps in unused.items():
+        note("info", f"{ref}: {len(ps)} pin{'s' if len(ps) > 1 else ''} not connected ("
+             + ", ".join(ps[:8]) + (", ..." if len(ps) > 8 else "") + ")", [ref])
     for net, d in board.nets.items():
         pins = [tuple(p) for p in d["pins"]]
         ts = [types.get(p) for p in pins]
@@ -192,7 +196,10 @@ def describe(name: str, board=None) -> str:
         if d.get("error"):
             lines += [f"  datasheet: not checked ({d['error']})"]
         else:
-            lines += [f"  datasheet agrees: {d['agree']} of {d['total']} pins (its pin table, page {d['page']})"]
+            if d["page"] is None:
+                lines += [f"  datasheet: its pin table not found (read {d['datasheet']} by hand)"]
+            lines += [f"  datasheet agrees: {d['agree']} of {d['total']} pins"
+                      + (f" (its pin table, page {d['page']})" if d["page"] else " (searched the first pages)")]
             for q in d["pins"]:
                 if q["status"] != "agrees":
                     lines.append(f"    pin {q['num']} {q['name']}: {q['status']}"
@@ -248,6 +255,24 @@ def datasheet_text(url: str) -> List[str]:
     return [(p.extract_text() or "") for p in pypdf.PdfReader(str(dst)).pages]
 
 
+# the same pin under the names datasheets and KiCad's symbols give it
+_ALIASES = [{"VO", "VOUT", "OUT", "OUTPUT"}, {"VI", "VIN", "IN", "INPUT"}, {"GND", "GROUND", "GND/ADJ", "VSS"}]
+
+
+def _numbers(variants, text, flags) -> List[str]:
+    """the pin numbers the datasheet gives a pin under any of its names: "NAME 3", "NAME 3, 4" (a table row) or
+    "3- NAME" (a numbered list)"""
+    nums, listed = [], []
+    for v in variants:
+        e = re.escape(v) + r"(?![A-Za-z0-9_])"          # (no left edge: pypdf runs words together, "X7RVCP 9")
+        for m in re.finditer(e + r"\s*((?:\d{1,3}(?:\s*[,/–-]\s*|\s+)){0,5}\d{1,3}|—)", text, flags):
+            nums += re.findall(r"\d{1,3}", m.group(1))
+        for m in re.finditer(r"(?:^[ \t]*|(?<=[a-z]\.))(\d{1,3})(?:[ \t]*[-–:.][ \t]*|[ \t]+)" + e, text, flags | re.M):
+            listed.append(m.group(1))
+    return listed or nums                               # (a numbered list says it plainly: "VIN" then the next
+                                                        # line's "3- VOUT" is not VIN's number)
+
+
 def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
     """each of the symbol's pins looked up in its datasheet's pin table: the pin's name followed by its number(s)
     (one per package the table lists). Returns {"datasheet", "page", "pins": [{"num", "name", "status": "agrees" |
@@ -256,20 +281,23 @@ def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
     if not s["datasheet"].lower().startswith("http"):
         return {"datasheet": s["datasheet"], "error": "the symbol has no datasheet link", "pins": []}
     pages = list(pages) if pages is not None else datasheet_text(s["datasheet"])
-    keys = {q["key"] for q in s["pins"]}                # (the pages that hold the table: most of the pin names)
-    hits = [sum(1 for k in keys if re.search(re.escape(k) + r"(?![A-Za-z0-9_])", t)) for t in pages]
-    tables = [i for i, t in enumerate(pages) if hits[i] >= max(2, len(keys) // 2)
-              and re.search(r"pin\s*(functions|descriptions?|configuration|assignments)", t, re.I)]
+    # the table's pages: most of the pins named (a name a datasheet gives otherwise counts), a pin-table heading,
+    # and pins given numbers there (a pinout drawing, its names and numbers apart, is not the table)
+    keys = {q["key"] for q in s["pins"]}
+    names = [{k} | next((g for g in _ALIASES if k.upper() in g), set()) for k in keys]
+    named = [sum(1 for n in names if any(re.search(re.escape(k) + r"(?![A-Za-z0-9_])", t) for k in n)) for t in pages]
+    hits = [sum(1 for n in names if _numbers(n, t, 0) or _numbers(n, t, re.I)) if named[i] >= 2 else 0
+            for i, t in enumerate(pages)]
+    tables = [i for i, t in enumerate(pages) if named[i] >= max(2, len(keys) // 2) and hits[i] >= 2
+              and re.search(r"pin\s*(functions|descriptions?|configurations?|assignments|connections)", t, re.I)]
     tables.sort(key=lambda i: -hits[i])
     text = "\n".join(pages[i] for i in (tables or range(min(len(pages), 12))))
     exposed = bool(re.search(r"power\s*pad|ppad|thermal\s*pad|exposed\s*pad|\bEP\b|\bPAD\b", text, re.I))
     out, agree = [], 0
     for p in sorted(s["pins"], key=lambda p: (len(p["num"]), p["num"])):
         variants = {p["key"], re.sub(r"^n", "", p["key"]), p["key"].replace("n", "/", 1)} - {""}
-        nums = []
-        for v in variants:
-            for m in re.finditer(re.escape(v) + r"(?![A-Za-z0-9_])\s*((?:\d{1,3}(?:\s*[,/–-]\s*|\s+)){0,5}\d{1,3}|—)", text):
-                nums += re.findall(r"\d{1,3}", m.group(1))
+        variants |= {a for g in _ALIASES if p["key"].upper() in g for a in g}
+        nums = _numbers(variants, text, 0) or _numbers(variants, text, re.I)   # (exact case first: "R" is not "r")
         nums = list(dict.fromkeys(nums))
         if p["num"] in nums:
             st = "agrees"

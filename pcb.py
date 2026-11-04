@@ -1997,6 +1997,16 @@ def from_netlist(path: str, outline, name: Optional[str] = None, at: Optional[Di
     return b
 
 
+def _decap_target(c: dict, ref: str, num: str) -> bool:
+    """a pin a decoupling capacitor belongs by: a chip's supply pin (a symbol's power input), never a connector's"""
+    if re.match(r"^(J|P|CN|CON)\d", ref, re.I):
+        return False
+    sym = c.get("symbol")
+    if sym:
+        return any(q["num"] == num and q["type"] == "power_in" for q in sym["pins"])
+    return True
+
+
 def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1.0, seed: int = 0,
               effort: float = 1.0, rotations: Sequence[int] = (0, 90, 180, 270)) -> List[str]:
     """place parts for you: a short total of wire (each net's half-perimeter, ground and other poured nets weighted
@@ -2070,7 +2080,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
         if len(sup) != 1 or not any(n in poured for n in ns.values()):
             continue
         num, n = sup[0]
-        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many]
+        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many and _decap_target(board.comps[p_[0]], p_[0], p_[1])]
         if not targets:
             continue
         k = deal.get(n, 0)

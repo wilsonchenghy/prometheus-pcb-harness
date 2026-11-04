@@ -15,6 +15,13 @@
   "within d mm" requirement is measured pad to pad; parts that do not fit stop the run at once instead of being
   routed round; via drops keep the board's edge gap; FreeRouting's edge slips are repaired; the critic stage no
   longer reports routing it has not done.
+- The datasheet check reads more datasheets: numbered pin lists ("2- VOUT"), "4 GND" rows, the names datasheets give
+  a pin otherwise (VOUT for KiCad's VO), other letter case (RS for Rs), a table continued on the next page; a pinout
+  drawing is no longer taken for the table. Checked on DRV8833, SN65HVD230, AMS1117, AP63205, NE555 and LM75B.
+- The CAN node is wired from KiCad's symbols (STM32F103, SN65HVD230, AMS1117) by pin name.
+- Decoupling capacitors are held to a chip's supply pins (a symbol's power inputs), never to a connector's pin.
+- The ERC lists a chip's unused pins in one note, not one note a pin.
+- The release video is Zeus, with a scene of the viewer (74 s).
 
 ## v0.1.0 (2026-11-04)
 

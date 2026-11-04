@@ -1203,3 +1203,18 @@ def test_datasheet_pin_table_is_held_against_the_symbol():
     assert r["agree"] == r["total"] == 17 and r["page"] == 2, [p for p in r["pins"] if p["status"] != "agrees"]
     bad = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=[page.replace("AIN1 14 16", "AIN1 14 99")])
     assert [(p["name"], p["status"]) for p in bad["pins"] if p["status"] != "agrees"] == [("AIN1", "differs")]
+
+
+def test_datasheet_numbered_list_and_other_names():
+    """a datasheet that lists its pins number first ("2- VOUT") under another name than the symbol's (VO), and one
+    that spells a pin in other case (RS for Rs), still confirms the symbol; a swapped pair is still caught"""
+    import parts
+    ams = "PIN CONNECTIONS\n3 PIN FIXED/ADJUSTABLE VERSION\n1- Ground/Adjust\n2- VOUT\n3- VIN\nSOT-223 Top View"
+    r = parts.datasheet_check("Regulator_Linear:AMS1117-3.3", pages=["front page", ams])
+    assert r["agree"] == r["total"] == 3 and r["page"] == 2, r["pins"]
+    bad = parts.datasheet_check("Regulator_Linear:AMS1117-3.3", pages=[ams.replace("2- VOUT\n3- VIN", "2- VIN\n3- VOUT")])
+    assert sorted(p["name"] for p in bad["pins"] if p["status"] == "differs") == ["VI", "VO"], bad["pins"]
+    can = ("Pin Functions\n1D 8  RS \n2GND 7  CANH\n3VCC 6  CANL\n4R 5  Vref\nD 1 I Driver input\nGND 2 GND\n"
+           "VCC 3 Supply\nR 4 O Receiver output\nVref 5 O\nCANL 6 I/O\nCANH 7 I/O\nRS\n8\nI Mode select")
+    r = parts.datasheet_check("Interface_CAN_LIN:SN65HVD230", pages=[can])
+    assert r["agree"] == r["total"] == 8, [p for p in r["pins"] if p["status"] != "agrees"]
