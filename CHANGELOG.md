@@ -18,7 +18,11 @@
 - The datasheet check reads more datasheets: numbered pin lists ("2- VOUT"), "4 GND" rows, the names datasheets give
   a pin otherwise (VOUT for KiCad's VO), other letter case (RS for Rs), a table continued on the next page; a pinout
   drawing is no longer taken for the table. Checked on DRV8833, SN65HVD230, AMS1117, AP63205, NE555 and LM75B.
-- The CAN node is wired from KiCad's symbols (STM32F103, SN65HVD230, AMS1117) by pin name.
+- The CAN node (STM32F103, SN65HVD230, AMS1117), the LED ring (ATtiny85) and the blinker (NE555) are wired from
+  KiCad's symbols by pin name. The ATtiny85-20SU is the 5.3 mm wide SOIC-8 its symbol names: the LED ring had the
+  3.9 mm one. The blinker's 100n sits by the 555's VCC pin.
+- A pin can be named by one of its functions (PB4 for "XTAL2/PB4"); the decoupling review counts a symbol's power
+  inputs only (not a reset tied high); a datasheet whose pin table is not found reads "not checked", never "differs".
 - Decoupling capacitors are held to a chip's supply pins (a symbol's power inputs), never to a connector's pin.
 - The ERC lists a chip's unused pins in one note, not one note a pin.
 - The release video is Zeus, with a scene of the viewer (74 s).
