@@ -25,7 +25,7 @@ packages = ["pcb_footprints", "pcb_viewer_assets"]
 
 [tool.setuptools.package-data]
 pcb_footprints = ["*.pretty/*.kicad_mod"]
-pcb_viewer_assets = ["*.html", "*.js", "*.txt"]
+pcb_viewer_assets = ["*.html", "*.js", "*.txt", "*.css"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

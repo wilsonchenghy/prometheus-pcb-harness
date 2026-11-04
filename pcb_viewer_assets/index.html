@@ -5,142 +5,200 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>pcb-harness viewer</title>
 <link rel="icon" href="data:,">
+<link rel="stylesheet" href="/fonts.css">
 <style>
+/* the page is a board: solder mask, silkscreen, ENIG gold, copper; the inspection station of a fab */
 :root {
-  --bg: #0d1210; --panel: #141b18; --panel2: #1a231f; --line: #2a3832; --text: #e4ece7; --dim: #8fa39a;
-  --ok: #6fd39a; --bad: #ff7a6b; --warn: #f2c66d; --accent: #e6b45a;
-  --fcu: #d8574b; --bcu: #4f86e0; --pad: #e8bf62; --mask: #0f3b29; --edge: #e8e0c8;
+  --mask: #082a1c; --silk: #eef3e8; --silkdim: #9fb8aa; --cu: #d98b4a; --cu2: #f0b072;
+  --gold1: #a8742c; --gold2: #f4cf8e; --gold3: #c99044; --red: #ff6b5a; --amber: #f2c66d; --ok: #7fd6a2;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace; --sans: "IBM Plex Sans", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
-  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-header { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--line);
-  background: var(--panel); flex-wrap: wrap; }
-header h1 { font-size: 16px; margin: 0; font-weight: 600; letter-spacing: .2px; }
-.badge { padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; }
-.badge.ok { color: var(--ok); border-color: var(--ok); } .badge.bad { color: var(--bad); border-color: var(--bad); }
-.badge.run { color: var(--warn); border-color: var(--warn); }
-.meta { color: var(--dim); font-size: 12.5px; }
-#prog { flex: 1 1 320px; min-width: 260px; display: none; }
-#prog .bar { height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; margin-top: 4px; }
-#prog .fill { height: 100%; width: 0; background: var(--warn); transition: width .6s; }
-#prog .txt { font-size: 12.5px; color: var(--dim); display: flex; justify-content: space-between; gap: 10px; }
-#prog .txt b { color: var(--text); font-weight: 600; }
-main { display: grid; grid-template-columns: 340px 1fr; height: calc(100% - 52px); }
-aside { border-right: 1px solid var(--line); overflow: auto; background: var(--panel); }
-aside h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: var(--dim); margin: 14px 14px 6px; }
-.f { margin: 0 10px 6px; padding: 8px 10px; border-radius: 6px; background: var(--panel2); cursor: pointer;
-  border-left: 3px solid var(--bad); font-size: 13px; }
-.f:hover { outline: 1px solid var(--line); } .f.sel { outline: 1px solid var(--accent); }
-.f .k { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .6px; }
-.f .h { font-size: 12px; color: var(--dim); margin-top: 3px; }
-.f.warning { border-left-color: var(--warn); } .f.info { border-left-color: var(--line); cursor: default; }
-.none { margin: 0 14px 6px; color: var(--ok); font-size: 13px; }
-.kv { margin: 0 14px; font-size: 12.5px; color: var(--dim); display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; }
-.kv b { color: var(--text); font-weight: 500; }
-.tabs { display: flex; gap: 2px; padding: 8px 10px 0; border-bottom: 1px solid var(--line); background: var(--panel); }
-.tab { padding: 7px 14px; border-radius: 6px 6px 0 0; cursor: pointer; color: var(--dim); border: 1px solid transparent;
-  border-bottom: none; user-select: none; }
-.tab.on { color: var(--text); background: var(--bg); border-color: var(--line); }
-section { position: relative; display: flex; flex-direction: column; min-width: 0; }
-.view { position: absolute; inset: 41px 0 0 0; display: none; }
-.view.on { display: block; }
-.tools { position: absolute; top: 10px; left: 10px; z-index: 5; display: flex; gap: 6px; flex-wrap: wrap;
-  background: rgba(20,27,24,.88); padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); }
-.tools label { font-size: 12px; color: var(--dim); display: flex; align-items: center; gap: 4px; cursor: pointer; }
-.tools button, .btn { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px;
-  padding: 4px 10px; font-size: 12px; cursor: pointer; }
-.tools button:hover, .btn:hover { border-color: var(--accent); }
-svg { width: 100%; height: 100%; display: block; cursor: grab; background: var(--bg); }
-svg.drag { cursor: grabbing; }
-#tip { position: fixed; pointer-events: none; background: #000c; border: 1px solid var(--line); padding: 4px 8px;
-  border-radius: 5px; font-size: 12px; display: none; z-index: 20; }
-#three { width: 100%; height: 100%; }
-#render { position: absolute; inset: 50px 10px 10px 10px; display: none; background: #000; border-radius: 8px;
-  border: 1px solid var(--line); overflow: hidden; }
-#render img { width: 100%; height: 100%; object-fit: contain; }
-#msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--dim); text-align: center; }
-.net-hi { filter: drop-shadow(0 0 2px #fff) brightness(1.5); }
-.pulse { animation: pulse 1s ease-out 3; }
-@keyframes pulse { from { stroke-width: 0.6; opacity: 1; } to { stroke-width: 0.1; opacity: .4; } }
-.files a { display: block; margin: 0 14px 4px; color: var(--accent); font-size: 13px; text-decoration: none; }
-.files a:hover { text-decoration: underline; }
-@media (max-width: 800px) { main { grid-template-columns: 1fr; grid-template-rows: 40% 60%; } aside { border-right: 0; border-bottom: 1px solid var(--line); } }
+html, body { margin: 0; height: 100%; overflow: hidden; }
+body { color: var(--silk); font: 400 14px/1.45 var(--sans); background: var(--mask);
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(238,243,232,.07) 1px, transparent 1.4px),
+    radial-gradient(1200px 700px at 60% 30%, rgba(40,120,80,.22), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 24px 24px, auto, 180px 180px; }
+
+/* ---- header: a silkscreen strip with a fiducial ---- */
+header { position: relative; height: 128px; padding: 14px 22px 0 78px; display: flex; align-items: flex-start; gap: 22px; }
+.fid { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: radial-gradient(circle, var(--gold2) 0 30%, var(--gold1) 31% 44%, transparent 45%);
+  box-shadow: 0 0 0 5px rgba(238,243,232,.06); }
+.brand { display: flex; flex-direction: column; gap: 2px; min-width: 210px; }
+.brand .k { font: 500 11px var(--mono); letter-spacing: 3.4px; color: var(--silkdim); }
+.brand .n { font: 500 25px/1.1 var(--mono); letter-spacing: 1.5px; color: var(--silk); text-transform: uppercase; white-space: nowrap; }
+.brand .m { font: 400 11px var(--mono); color: var(--silkdim); letter-spacing: 1px; }
+#status { margin-left: auto; position: relative; display: flex; align-items: center; gap: 14px; padding-top: 4px; }
+.stamp { font: 600 14px var(--mono); letter-spacing: 4px; padding: 7px 15px; border: 3px solid; border-radius: 4px; transform: rotate(-6deg); text-transform: uppercase; }
+.stamp.pass { color: var(--ok); border-color: var(--ok); } .stamp.fail { color: var(--red); border-color: var(--red); }
+.stamp.run { color: var(--amber); border-color: var(--amber); animation: breathe 1.6s ease-in-out infinite; }
+@keyframes breathe { 50% { opacity: .5; } }
+
+/* ---- the run as a routed trace ---- */
+#trace { position: absolute; left: 78px; right: 22px; top: 86px; height: 40px; }
+#trace svg { width: 100%; height: 100%; overflow: visible; }
+#tlabel { position: absolute; right: 22px; top: 66px; font: 500 11.5px var(--mono); letter-spacing: 2px; color: var(--cu2); text-transform: uppercase; }
+
+/* ---- gold-finger tabs: the edge connector ---- */
+#fingers { position: absolute; left: 0; top: 140px; bottom: 0; width: 58px; display: flex; flex-direction: column; gap: 8px; padding-top: 6px;
+  background: linear-gradient(90deg, rgba(0,0,0,.25), transparent); border-right: 1px dashed rgba(238,243,232,.12); }
+.finger { width: 40px; height: 118px; margin-left: 9px; cursor: pointer; position: relative; user-select: none;
+  background: linear-gradient(90deg, #6d4c1d, #b98a3e 40%, #e8c27a 55%, #a8742c); opacity: .45; transition: opacity .2s, transform .2s; clip-path: polygon(0 6%, 100% 0, 100% 100%, 0 94%); }
+.finger:hover { opacity: .8; } .finger.on { opacity: 1; transform: translateX(6px); }
+.finger span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-90deg); font: 600 11.5px var(--mono); letter-spacing: 3px; color: #2a1a05; white-space: nowrap; }
+
+/* ---- the station ---- */
+main { position: absolute; left: 58px; right: 0; top: 140px; bottom: 0; display: grid; grid-template-columns: 1fr 360px; }
+#stage { position: relative; margin: 0 0 14px 14px; border-radius: 10px; overflow: hidden;
+  background: radial-gradient(900px 600px at 50% 45%, #17241f, #0c1411 75%); box-shadow: inset 0 0 0 1px rgba(232,224,200,.16), inset 0 0 80px rgba(0,0,0,.6); }
+.view { position: absolute; inset: 0; display: none; } .view.on { display: block; }
+svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.drag { cursor: grabbing; }
+.ruler { position: absolute; pointer-events: none; }
+.ruler.top { left: 26px; right: 0; top: 0; height: 22px; border-bottom: 1px solid rgba(232,224,200,.15); background: rgba(8,20,15,.72); }
+.ruler.left { top: 22px; bottom: 0; left: 0; width: 26px; border-right: 1px solid rgba(232,224,200,.15); background: rgba(8,20,15,.72); }
+.ruler svg { width: 100%; height: 100%; }
+.corner { position: absolute; left: 0; top: 0; width: 26px; height: 22px; background: rgba(8,20,15,.92); font: 500 8.5px var(--mono); color: var(--silkdim); display: flex; align-items: center; justify-content: center; }
+
+/* the stack-up: the layer controls as a cross-section of the board */
+.panel { position: absolute; right: 14px; top: 34px; z-index: 6; width: 182px; padding: 12px 12px 10px; border-radius: 8px;
+  background: rgba(6,18,13,.86); box-shadow: inset 0 0 0 1px rgba(232,224,200,.14); backdrop-filter: blur(4px); }
+.panel .t { font: 500 10px var(--mono); letter-spacing: 2.4px; color: var(--silkdim); margin-bottom: 8px; }
+.plate { height: 15px; margin: 3px 0; border-radius: 2px; cursor: pointer; position: relative; transform: skewX(-24deg); transition: opacity .2s, filter .2s; }
+.plate span { position: absolute; left: 12px; top: 0; transform: skewX(24deg); font: 500 9.5px/15px var(--mono); letter-spacing: 1.6px; color: #111; }
+.plate.off { opacity: .22; filter: grayscale(.8); }
+.modes, .btns { display: flex; gap: 6px; margin-top: 10px; }
+.mode, .chip { flex: 1; text-align: center; padding: 5px 0; font: 500 10px var(--mono); letter-spacing: 1.5px; border-radius: 3px; cursor: pointer; color: var(--silk);
+  background: rgba(238,243,232,.05); box-shadow: inset 0 0 0 1px rgba(232,224,200,.2); border: 0; }
+.mode { color: var(--silkdim); }
+.mode.on { color: #2a1a05; background: linear-gradient(135deg, var(--gold1), var(--gold2) 45%, var(--gold3)); box-shadow: none; }
+.chip:hover, .mode:hover { box-shadow: inset 0 0 0 1px var(--gold3); }
+.tp { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 10px; }
+.tp label { font: 400 10.5px var(--mono); color: var(--silkdim); display: flex; gap: 5px; align-items: center; cursor: pointer; letter-spacing: .5px; }
+.tp input { appearance: none; width: 11px; height: 11px; border-radius: 50%; margin: 0; border: 1.5px solid var(--gold3); cursor: pointer; }
+.tp input:checked { background: radial-gradient(circle, var(--gold2) 0 45%, var(--gold3) 46%); }
+
+/* ---- the AOI report ---- */
+aside { overflow: auto; padding: 0 18px 18px 18px; }
+aside h2 { font: 500 10.5px var(--mono); letter-spacing: 3px; color: var(--silkdim); margin: 4px 0 10px; display: flex; align-items: center; gap: 8px; }
+aside h2::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, rgba(217,139,74,.55), transparent); }
+.ticket { position: relative; margin: 0 0 9px; padding: 10px 12px 10px 40px; border-radius: 4px; cursor: pointer; background: rgba(4,14,10,.6);
+  box-shadow: inset 0 0 0 1px rgba(255,107,90,.35); transition: box-shadow .2s, transform .2s; }
+.ticket:hover { transform: translateX(-3px); } .ticket.sel { box-shadow: inset 0 0 0 1.5px var(--red), 0 0 22px rgba(255,107,90,.15); }
+.ticket.warn { box-shadow: inset 0 0 0 1px rgba(242,198,109,.35); } .ticket.info { box-shadow: inset 0 0 0 1px rgba(238,243,232,.12); cursor: default; }
+.ticket.info:hover { transform: none; }
+.ticket svg.ret { position: absolute; left: 10px; top: 11px; width: 20px; height: 20px; }
+.ticket .k { font: 500 9.5px var(--mono); letter-spacing: 2px; color: var(--red); text-transform: uppercase; }
+.ticket.warn .k { color: var(--amber); } .ticket.info .k { color: var(--silkdim); }
+.ticket .x { font-size: 13px; color: var(--silk); margin-top: 2px; }
+.ticket .h { font: 400 11px var(--mono); color: var(--silkdim); margin-top: 4px; }
+.ticket .at { position: absolute; right: 10px; top: 9px; font: 400 9.5px var(--mono); color: var(--silkdim); }
+#passstamp { display: none; margin: 0 auto 14px; width: 176px; height: 176px; }
+.coupon { font: 400 11.5px var(--mono); color: var(--silkdim); margin-bottom: 16px; }
+.coupon .r { display: flex; gap: 6px; align-items: baseline; padding: 2.5px 0; }
+.coupon .r .d { flex: 1; border-bottom: 1px dotted rgba(238,243,232,.18); transform: translateY(-3px); }
+.coupon .r b { font-weight: 500; color: var(--silk); text-align: right; }
+.coupon .bar { height: 3px; margin: 1px 0 5px; border-radius: 2px; background: linear-gradient(90deg, var(--cu), var(--cu2)); }
+.pins a { display: flex; align-items: center; gap: 9px; padding: 4px 0; color: var(--silk); text-decoration: none; font: 400 12px var(--mono); }
+.pins a::before { content: ""; width: 11px; height: 11px; border-radius: 2px; background: linear-gradient(135deg, var(--gold1), var(--gold2) 45%, var(--gold3)); flex: none; }
+.pins a:hover { color: var(--gold2); } .pins a span { color: var(--silkdim); font-size: 11px; }
+#tip { position: fixed; pointer-events: none; z-index: 30; display: none; padding: 5px 9px; font: 400 11.5px var(--mono); color: var(--silk);
+  background: rgba(4,12,9,.94); border-left: 2px solid var(--gold3); border-radius: 0 3px 3px 0; letter-spacing: .3px; max-width: 420px; }
+#msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font: 500 12px var(--mono); letter-spacing: 2px; color: var(--silkdim); text-align: center; pointer-events: none; }
+#render { position: absolute; inset: 0; display: none; background: #000; } #render img { width: 100%; height: 100%; object-fit: contain; }
+.reticle { animation: aoi 1.8s ease-in-out infinite; }
+@keyframes aoi { 50% { opacity: .4; } }
+.hit { animation: hit .8s ease-out 2; transform-box: fill-box; transform-origin: center; }
+@keyframes hit { from { transform: scale(2.4); } to { transform: scale(1); } }
+.net-hi { filter: drop-shadow(0 0 1.2px #fff) brightness(1.5); }
+@media (max-width: 900px) { main { grid-template-columns: 1fr; grid-template-rows: 60% 40%; } aside { padding-top: 12px; } .panel { width: 150px; } .brand .n { font-size: 18px; } }
 </style>
 </head>
 <body>
 <header>
-  <h1 id="name">pcb-harness</h1>
-  <span id="badge" class="badge run">loading</span>
-  <span id="meta" class="meta"></span>
-  <div id="prog"><div class="txt"><span id="pstage"></span><span id="peta"></span></div><div class="bar"><div class="fill" id="pfill"></div></div></div>
+  <div class="fid" style="left:22px;top:20px"></div>
+  <div class="brand"><div class="k">PCB-HARNESS · INSPECTION</div><div class="n" id="name">—</div><div class="m" id="meta"></div></div>
+  <div id="status"><span id="stampTop" class="stamp run">loading</span></div>
+  <div id="tlabel"></div>
+  <div id="trace"><svg id="tsvg"></svg></div>
 </header>
+<nav id="fingers">
+  <div class="finger on" data-v="layout"><span>LAYOUT</span></div>
+  <div class="finger" data-v="v3d"><span>3D</span></div>
+  <div class="finger" data-v="schem"><span>SCHEMATIC</span></div>
+</nav>
 <main>
-  <aside>
-    <h2>Findings</h2><div id="findings"></div>
-    <h2>Critic</h2><div id="critic"></div>
-    <h2>Run</h2><div id="run" class="kv"></div>
-    <h2>Files</h2><div id="files" class="files"></div>
-  </aside>
-  <section>
-    <div class="tabs"><div class="tab on" data-v="layout">Layout</div><div class="tab" data-v="v3d">3D</div><div class="tab" data-v="schem">Schematic</div></div>
+  <div id="stage">
     <div class="view on" id="layout">
-      <div class="tools" id="ltools">
-        <label><input type="checkbox" data-l="F" checked> F.Cu</label>
-        <label><input type="checkbox" data-l="B" checked> B.Cu</label>
-        <label><input type="checkbox" data-l="pads" checked> pads</label>
-        <label><input type="checkbox" data-l="vias" checked> vias</label>
-        <label><input type="checkbox" data-l="court"> courtyards</label>
-        <label><input type="checkbox" data-l="refs" checked> refs</label>
-        <label><input type="checkbox" data-l="marks" checked> findings</label>
-        <button id="fit">fit</button><button id="flip">view from below</button>
+      <svg id="lsvg" class="pan"></svg>
+      <div class="ruler top"><svg id="rtop"></svg></div><div class="ruler left"><svg id="rleft"></svg></div><div class="corner">mm</div>
+      <div class="panel">
+        <div class="t">STACK-UP</div>
+        <div class="plate" data-l="silk" style="background:#eef3e8"><span>SILK</span></div>
+        <div class="plate" data-l="F" style="background:linear-gradient(90deg,#d98b4a,#f0b072)"><span>F.CU</span></div>
+        <div class="plate" style="background:#3c5a46;height:9px;cursor:default"><span style="line-height:9px;color:#cfe">FR-4</span></div>
+        <div class="plate" data-l="B" style="background:linear-gradient(90deg,#4f86e0,#8ab0ef)"><span>B.CU</span></div>
+        <div class="modes"><div class="mode on" data-m="board">AS MADE</div><div class="mode" data-m="xray">X-RAY</div></div>
+        <div class="tp">
+          <label><input type="checkbox" data-l="vias" checked>vias</label>
+          <label><input type="checkbox" data-l="court">courtyards</label>
+          <label><input type="checkbox" data-l="marks" checked>findings</label>
+        </div>
+        <div class="btns"><button class="chip" id="fit">FIT</button><button class="chip" id="flip">FLIP</button></div>
       </div>
-      <svg id="lsvg"></svg>
     </div>
     <div class="view" id="v3d">
-      <div class="tools"><button id="krender">KiCad render (photoreal)</button><button id="k3dclose" style="display:none">back to interactive</button><span class="meta" id="k3dmsg"></span></div>
-      <div id="three"></div>
+      <div id="three" style="position:absolute;inset:0"></div>
+      <div class="panel" style="width:206px"><div class="t">3D · DRAG · WHEEL · SHIFT-DRAG</div>
+        <div class="btns"><button class="chip" id="krender">KICAD RENDER</button><button class="chip" id="k3dclose" style="display:none">BACK</button></div>
+        <div class="tp"><span id="k3dmsg" style="font:400 10.5px var(--mono);color:var(--silkdim)"></span></div></div>
       <div id="render"><img id="rimg" alt="KiCad 3D render"></div>
     </div>
-    <div class="view" id="schem">
-      <div class="tools"><span class="meta">net-label view, drawn from the netlist: hover a net to see it everywhere</span><button id="sfit">fit</button></div>
-      <svg id="ssvg"></svg>
-    </div>
+    <div class="view" id="schem"><svg id="ssvg" class="pan"></svg></div>
     <div id="msg"></div>
-  </section>
+  </div>
+  <aside>
+    <svg id="passstamp" viewBox="0 0 200 200"></svg>
+    <h2>AOI · FINDINGS</h2><div id="findings"></div>
+    <h2>REVIEW · CRITIC</h2><div id="critic"></div>
+    <h2>TEST COUPON</h2><div id="run" class="coupon"></div>
+    <h2>OUTPUT HEADER</h2><div id="files" class="pins"></div>
+  </aside>
 </main>
 <div id="tip"></div>
-<script src="/three.min.js"></script>  <!-- three.js r128, MIT (three.LICENSE.txt), served with the page: works offline -->
+<script src="/three.min.js"></script>
 <script>
 "use strict";
 const $ = (s) => document.querySelector(s);
 const NS = "http://www.w3.org/2000/svg";
-const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
-let B = null, R = null, P = null, flipped = false, threeReady = false;
+const el = (tag, a = {}, parent) => { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (parent) parent.appendChild(e); return e; };
+let B = null, R = null, P = null, flipped = false, mode = "board", threeReady = false;
+const layerOn = { silk: true, F: true, B: true, vias: true, court: false, marks: true };
 const tip = $("#tip");
-function showTip(e, t) { tip.textContent = t; tip.style.display = "block"; tip.style.left = (e.clientX + 12) + "px"; tip.style.top = (e.clientY + 12) + "px"; }
-function hideTip() { tip.style.display = "none"; }
+function showTip(e, t) { tip.textContent = t; tip.style.display = "block"; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 12) + "px"; }
+const hideTip = () => tip.style.display = "none";
 function hue(s) { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return h; }
-function fmt(s) { if (s == null) return "?"; s = Math.max(0, Math.round(s)); return s < 60 ? s + " s" : Math.floor(s / 60) + " min " + (s % 60) + " s"; }
+function tminus(s) { s = Math.max(0, Math.round(s)); return "T−" + String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0"); }
+function secs(s) { return s == null ? "?" : (s < 10 ? s.toFixed(2) : s.toFixed(1)) + " s"; }
+const FONT = "IBM Plex Mono";
 
-// ---------- tabs ----------
-document.querySelectorAll(".tab").forEach(t => t.onclick = () => {
-  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === t));
+// ---------- tabs: the edge connector ----------
+document.querySelectorAll(".finger").forEach(t => t.onclick = () => {
+  document.querySelectorAll(".finger").forEach(x => x.classList.toggle("on", x === t));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === t.dataset.v));
   if (t.dataset.v === "v3d") init3d();
-  if (t.dataset.v === "schem") drawSchem();                       // (drawn when shown: a hidden svg measures 0)
+  if (t.dataset.v === "schem") drawSchem();
   if (t.dataset.v === "layout") fitLayout();
 });
 
-// ---------- pan / zoom for an svg ----------
-function panZoom(svg) {
+// ---------- pan / zoom ----------
+function panZoom(svg, onChange) {
   const st = { vb: [0, 0, 100, 100] };
-  const apply = () => svg.setAttribute("viewBox", st.vb.join(" "));
+  const apply = () => { svg.setAttribute("viewBox", st.vb.join(" ")); if (onChange) onChange(st.vb); };
   st.set = (x, y, w, h) => { const r = svg.getBoundingClientRect(), a = (r.width || 800) / (r.height || 600);
-    if (w / h < a) { const nw = h * a; x -= (nw - w) / 2; w = nw; } else { const nh = w / a; y -= (nh - h) / 2; h = nh; }
-    st.vb = [x, y, w, h]; apply(); };
-  svg.addEventListener("wheel", e => { e.preventDefault(); const r = svg.getBoundingClientRect();
-    const k = Math.exp(e.deltaY * 0.0015), [x, y, w, h] = st.vb;
+    if (w / h < a) { const nw = h * a; x -= (nw - w) / 2; w = nw; } else { const nh = w / a; y -= (nh - h) / 2; h = nh; } st.vb = [x, y, w, h]; apply(); };
+  svg.addEventListener("wheel", e => { e.preventDefault(); const r = svg.getBoundingClientRect(), k = Math.exp(e.deltaY * 0.0015), [x, y, w, h] = st.vb;
     const px = x + (e.clientX - r.left) / r.width * w, py = y + (e.clientY - r.top) / r.height * h;
     st.vb = [px - (px - x) * k, py - (py - y) * k, w * k, h * k]; apply(); }, { passive: false });
   let d = null;
@@ -150,257 +208,331 @@ function panZoom(svg) {
   svg.addEventListener("pointerup", () => { d = null; svg.classList.remove("drag"); });
   return st;
 }
-const LZ = panZoom($("#lsvg")), SZ = panZoom($("#ssvg"));
+const LZ = panZoom($("#lsvg"), drawRulers), SZ = panZoom($("#ssvg"));
 
-// ---------- layout ----------
-const X = (x) => flipped ? -x : x, Y = (y) => -y;
-function ring(r) { return "M" + r.map(p => X(p[0]).toFixed(3) + "," + Y(p[1]).toFixed(3)).join("L") + "Z"; }
-function polyPath(polys) { return polys.map(p => p.map(ring).join("")).join(""); }
-function hiNet(net, on) { document.querySelectorAll('[data-net="' + CSS.escape(net) + '"]').forEach(e => e.classList.toggle("net-hi", on)); }
-function hover(e, node, text, net) {
-  node.addEventListener("pointerenter", ev => { showTip(ev, text); if (net) hiNet(net, true); });
-  node.addEventListener("pointermove", ev => showTip(ev, text));
-  node.addEventListener("pointerleave", () => { hideTip(); if (net) hiNet(net, false); });
+// rulers in mm that follow the zoom
+function drawRulers(vb) {
+  const [x, y, w] = vb, top = $("#rtop"), left = $("#rleft"); top.innerHTML = ""; left.innerHTML = "";
+  const sr = $("#lsvg").getBoundingClientRect(), tr = top.getBoundingClientRect(), lr = left.getBoundingClientRect();
+  if (!sr.width) return;
+  const pxmm = sr.width / w, step = pxmm > 14 ? 1 : pxmm > 6 ? 2 : pxmm > 2.5 ? 5 : 10, lab = step * 5;
+  const sx = (v) => (v - x) * pxmm - (tr.left - sr.left), sy = (v) => (v - y) * pxmm - (lr.top - sr.top);
+  for (let m = Math.ceil(x / step) * step; m <= x + w; m += step) { const p = sx(m), big = Math.abs(Math.round(m) % lab) < 1e-6;
+    el("line", { x1: p, y1: big ? 9 : 15, x2: p, y2: 22, stroke: big ? "#cdbf98" : "#6f7d74" }, top);
+    if (big) el("text", { x: p + 3, y: 10, fill: "#9fb8aa", "font-size": 9.5, "font-family": FONT }, top).textContent = Math.round(flipped ? -m : m); }
+  const h = sr.height / pxmm;
+  for (let m = Math.ceil(y / step) * step; m <= y + h; m += step) { const p = sy(m), big = Math.abs(Math.round(m) % lab) < 1e-6;
+    el("line", { x1: big ? 11 : 17, y1: p, x2: 26, y2: p, stroke: big ? "#cdbf98" : "#6f7d74" }, left);
+    if (big) el("text", { x: 2, y: p - 3, fill: "#9fb8aa", "font-size": 9.5, "font-family": FONT }, left).textContent = Math.round(-m); }
 }
+
+// ---------- the layout ----------
+const X = (x) => flipped ? -x : x, Y = (y) => -y;
+const ring = (r) => "M" + r.map(p => X(p[0]).toFixed(3) + "," + Y(p[1]).toFixed(3)).join("L") + "Z";
+const polyPath = (ps) => ps.map(p => p.map(ring).join("")).join("");
+function hiNet(net, on) { if (!net) return; document.querySelectorAll('[data-net="' + CSS.escape(net) + '"]').forEach(e => e.classList.toggle("net-hi", on)); }
+function hover(node, text, net) {
+  node.addEventListener("pointerenter", ev => { showTip(ev, text); hiNet(net, true); });
+  node.addEventListener("pointermove", ev => showTip(ev, text));
+  node.addEventListener("pointerleave", () => { hideTip(); hiNet(net, false); });
+}
+function enig(svg, id) { const d = el("defs", {}, svg), g = el("linearGradient", { id, x1: 0, y1: 0, x2: 1, y2: 1 }, d);
+  [["0", "#a8742c"], [".45", "#f4cf8e"], ["1", "#c99044"]].forEach(([o, c]) => el("stop", { offset: o, "stop-color": c }, g)); }
+const topL = () => flipped ? "B" : "F", botL = () => flipped ? "F" : "B";
 function drawLayout() {
-  const svg = $("#lsvg"); svg.innerHTML = "";
+  const svg = $("#lsvg"); svg.innerHTML = ""; enig(svg, "enig");
   if (!B || B.error) return;
-  const g = { };
-  const order = flipped ? ["F", "B"] : ["B", "F"];
-  el("path", { d: ring(B.outline), fill: "#0f3b29", stroke: "var(--edge)", "stroke-width": 0.15 }, svg);
-  for (const L of order) {
-    g[L] = el("g", { "data-layer": L, opacity: L === order[1] ? 0.95 : 0.75 }, svg);
+  const G = {};
+  // as made: mask over copper, gold pads, silk; x-ray: both copper layers in their colours
+  el("path", { d: ring(B.outline), fill: mode === "board" ? "#0b3a26" : "#0a1712", stroke: "#e8e0c8", "stroke-width": 0.18 }, svg);
+  for (const L of (mode === "board" ? [topL()] : [botL(), topL()])) {
+    if (!layerOn[L]) continue; G[L] = el("g", {}, svg);
     for (const c of B.copper.filter(c => c.layer === L)) {
-      const p = el("path", { d: polyPath(c.poly), fill: L === "F" ? "var(--fcu)" : "var(--bcu)", "fill-rule": "evenodd", "data-net": c.net, opacity: 0.85 }, g[L]);
-      hover(null, p, c.net + " · " + L + ".Cu", c.net);
+      const fill = mode === "board" ? "#1d6b46" : (L === "F" ? "#d98b4a" : "#4f86e0");
+      const p = el("path", { d: polyPath(c.poly), fill, "fill-rule": "evenodd", "data-net": c.net, opacity: mode === "board" ? 0.95 : (L === topL() ? 0.85 : 0.55) }, G[L]);
+      hover(p, c.net + "  ·  " + L + ".Cu", c.net);
     }
   }
-  g.pads = el("g", {}, svg);
+  G.pads = el("g", {}, svg);
   for (const c of B.comps) for (const p of c.pads) {
-    if (flipped ? p.layer === "F" && !p.drill : p.layer === "B" && !p.drill) continue;
-    const n = el("path", { d: polyPath(p.poly), fill: "var(--pad)", "fill-rule": "evenodd", "data-net": p.net || "", "data-pin": c.ref + "." + p.num }, g.pads);
-    hover(null, n, c.ref + "." + p.num + (p.net ? " · " + p.net : " · no net") + "  (" + c.value + ")", p.net);
+    if (!p.drill && (mode === "board" ? p.layer !== topL() : !layerOn[p.layer])) continue;
+    const n = el("path", { d: polyPath(p.poly), fill: "url(#enig)", "fill-rule": "evenodd", "data-net": p.net || "", "data-pin": c.ref + "." + p.num }, G.pads);
+    hover(n, c.ref + "." + p.num + "  ·  " + (p.net || "no net") + "    " + (c.value || ""), p.net);
+    if (p.drill) el("circle", { cx: X(p.at[0]), cy: Y(p.at[1]), r: p.drill / 2, fill: "#05100b" }, G.pads);
   }
-  g.vias = el("g", {}, svg);
+  G.vias = el("g", {}, svg);
   for (const v of B.vias) {
-    const n = el("circle", { cx: X(v.at[0]), cy: Y(v.at[1]), r: v.dia / 2, fill: "#c9cfcc", "data-net": v.net }, g.vias);
-    el("circle", { cx: X(v.at[0]), cy: Y(v.at[1]), r: v.drill / 2, fill: "#0d1210" }, g.vias);
-    hover(null, n, "via · " + v.net, v.net);
+    const n = el("circle", { cx: X(v.at[0]), cy: Y(v.at[1]), r: v.dia / 2, fill: mode === "board" ? "#2b8a5b" : "url(#enig)", "data-net": v.net }, G.vias);
+    el("circle", { cx: X(v.at[0]), cy: Y(v.at[1]), r: v.drill / 2, fill: "#05100b" }, G.vias);
+    hover(n, "via  ·  " + v.net, v.net);
   }
-  for (const h of B.holes) el("circle", { cx: X(h[0]), cy: Y(h[1]), r: h[2] / 2, fill: "#0d1210", stroke: "#555", "stroke-width": 0.05 }, svg);
-  g.court = el("g", { fill: "none", stroke: "#d6d6d6", "stroke-width": 0.06, "stroke-dasharray": "0.3 0.2" }, svg);
-  for (const c of B.comps) if (c.courtyard.length) el("path", { d: polyPath(c.courtyard) }, g.court);
-  g.refs = el("g", { fill: "#f2f2ea", "font-size": 0.9, "text-anchor": "middle", "dominant-baseline": "middle", style: "pointer-events:none;font-family:monospace" }, svg);
-  for (const c of B.comps) { const t = el("text", { x: X(c.at[0]), y: Y(c.at[1]) }, g.refs); t.textContent = c.ref; }
-  g.marks = el("g", {}, svg);
-  window._marks = [];
+  for (const h of B.holes) { el("circle", { cx: X(h[0]), cy: Y(h[1]), r: h[2] / 2 + 0.45, fill: "none", stroke: "rgba(238,243,232,.2)", "stroke-width": 0.08 }, svg);
+    el("circle", { cx: X(h[0]), cy: Y(h[1]), r: h[2] / 2, fill: "#05100b" }, svg); }
+  G.court = el("g", { fill: "none", stroke: "#eef3e8", "stroke-width": 0.07, "stroke-dasharray": "0.35 0.25", opacity: 0.7 }, svg);
+  for (const c of B.comps) if (c.courtyard.length && (c.side || "F") === topL()) el("path", { d: polyPath(c.courtyard) }, G.court);
+  G.silk = el("g", { fill: "#eef3e8", "font-size": 1.0, "text-anchor": "middle", "dominant-baseline": "middle", style: `pointer-events:none;font-family:'${FONT}';font-weight:500` }, svg);
+  for (const c of B.comps) if ((c.side || "F") === topL()) el("text", { x: X(c.at[0]), y: Y(c.at[1]), opacity: 0.92 }, G.silk).textContent = c.ref;
+  const [bx0, by0, bx1] = B.bounds;           // (a fab's legend in the corner)
+  el("text", { x: X(flipped ? bx1 - 1.0 : bx0 + 1.0), y: Y(by0 + 1.1), "font-size": 0.85, opacity: 0.5, "text-anchor": "start", "dominant-baseline": "auto" }, G.silk)
+    .textContent = (B.name || "").toUpperCase() + "  ·  REV A  ·  " + (flipped ? "BOTTOM" : "TOP");
+  G.marks = el("g", {}, svg); window._marks = [];
   (R && R.findings || []).forEach((f, i) => {
     let at = f.at && f.stage !== "kicad" ? f.at : null;
     if (!at && f.pins && f.pins.length) { const pad = findPad(f.pins[0]); if (pad) at = pad.at; }
     if (!at) return;
-    const m = el("circle", { cx: X(at[0]), cy: Y(at[1]), r: 0.9, fill: "none", stroke: "var(--bad)", "stroke-width": 0.25, "data-f": i }, g.marks);
-    hover(null, m, f.text);
-    window._marks[i] = m;
+    const g = el("g", { class: "reticle" }, G.marks), x = X(at[0]), y = Y(at[1]), r = 1.1, c = "#ff6b5a";
+    el("circle", { cx: x, cy: y, r, fill: "none", stroke: c, "stroke-width": 0.14 }, g);
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) el("line", { x1: x + dx * r * 0.45, y1: y + dy * r * 0.45, x2: x + dx * r * 1.6, y2: y + dy * r * 1.6, stroke: c, "stroke-width": 0.12 }, g);
+    hover(g, "⚠ " + f.text); window._marks[i] = g;
   });
-  document.querySelectorAll("#ltools input").forEach(inp => {
-    const tgt = inp.dataset.l; const node = g[tgt]; if (node) node.style.display = inp.checked ? "" : "none";
-    inp.onchange = () => { if (g[tgt]) g[tgt].style.display = inp.checked ? "" : "none"; };
-  });
+  for (const k of ["silk", "vias", "court", "marks"]) if (G[k]) G[k].style.display = layerOn[k] ? "" : "none";
 }
 function findPad(pin) { const [ref, num] = pin.split("."); const c = B && B.comps.find(c => c.ref === ref); return c && c.pads.find(p => p.num === num); }
-function fitLayout() { if (!B || B.error) return; const [x0, y0, x1, y1] = B.bounds, m = 2;
-  const xa = flipped ? -x1 : x0; LZ.set(xa - m, -y1 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m); }
+function fitLayout() { if (!B || B.error) return; const [x0, y0, x1, y1] = B.bounds, m = Math.max(3, (x1 - x0) * 0.08);
+  LZ.set((flipped ? -x1 : x0) - m, -y1 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m); }
 $("#fit").onclick = fitLayout;
-$("#flip").onclick = () => { flipped = !flipped; $("#flip").textContent = flipped ? "view from above" : "view from below"; drawLayout(); fitLayout(); };
+$("#flip").onclick = () => { flipped = !flipped; drawLayout(); fitLayout(); };
+document.querySelectorAll(".plate[data-l]").forEach(p => p.onclick = () => { layerOn[p.dataset.l] = !layerOn[p.dataset.l]; p.classList.toggle("off", !layerOn[p.dataset.l]); drawLayout(); });
+document.querySelectorAll(".mode").forEach(m => m.onclick = () => { mode = m.dataset.m; document.querySelectorAll(".mode").forEach(x => x.classList.toggle("on", x === m)); drawLayout(); });
+document.querySelectorAll(".tp input[data-l]").forEach(i => i.onchange = () => { layerOn[i.dataset.l] = i.checked; drawLayout(); });
 function zoomTo(f, i) {
-  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x.dataset.v === "layout"));
+  document.querySelectorAll(".finger").forEach(x => x.classList.toggle("on", x.dataset.v === "layout"));
   document.querySelectorAll(".view").forEach(v => v.classList.toggle("on", v.id === "layout"));
-  let at = f.at && f.stage !== "kicad" ? f.at : null;
-  const pads = (f.pins || []).map(findPad).filter(Boolean);
+  let at = f.at && f.stage !== "kicad" ? f.at : null; const pads = (f.pins || []).map(findPad).filter(Boolean);
   if (!at && pads.length) at = pads[0].at;
-  if (at) LZ.set(X(at[0]) - 6, Y(at[1]) - 4.5, 12, 9);
-  const m = window._marks && window._marks[i]; if (m) { m.classList.remove("pulse"); void m.getBBox(); m.classList.add("pulse"); }
+  if (at) LZ.set(X(at[0]) - 7, Y(at[1]) - 5, 14, 10);
+  const m = window._marks && window._marks[i]; if (m) { m.classList.remove("hit"); void m.getBBox(); m.classList.add("hit"); }
   document.querySelectorAll("[data-pin]").forEach(p => p.classList.toggle("net-hi", (f.pins || []).includes(p.dataset.pin)));
 }
 
-// ---------- schematic (net labels) ----------
+// ---------- the schematic: a blueprint sheet with zones and a title block ----------
 function drawSchem() {
   const svg = $("#ssvg"); svg.innerHTML = "";
   if (!B || B.error) return;
-  const rank = { ic: 0, connector: 1, inductor: 2, crystal: 2, electrolytic: 3, cap: 4, res: 5, diode: 5, led: 5, pot: 3, switch: 6, pad: 7, fuse: 5, other: 8 };
-  const comps = B.comps.filter(c => c.pads.length).slice().sort((a, b) => (rank[a.kind] - rank[b.kind]) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
-  const cols = Math.max(2, Math.ceil(Math.sqrt(comps.length * 0.9))); const CW = 260;
-  let x = 0, y = 0, rowH = 0, col = 0;
+  const rank = { ic: 0, connector: 1, inductor: 2, crystal: 2, electrolytic: 3, pot: 3, cap: 4, res: 5, diode: 5, led: 5, fuse: 5, switch: 6, pad: 7, other: 8 };
+  const comps = B.comps.filter(c => c.pads.length).slice().sort((a, b) => ((rank[a.kind] ?? 8) - (rank[b.kind] ?? 8)) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
+  const cols = Math.max(2, Math.ceil(Math.sqrt(comps.length * 0.9))), CW = 270;
+  const body = el("g", {}); let x = 0, y = 0, rowH = 0, col = 0;
   for (const c of comps) {
     const pins = [...new Map(c.pads.map(p => [p.num, p])).values()].sort((a, b) => a.num.localeCompare(b.num, undefined, { numeric: true }));
     const left = pins.slice(0, Math.ceil(pins.length / 2)), right = pins.slice(Math.ceil(pins.length / 2));
-    const h = Math.max(left.length, right.length) * 18 + 34, w = 96;
-    const gx = x + 80, gy = y;
-    const g = el("g", {}, svg);
-    el("rect", { x: gx, y: gy, width: w, height: h, rx: 4, fill: "#16201c", stroke: "#8fa39a", "stroke-width": 1 }, g);
-    const t1 = el("text", { x: gx + w / 2, y: gy + 14, fill: "#e6b45a", "font-size": 12, "text-anchor": "middle", "font-weight": 600 }, g); t1.textContent = c.ref;
-    const t2 = el("text", { x: gx + w / 2, y: gy + h - 8, fill: "#8fa39a", "font-size": 10, "text-anchor": "middle" }, g); t2.textContent = (c.value || "").slice(0, 16);
+    const h = Math.max(left.length, right.length) * 18 + 30, w = 96, gx = x + 86, gy = y, g = el("g", {}, body);
+    el("rect", { x: gx, y: gy, width: w, height: h, fill: "rgba(223,233,247,.04)", stroke: "#dfe9f7", "stroke-width": 1.3 }, g);
+    el("text", { x: gx, y: gy - 6, fill: "#f4cf8e", "font-size": 12, "font-family": FONT, "font-weight": 500 }, g).textContent = c.ref;
+    el("text", { x: gx + w, y: gy - 6, fill: "#9db4d6", "font-size": 9.5, "text-anchor": "end", "font-family": FONT }, g).textContent = (c.value || "").slice(0, 15);
     const pin = (p, i, side) => {
-      const py = gy + 30 + i * 18, x0 = side < 0 ? gx : gx + w, x1 = x0 + side * 22;
-      const net = p.net || "";
-      const ln = el("line", { x1: x0, y1: py, x2: x1, y2: py, stroke: net ? `hsl(${hue(net)},60%,62%)` : "#555", "stroke-width": 1.6, "data-net": net }, g);
-      const tn = el("text", { x: x0 - side * 4, y: py + 3.5, fill: "#cfd8d3", "font-size": 9, "text-anchor": side < 0 ? "start" : "end" }, g); tn.textContent = p.num;
-      if (net) { const lb = el("text", { x: x1 + side * 3, y: py + 3.5, fill: `hsl(${hue(net)},65%,68%)`, "font-size": 10.5, "text-anchor": side < 0 ? "end" : "start", "data-net": net, style: "cursor:pointer" }, g);
-        lb.textContent = net; hover(null, lb, net + ": " + B.nets[net].pins.map(p => p.join(".")).join(", "), net); hover(null, ln, net, net); }
-      else { el("text", { x: x1 + side * 3, y: py + 3.5, fill: "#666", "font-size": 9, "text-anchor": side < 0 ? "end" : "start" }, g).textContent = "nc"; }
+      const py = gy + 22 + i * 18, x0 = side < 0 ? gx : gx + w, x1 = x0 + side * 24, net = p.net || "";
+      el("line", { x1: x0, y1: py, x2: x1, y2: py, stroke: "#dfe9f7", "stroke-width": 1.3 }, g);
+      el("circle", { cx: x1, cy: py, r: 1.8, fill: "#dfe9f7" }, g);
+      el("text", { x: x0 - side * 4, y: py + 3.5, fill: "#9db4d6", "font-size": 9, "text-anchor": side < 0 ? "start" : "end", "font-family": FONT }, g).textContent = p.num;
+      if (!net) { el("text", { x: x1 + side * 5, y: py + 3.5, fill: "#5d7598", "font-size": 10, "text-anchor": side < 0 ? "end" : "start", "font-family": FONT }, g).textContent = "×"; return; }
+      const tw = net.length * 6.3 + 12, c_ = `hsl(${hue(net)},70%,74%)`;
+      const fl = el("path", { d: side < 0 ? `M${x1 - 2},${py} l-6,-6.5 h${-(tw - 6)} v13 h${tw - 6} z` : `M${x1 + 2},${py} l6,-6.5 h${tw - 6} v13 h${-(tw - 6)} z`,
+        fill: "rgba(11,35,66,.95)", stroke: c_, "stroke-width": 1, "data-net": net, style: "cursor:pointer" }, g);
+      el("text", { x: side < 0 ? x1 - 9 : x1 + 9, y: py + 3.4, fill: c_, "font-size": 10, "text-anchor": side < 0 ? "end" : "start", "font-family": FONT, "font-weight": 500, style: "pointer-events:none" }, g).textContent = net;
+      hover(fl, net + "  →  " + B.nets[net].pins.map(p => p.join(".")).join("  "), net);
     };
     left.forEach((p, i) => pin(p, i, -1)); right.forEach((p, i) => pin(p, i, 1));
-    rowH = Math.max(rowH, h); col++; x += CW;
-    if (col >= cols) { col = 0; x = 0; y += rowH + 30; rowH = 0; }
+    rowH = Math.max(rowH, h); col++; x += CW; if (col >= cols) { col = 0; x = 0; y += rowH + 44; rowH = 0; }
   }
-  const bb = svg.getBBox(); SZ.set(bb.x - 20, bb.y - 20, bb.width + 40, bb.height + 40);
+  const W = cols * CW + 40, H = (col ? y + rowH : y - 44) + 130, ox = -10, oy = -40;
+  el("rect", { x: ox - 40, y: oy - 40, width: W + 80, height: H + 80, fill: "#0b2342" }, svg);
+  const grid = el("g", { stroke: "#15325a", "stroke-width": 0.6 }, svg);
+  for (let gx = ox - 40; gx < ox + W + 40; gx += 20) el("line", { x1: gx, y1: oy - 40, x2: gx, y2: oy + H + 40 }, grid);
+  for (let gy = oy - 40; gy < oy + H + 40; gy += 20) el("line", { x1: ox - 40, y1: gy, x2: ox + W + 40, y2: gy }, grid);
+  el("rect", { x: ox - 20, y: oy - 20, width: W + 40, height: H + 40, fill: "none", stroke: "#dfe9f7", "stroke-width": 1.5 }, svg);
+  el("rect", { x: ox - 10, y: oy - 10, width: W + 20, height: H + 20, fill: "none", stroke: "#dfe9f7", "stroke-width": 0.7 }, svg);
+  for (let i = 0; i < 6; i++) el("text", { x: ox - 10 + (i + 0.5) * (W + 20) / 6, y: oy - 12.5, fill: "#9db4d6", "font-size": 8, "text-anchor": "middle", "font-family": FONT }, svg).textContent = i + 1;
+  for (let i = 0; i < 4; i++) el("text", { x: ox - 15, y: oy - 10 + (i + 0.5) * (H + 20) / 4, fill: "#9db4d6", "font-size": 8, "text-anchor": "middle", "font-family": FONT }, svg).textContent = "ABCD"[i];
+  svg.appendChild(body);
+  const tbw = 300, tbh = 70, tx = ox + W + 10 - tbw, ty = oy + H + 10 - tbh, tb = el("g", { "font-family": FONT, fill: "#dfe9f7" }, svg);
+  el("rect", { x: tx, y: ty, width: tbw, height: tbh, fill: "#0b2342", stroke: "#dfe9f7", "stroke-width": 1.2 }, tb);
+  el("line", { x1: tx, y1: ty + 34, x2: tx + tbw, y2: ty + 34, stroke: "#dfe9f7", "stroke-width": 0.8 }, tb);
+  el("line", { x1: tx + 190, y1: ty + 34, x2: tx + 190, y2: ty + tbh, stroke: "#dfe9f7", "stroke-width": 0.8 }, tb);
+  el("text", { x: tx + 8, y: ty + 12, "font-size": 7.5, fill: "#9db4d6" }, tb).textContent = "TITLE";
+  el("text", { x: tx + 8, y: ty + 28, "font-size": 14, "font-weight": 500 }, tb).textContent = (B.name || "").toUpperCase();
+  el("text", { x: tx + 8, y: ty + 46, "font-size": 7.5, fill: "#9db4d6" }, tb).textContent = "DRAWN BY";
+  el("text", { x: tx + 8, y: ty + 61, "font-size": 10.5 }, tb).textContent = "pcb-harness · net labels";
+  el("text", { x: tx + 198, y: ty + 46, "font-size": 7.5, fill: "#9db4d6" }, tb).textContent = "SHEET · REV";
+  el("text", { x: tx + 198, y: ty + 61, "font-size": 10.5 }, tb).textContent = "1 / 1 · A";
+  SZ.set(ox - 46, oy - 46, W + 92, H + 92);
 }
-$("#sfit").onclick = drawSchem;
 
-// ---------- 3D ----------
-let scene, cam, ren, root, orbit = { az: -0.6, el: 0.9, dist: 80, tx: 0, ty: 0 };
+// ---------- 3D: the board on a turntable ----------
+let scene, cam, ren, root, spin = true, orbit = { az: -0.55, el: 0.78, dist: 80, tx: 0, ty: 0 };
 function init3d() {
-  if (threeReady || !B || B.error) { if (ren) resize3d(); return; }
-  if (typeof THREE === "undefined") { $("#k3dmsg").textContent = "the interactive view needs three.js (no internet?): try the KiCad render"; return; }
-  threeReady = true;
-  const host = $("#three");
-  ren = new THREE.WebGLRenderer({ antialias: true }); ren.setPixelRatio(window.devicePixelRatio || 1);
-  host.appendChild(ren.domElement);
-  scene = new THREE.Scene(); scene.background = new THREE.Color(0x0d1210);
-  cam = new THREE.PerspectiveCamera(35, 1, 0.1, 2000);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x223322, 0.85));
-  const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(40, -60, 90); scene.add(dl);
+  if (threeReady) { resize3d(); return; } if (!B || B.error) return;
+  if (typeof THREE === "undefined") { $("#k3dmsg").textContent = "three.js did not load: use the KiCad render"; return; }
+  threeReady = true; const host = $("#three");
+  ren = new THREE.WebGLRenderer({ antialias: true, alpha: true }); ren.setPixelRatio(window.devicePixelRatio || 1); host.appendChild(ren.domElement);
+  scene = new THREE.Scene(); cam = new THREE.PerspectiveCamera(32, 1, 0.1, 3000);
+  scene.add(new THREE.HemisphereLight(0xfff4e0, 0x0d2a1d, 0.9));
+  const k = new THREE.DirectionalLight(0xffffff, 0.8); k.position.set(50, -70, 110); scene.add(k);
+  const rim = new THREE.DirectionalLight(0x9fd8ff, 0.35); rim.position.set(-80, 60, 40); scene.add(rim);
   build3d(); resize3d(); window.addEventListener("resize", resize3d);
-  let d = null;
-  ren.domElement.addEventListener("pointerdown", e => { d = { x: e.clientX, y: e.clientY, b: e.button, o: { ...orbit } }; ren.domElement.setPointerCapture(e.pointerId); });
-  ren.domElement.addEventListener("pointermove", e => { if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y;
-    if (d.b === 2 || e.shiftKey) { const k = orbit.dist / 600; orbit.tx = d.o.tx - dx * k * Math.cos(orbit.az) - dy * k * Math.sin(orbit.az); orbit.ty = d.o.ty - dx * k * Math.sin(orbit.az) + dy * k * Math.cos(orbit.az); }
-    else { orbit.az = d.o.az - dx * 0.008; orbit.el = Math.min(1.55, Math.max(-1.55, d.o.el + dy * 0.008)); } place3d(); });
-  ren.domElement.addEventListener("pointerup", () => d = null);
-  ren.domElement.addEventListener("contextmenu", e => e.preventDefault());
-  ren.domElement.addEventListener("wheel", e => { e.preventDefault(); orbit.dist *= Math.exp(e.deltaY * 0.0012); place3d(); }, { passive: false });
+  let d = null; const c = ren.domElement;
+  c.addEventListener("pointerdown", e => { spin = false; d = { x: e.clientX, y: e.clientY, b: e.button, o: { ...orbit } }; c.setPointerCapture(e.pointerId); });
+  c.addEventListener("pointermove", e => { if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (d.b === 2 || e.shiftKey) { const kk = orbit.dist / 700; orbit.tx = d.o.tx - dx * kk * Math.cos(orbit.az) - dy * kk * Math.sin(orbit.az); orbit.ty = d.o.ty - dx * kk * Math.sin(orbit.az) + dy * kk * Math.cos(orbit.az); }
+    else { orbit.az = d.o.az - dx * 0.008; orbit.el = Math.min(1.5, Math.max(-1.5, d.o.el + dy * 0.008)); } place3d(); });
+  c.addEventListener("pointerup", () => d = null); c.addEventListener("contextmenu", e => e.preventDefault());
+  c.addEventListener("wheel", e => { e.preventDefault(); spin = false; orbit.dist *= Math.exp(e.deltaY * 0.0012); place3d(); }, { passive: false });
+  const tick = () => { if (spin && $("#v3d").classList.contains("on")) { orbit.az += 0.0035; place3d(); } requestAnimationFrame(tick); }; tick();
 }
 function shapeOf(rings) { const s = new THREE.Shape(rings[0].map(p => new THREE.Vector2(p[0], p[1])));
   for (const h of rings.slice(1)) s.holes.push(new THREE.Path(h.map(p => new THREE.Vector2(p[0], p[1])))); return s; }
 function build3d() {
-  if (root) scene.remove(root);
-  root = new THREE.Group(); scene.add(root);
-  const T = B.thickness || 1.6;
+  if (root) scene.remove(root); root = new THREE.Group(); scene.add(root);
+  const T = B.thickness || 1.6, [bx0, by0, bx1, by1] = B.bounds, cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2, span = Math.max(bx1 - bx0, by1 - by0);
+  const sc = document.createElement("canvas"); sc.width = sc.height = 256; const sx = sc.getContext("2d");      // (a soft shadow under it)
+  const gr = sx.createRadialGradient(128, 128, 10, 128, 128, 128); gr.addColorStop(0, "rgba(0,0,0,.6)"); gr.addColorStop(1, "rgba(0,0,0,0)"); sx.fillStyle = gr; sx.fillRect(0, 0, 256, 256);
+  const sh = new THREE.Mesh(new THREE.PlaneGeometry(span * 1.9, span * 1.4), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false }));
+  sh.position.set(cx, cy, -T - 6); root.add(sh);
   const bs = new THREE.Shape(B.outline.map(p => new THREE.Vector2(p[0], p[1])));
   for (const h of B.holes) { const c = new THREE.Path(); c.absarc(h[0], h[1], h[2] / 2, 0, Math.PI * 2, true); bs.holes.push(c); }
-  const bg = new THREE.ExtrudeGeometry(bs, { depth: T, bevelEnabled: false, curveSegments: 24 });
-  bg.translate(0, 0, -T);
-  root.add(new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ color: 0x0f4a2e, roughness: 0.55, metalness: 0.05 })));
-  const cuMat = (L) => new THREE.MeshStandardMaterial({ color: L === "F" ? 0x2f7a4e : 0x2a6a49, roughness: 0.45, metalness: 0.15, side: THREE.DoubleSide });
-  for (const c of B.copper) for (const p of c.poly) {
-    try { const g = new THREE.ShapeGeometry(shapeOf(p)); const m = new THREE.Mesh(g, cuMat(c.layer)); m.position.z = c.layer === "F" ? 0.02 : -T - 0.02; root.add(m); } catch (e) {}
-  }
-  const gold = new THREE.MeshStandardMaterial({ color: 0xd9aa45, roughness: 0.3, metalness: 0.85, side: THREE.DoubleSide });
-  for (const c of B.comps) for (const p of c.pads) for (const q of p.poly) {
-    try { const g = new THREE.ShapeGeometry(shapeOf(q)); for (const z of (p.drill ? [0.04, -T - 0.04] : [p.layer === "F" ? 0.04 : -T - 0.04])) { const m = new THREE.Mesh(g, gold); m.position.z = z; root.add(m); } } catch (e) {}
-  }
-  const col = { ic: 0x1c1c1e, cap: 0xb8915a, res: 0x222222, led: 0xe8f0ea, diode: 0x2a2a2a, inductor: 0x34363a, connector: 0xf2efe6,
-                electrolytic: 0x1d3b8f, pot: 0x2f62c8, switch: 0x7d7f84, crystal: 0xc7c9cc, fuse: 0xe0d2b0, other: 0x555555, pad: 0, hole: 0 };
+  const bg = new THREE.ExtrudeGeometry(bs, { depth: T, bevelEnabled: false, curveSegments: 28 }); bg.translate(0, 0, -T);
+  root.add(new THREE.Mesh(bg, [new THREE.MeshStandardMaterial({ color: 0x0d4a2f, roughness: 0.42, metalness: 0.05 }), new THREE.MeshStandardMaterial({ color: 0xcfc39a, roughness: 0.8 })]));
+  const under = new THREE.MeshStandardMaterial({ color: 0x2b8a5b, roughness: 0.35, metalness: 0.1, side: THREE.DoubleSide });
+  for (const c of B.copper) for (const p of c.poly) { try { const m = new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(p)), under); m.position.z = c.layer === "F" ? 0.02 : -T - 0.02; root.add(m); } catch (e) {} }
+  const gold = new THREE.MeshStandardMaterial({ color: 0xe3b257, roughness: 0.25, metalness: 0.9, side: THREE.DoubleSide });
+  for (const c of B.comps) for (const p of c.pads) for (const q of p.poly) { try { const g = new THREE.ShapeGeometry(shapeOf(q));
+    for (const z of (p.drill ? [0.045, -T - 0.045] : [p.layer === "F" ? 0.045 : -T - 0.045])) { const m = new THREE.Mesh(g, gold); m.position.z = z; root.add(m); } } catch (e) {} }
+  const col = { ic: 0x18181a, cap: 0xc29a62, res: 0x1e1e1e, led: 0xf1f6f0, diode: 0x262626, inductor: 0x2e3034, connector: 0xf3efe4,
+                electrolytic: 0x18307c, pot: 0x2d63cf, switch: 0x80838a, crystal: 0xd0d3d6, fuse: 0xe6d8b4, other: 0x505050 };
   for (const c of B.comps) {
     if (c.kind === "pad" || c.kind === "hole" || !c.courtyard.length || c.unplaced) continue;
     const xs = c.courtyard[0][0].map(p => p[0]), ys = c.courtyard[0][0].map(p => p[1]);
-    let x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
-    const sh = 0.82, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, w = (x1 - x0) * sh, d = (y1 - y0) * sh, h = c.height;
-    const mat = new THREE.MeshStandardMaterial({ color: col[c.kind] ?? 0x555555, roughness: c.kind === "ic" ? 0.6 : 0.4, metalness: c.kind === "electrolytic" ? 0.3 : 0.05 });
-    let mesh;
-    if (c.kind === "electrolytic") { const r = Math.min(w, d) / 2; mesh = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 40), mat); mesh.rotation.x = Math.PI / 2; }
-    else mesh = new THREE.Mesh(new THREE.BoxGeometry(w, d, h), mat);
-    const top = c.side !== "B";
-    mesh.position.set(cx, cy, top ? h / 2 + 0.05 : -T - h / 2 - 0.05);
-    root.add(mesh);
-    if (c.kind === "electrolytic") { const cap = new THREE.Mesh(new THREE.CircleGeometry(Math.min(w, d) / 2 * 0.98, 40), new THREE.MeshStandardMaterial({ color: 0xb9c2cc, metalness: 0.7, roughness: 0.3 }));
-      cap.position.set(cx, cy, h + 0.06); root.add(cap); }
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys), s = 0.8;
+    const w = (x1 - x0) * s, d = (y1 - y0) * s, h = c.height, px = (x0 + x1) / 2, py = (y0 + y1) / 2, top = c.side !== "B";
+    const mat = new THREE.MeshStandardMaterial({ color: col[c.kind] ?? 0x505050, roughness: c.kind === "ic" ? 0.55 : 0.4, metalness: c.kind === "electrolytic" ? 0.35 : 0.04 });
+    let m;
+    if (c.kind === "electrolytic") { const r = Math.min(w, d) / 2; m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 48), mat); m.rotation.x = Math.PI / 2;
+      const lid = new THREE.Mesh(new THREE.CircleGeometry(r * 0.97, 48), new THREE.MeshStandardMaterial({ color: 0xc3ccd6, metalness: 0.8, roughness: 0.28 })); lid.position.set(px, py, h + 0.07); root.add(lid); }
+    else m = new THREE.Mesh(new THREE.BoxGeometry(w, d, h), mat);
+    m.position.set(px, py, top ? h / 2 + 0.06 : -T - h / 2 - 0.06); root.add(m);
+    if (c.kind === "ic" && top) { const dot = new THREE.Mesh(new THREE.CircleGeometry(Math.min(w, d) * 0.06, 20), new THREE.MeshBasicMaterial({ color: 0x777777 }));
+      dot.position.set(px - w * 0.35, py + d * 0.35, h + 0.07); root.add(dot); }
   }
-  const [x0, y0, x1, y1] = B.bounds; orbit.tx = (x0 + x1) / 2; orbit.ty = (y0 + y1) / 2; orbit.dist = Math.max(x1 - x0, y1 - y0) * 2.1;
-  place3d();
+  orbit.tx = cx; orbit.ty = cy; orbit.dist = span * 2.3; place3d();
 }
 function place3d() { if (!cam) return; const ce = Math.cos(orbit.el);
   cam.position.set(orbit.tx + orbit.dist * ce * Math.sin(orbit.az), orbit.ty - orbit.dist * ce * Math.cos(orbit.az), orbit.dist * Math.sin(orbit.el));
   cam.up.set(0, 0, 1); cam.lookAt(orbit.tx, orbit.ty, 0); ren.render(scene, cam); }
-function resize3d() { if (!ren) return; const h = $("#three"); const w = h.clientWidth || 800, hh = h.clientHeight || 600;
-  ren.setSize(w, hh); cam.aspect = w / hh; cam.updateProjectionMatrix(); place3d(); }
-$("#krender").onclick = async () => {
-  $("#k3dmsg").textContent = "KiCad is rendering (about 20-60 s)...";
-  const r = await (await fetch("/api/render3d")).json();
-  if (r.error) { $("#k3dmsg").textContent = r.error; return; }
-  $("#rimg").src = r.png; $("#render").style.display = "block"; $("#k3dclose").style.display = ""; $("#k3dmsg").textContent = "";
-};
+function resize3d() { if (!ren) return; const h = $("#three"), w = h.clientWidth || 800, hh = h.clientHeight || 600; ren.setSize(w, hh); cam.aspect = w / hh; cam.updateProjectionMatrix(); place3d(); }
+$("#krender").onclick = async () => { $("#k3dmsg").textContent = "KiCad is rendering (20-60 s)…";
+  const r = await (await fetch("/api/render3d")).json(); if (r.error) { $("#k3dmsg").textContent = r.error; return; }
+  $("#rimg").src = r.png; $("#render").style.display = "block"; $("#k3dclose").style.display = ""; $("#k3dmsg").textContent = ""; };
 $("#k3dclose").onclick = () => { $("#render").style.display = "none"; $("#k3dclose").style.display = "none"; };
 
-// ---------- the side panel ----------
+// ---------- the run, routed as a trace across the top ----------
+function drawTrace() {
+  const svg = $("#tsvg"); svg.innerHTML = ""; enig(svg, "enigT");
+  const W = svg.getBoundingClientRect().width || 1000, y = 14;
+  const running = !!(P && !P.done && P.stage !== "none"), st = (P && P.stages) || [];
+  let frac = 1;
+  if (running) frac = P.eta == null ? 0.04 : Math.max(0.03, Math.min(0.97, P.elapsed / (P.elapsed + P.eta)));
+  const pts = [[0, y]], jogs = 5;                         // (straight runs with 45-degree jogs, as a router draws)
+  for (let i = 1; i <= jogs; i++) { const x = W * i / (jogs + 1), up = i % 2 ? -7 : 7, ly = pts[pts.length - 1][1]; pts.push([x - 9, ly], [x - 2, y + up], [x + 30, y + up]); }
+  pts.push([W, pts[pts.length - 1][1]]);
+  const d = "M" + pts.map(p => p.join(",")).join("L");
+  const full = el("path", { d, fill: "none", stroke: "rgba(238,243,232,.28)", "stroke-width": 1.1, "stroke-dasharray": "2 5" }, svg);    // the ratsnest
+  const L = full.getTotalLength();
+  el("path", { d, fill: "none", stroke: "#d98b4a", "stroke-width": 3.4, "stroke-linecap": "round", "stroke-linejoin": "round", "stroke-dasharray": `${L * frac} ${L}` }, svg);
+  el("path", { d, fill: "none", stroke: "#f6c48c", "stroke-width": 1, opacity: 0.85, "stroke-linejoin": "round", "stroke-dasharray": `${L * frac} ${L}` }, svg);
+  if (running) { const pl = el("path", { d, fill: "none", stroke: "#fff3d0", "stroke-width": 3.6, "stroke-linecap": "round", "stroke-dasharray": `16 ${L * 2}` }, svg);
+    pl.animate([{ strokeDashoffset: 16 }, { strokeDashoffset: -L * frac }], { duration: 1500, iterations: Infinity }); }
+  const total = running ? P.elapsed + (P.eta || 0) : (st.length ? (st[st.length - 1].end || st[st.length - 1].start) : 1);
+  let lastX = -99;
+  st.forEach(s => { if (s.name === "done" || s.end == null) return;
+    const p = full.getPointAtLength(L * Math.min(frac, s.end / Math.max(total, 1e-6)));
+    el("circle", { cx: p.x, cy: p.y, r: 4.4, fill: "url(#enigT)", stroke: "#2a1a05", "stroke-width": 0.6 }, svg);
+    el("circle", { cx: p.x, cy: p.y, r: 1.7, fill: "#082a1c" }, svg);
+    const share = (s.end - s.start) / Math.max(total, 1e-6);             // (a label for each stage worth one)
+    if (share > 0.06 && p.x - lastX > 150) { const nearEnd = p.x > W - 90;
+      el("text", { x: nearEnd ? p.x : p.x, y: p.y + 19, fill: "#9fb8aa", "font-size": 9, "text-anchor": nearEnd ? "end" : "middle", "font-family": FONT, "letter-spacing": 1.1 }, svg)
+        .textContent = s.name.toUpperCase() + " " + secs(s.end - s.start); lastX = p.x; } });
+  const head = full.getPointAtLength(L * frac);
+  el("circle", { cx: head.x, cy: head.y, r: running ? 6 : 5, fill: "url(#enigT)", stroke: "#2a1a05", "stroke-width": 0.7 }, svg);
+  el("circle", { cx: head.x, cy: head.y, r: 2, fill: "#082a1c" }, svg);
+  const lab = $("#tlabel");
+  if (running) { let s = P.stage; if ((s === "place+route" || s === "place") && P.tries) s += ` · try ${Math.min(P.tries_done + 1, P.tries)}/${P.tries}`;
+    lab.textContent = `${s} · ${secs(P.elapsed)} · ${P.eta == null ? "T−??:??" : tminus(P.eta)}`; }
+  else if (R && R.board) lab.textContent = `routed in ${secs(R.seconds)}` + (P && P.tries_done ? ` · ${P.tries_done} ${P.tries_done === 1 ? "try" : "tries"}` : "");
+  else lab.textContent = "";
+}
+
+// ---------- the report ----------
+function reticleIcon(c) { return `<svg class="ret" viewBox="0 0 20 20"><circle cx="10" cy="10" r="5.5" fill="none" stroke="${c}" stroke-width="1.3"/><path d="M10 0v5M10 15v5M0 10h5M15 10h5" stroke="${c}" stroke-width="1.3"/></svg>`; }
+function drawPassStamp(on) {
+  const s = $("#passstamp"); s.style.display = on ? "block" : "none"; if (!on) return; s.innerHTML = "";
+  const g = el("g", { transform: "rotate(-9 100 100)", fill: "none", stroke: "#7fd6a2" }, s);
+  el("circle", { cx: 100, cy: 100, r: 88, "stroke-width": 4 }, g); el("circle", { cx: 100, cy: 100, r: 74, "stroke-width": 1.4 }, g);
+  el("path", { id: "arc", d: "M 22,100 A 78,78 0 1,1 178,100", stroke: "none" }, g);
+  const tx = el("text", { fill: "#7fd6a2", stroke: "none", "font-size": 11.5, "font-family": FONT, "font-weight": 500, "letter-spacing": 4 }, g);
+  const tp = el("textPath", { href: "#arc", startOffset: "50%", "text-anchor": "middle" }, tx); tp.textContent = "PCB-HARNESS · INSPECTED";
+  el("text", { x: 100, y: 113, fill: "#7fd6a2", stroke: "none", "font-size": 36, "font-family": FONT, "font-weight": 500, "text-anchor": "middle", "letter-spacing": 4 }, g).textContent = "PASS";
+  el("line", { x1: 48, y1: 126, x2: 152, y2: 126, "stroke-width": 1 }, g);
+  el("text", { x: 100, y: 142, fill: "#7fd6a2", stroke: "none", "font-size": 8.5, "font-family": FONT, "text-anchor": "middle", "letter-spacing": 1.8 }, g).textContent =
+    R.kicad_drc && R.kicad_drc.run ? "DESIGN · HOUSE · KICAD" : "DESIGN · HOUSE";
+  el("text", { x: 100, y: 156, fill: "#7fd6a2", stroke: "none", "font-size": 8.5, "font-family": FONT, "text-anchor": "middle", opacity: 0.8 }, g).textContent = new Date().toISOString().slice(0, 10);
+}
 function drawSide() {
-  const fs = $("#findings"); fs.innerHTML = "";
-  const list = (R && R.findings) || [];
-  if (!R || !R.board) fs.innerHTML = '<div class="meta" style="margin:0 14px">no result yet</div>';
-  else if (!list.length) fs.innerHTML = '<div class="none">none: every check clean</div>';
-  list.forEach((f, i) => { const d = document.createElement("div"); d.className = "f";
-    d.innerHTML = `<div class="k">${f.stage} · ${f.kind}</div><div></div><div class="h"></div>`;
-    d.children[1].textContent = f.text; d.children[2].textContent = f.hint || "";
-    d.onclick = () => { document.querySelectorAll(".f").forEach(x => x.classList.remove("sel")); d.classList.add("sel"); zoomTo(f, i); };
+  const fs = $("#findings"); fs.innerHTML = ""; const list = (R && R.findings) || [];
+  drawPassStamp(!!(R && R.board && R.clean));
+  if (!R || !R.board) fs.innerHTML = '<div class="ticket info"><div class="k">waiting</div><div class="x">no result yet</div></div>';
+  else if (!list.length) fs.innerHTML = '<div class="ticket info">' + reticleIcon("#7fd6a2") + '<div class="k" style="color:#7fd6a2">no defects</div><div class="x">every check clean</div></div>';
+  list.forEach((f, i) => { const d = document.createElement("div"); d.className = "ticket";
+    d.innerHTML = reticleIcon("#ff6b5a") + '<div class="k"></div><div class="x"></div><div class="h"></div><div class="at"></div>';
+    d.querySelector(".k").textContent = f.stage + " · " + f.kind; d.querySelector(".x").textContent = f.text; d.querySelector(".h").textContent = f.hint ? "→ " + f.hint : "";
+    d.querySelector(".at").textContent = f.at && f.stage !== "kicad" ? `@ ${f.at[0].toFixed(1)}, ${f.at[1].toFixed(1)}` : "";
+    d.onclick = () => { document.querySelectorAll(".ticket").forEach(x => x.classList.remove("sel")); d.classList.add("sel"); zoomTo(f, i); };
     fs.appendChild(d); });
-  const cr = $("#critic"); cr.innerHTML = "";
-  const notes = (R && R.critic) || [];
-  if (R && R.board && !notes.length) cr.innerHTML = '<div class="none">no notes</div>';
-  notes.forEach(n => { const d = document.createElement("div"); d.className = "f " + (n.severity === "error" ? "" : n.severity);
-    d.innerHTML = `<div class="k">${n.severity} · ${n.kind || ""}</div><div></div>`; d.children[1].textContent = n.text;
-    if (n.refs && n.refs.length) d.onclick = () => zoomTo({ pins: [] , at: (B.comps.find(c => c.ref === n.refs[0]) || {}).at }, -1);
-    cr.appendChild(d); });
+  const cr = $("#critic"); cr.innerHTML = ""; const notes = (R && R.critic) || [];
+  if (R && R.board && !notes.length) cr.innerHTML = '<div class="ticket info">' + reticleIcon("#7fd6a2") + '<div class="k" style="color:#7fd6a2">no notes</div><div class="x">the requirements are met</div></div>';
+  notes.forEach(n => { const sev = n.severity === "error" ? "" : n.severity === "warning" ? "warn" : "info", d = document.createElement("div"); d.className = "ticket " + sev;
+    d.innerHTML = reticleIcon(sev === "" ? "#ff6b5a" : sev === "warn" ? "#f2c66d" : "#9fb8aa") + '<div class="k"></div><div class="x"></div>';
+    d.querySelector(".k").textContent = n.severity + (n.kind ? " · " + n.kind : ""); d.querySelector(".x").textContent = n.text; cr.appendChild(d); });
   const run = $("#run"); run.innerHTML = "";
   if (R && R.board) {
-    const kv = [["router", R.router], ["parts / nets", R.parts + " / " + R.nets], ["layers", R.layers], ["time", R.seconds + " s"],
-                ["KiCad DRC", R.kicad_drc && R.kicad_drc.run ? "ran (KiCad " + R.kicad_drc.version + ")" : (R.kicad_drc && R.kicad_drc.skipped) || "off"]];
-    for (const [k, v] of Object.entries(R.timings || {})) kv.push([k, v + " s"]);
-    for (const [k, v] of kv) { const a = document.createElement("span"); a.textContent = k; const b = document.createElement("b"); b.textContent = v; run.append(a, b); }
+    const row = (k, v) => { const r = document.createElement("div"); r.className = "r"; r.innerHTML = "<span></span><span class='d'></span><b></b>"; r.children[0].textContent = k; r.children[2].textContent = v; run.appendChild(r); };
+    row("router", R.router); row("parts · nets · layers", `${R.parts} · ${R.nets} · ${R.layers}`);
+    row("kicad drc", R.kicad_drc && R.kicad_drc.run ? "KiCad " + R.kicad_drc.version : "skipped");
+    const tm = Object.entries(R.timings || {}), mx = Math.max(...tm.map(t => t[1]), 0.01);
+    for (const [k, v] of tm) { row(k, secs(v)); const b = document.createElement("div"); b.className = "bar"; b.style.width = Math.max(2, v / mx * 100) + "%"; run.appendChild(b); }
+    row("total", secs(R.seconds));
   }
   const fl = $("#files"); fl.innerHTML = "";
-  if (R && R.files) for (const [k, v] of Object.entries(R.files)) { const rel = String(v).split(/[\\/]/).slice(-2).join("/"); const name = rel.startsWith(R.board) ? rel : rel;
-    const a = document.createElement("a"); const p = String(v); const i = p.lastIndexOf("/" + (p.includes("/cart/") ? "cart/" : ""));
-    a.href = "/files/" + (p.includes("/cart/") ? "cart/" + p.split("/cart/")[1] : p.split("/").pop()); a.target = "_blank"; a.textContent = k + ": " + p.split("/").slice(-1)[0]; fl.appendChild(a); }
+  if (R && R.files) for (const [k, v] of Object.entries(R.files)) { const p = String(v), rel = p.includes("/cart/") ? "cart/" + p.split("/cart/")[1] : p.split("/").pop();
+    const a = document.createElement("a"); a.href = "/files/" + rel; a.target = "_blank"; a.innerHTML = "<b style='font-weight:400'></b><span></span>"; a.children[0].textContent = rel; a.children[1].textContent = k; fl.appendChild(a); }
 }
 function drawHeader() {
-  $("#name").textContent = (B && B.name) || (R && R.board) || "pcb-harness";
-  const b = $("#badge");
-  if (P && !P.done) { b.className = "badge run"; b.textContent = "running"; }
-  else if (R && R.board) { b.className = "badge " + (R.clean ? "ok" : "bad"); b.textContent = R.clean ? "clean" : "not clean"; }
-  $("#meta").textContent = R && R.board ? `${R.parts} parts · ${R.nets} nets · ${R.layers} layers · ${R.router}` : "";
-}
-function drawProgress() {
-  const box = $("#prog");
-  if (!P || P.done || P.stage === "none") { box.style.display = "none"; return; }
-  box.style.display = "block";
-  let s = P.stage;
-  if ((s === "place+route" || s === "place") && P.tries) s += ` · try ${Math.min(P.tries_done + 1, P.tries)} of ${P.tries}` + (P.tries_done ? ` (${P.tries_done} done)` : "");
-  $("#pstage").innerHTML = "<b>" + s + "</b> · " + fmt(P.elapsed) + " so far";
-  $("#peta").textContent = P.eta == null ? "estimating" : "about " + fmt(P.eta) + " left";
-  const frac = P.eta == null ? 0.05 : P.elapsed / (P.elapsed + P.eta);
-  $("#pfill").style.width = Math.max(3, Math.min(98, frac * 100)) + "%";
+  $("#name").textContent = (B && B.name) || (R && R.board) || "—";
+  $("#meta").textContent = R && R.board ? `${R.parts} PARTS · ${R.nets} NETS · ${R.layers} LAYERS · ${String(R.router).toUpperCase()}` : "";
+  const s = $("#stampTop");
+  if (P && !P.done && P.stage !== "none") { s.className = "stamp run"; s.textContent = "routing"; }
+  else if (R && R.board) { const nf = (R.findings || []).length, ne = (R.critic || []).filter(n => n.severity === "error").length;
+    s.className = "stamp " + (R.clean ? "pass" : "fail");
+    s.textContent = R.clean ? "pass" : nf ? nf + (nf === 1 ? " defect" : " defects") : ne + " review " + (ne === 1 ? "error" : "errors"); }
+  drawTrace();
 }
 
 // ---------- data ----------
 async function getJ(u) { try { return await (await fetch(u, { cache: "no-store" })).json(); } catch (e) { return null; } }
 async function loadAll() {
   R = await getJ("/api/result"); B = await getJ("/api/board");
-  const msg = $("#msg");
-  if (!B || B.error) msg.textContent = (B && B.error) || "no board yet"; else msg.textContent = "";
+  $("#msg").textContent = !B || B.error ? ((B && B.error) || "no board yet").toUpperCase() : "";
   drawHeader(); drawSide(); drawLayout(); fitLayout();
-  if ($("#schem").classList.contains("on")) drawSchem();
-  if (threeReady) build3d();
+  if ($("#schem").classList.contains("on")) drawSchem(); if (threeReady) build3d();
 }
 let wasRunning = false;
 async function poll() {
-  P = await getJ("/api/progress");
-  drawProgress(); drawHeader();
-  if (P && !P.done) wasRunning = true;
-  else if (wasRunning) { wasRunning = false; await loadAll(); }
+  P = await getJ("/api/progress"); drawHeader();
+  if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; await loadAll(); }
   setTimeout(poll, P && !P.done ? 1000 : 4000);
 }
-loadAll().then(poll);
-window.addEventListener("resize", () => { fitLayout(); });
+(async () => { P = await getJ("/api/progress"); await loadAll(); poll(); })();
+window.addEventListener("resize", () => { fitLayout(); drawTrace(); });
+document.fonts && document.fonts.ready.then(() => drawTrace());
 </script>
 </body>
 </html>

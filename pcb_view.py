@@ -256,6 +256,8 @@ def make_handler(out_dir: str):
             try:
                 if path in ("/", "/index.html"):
                     return self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+                if path == "/fonts.css":
+                    return self._send(200, (PAGE.parent / "fonts.css").read_bytes(), "text/css")
                 if path == "/three.min.js":
                     return self._send(200, (PAGE.parent / "three.min.js").read_bytes(), "text/javascript")
                 if path == "/api/progress":
