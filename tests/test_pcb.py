@@ -1124,3 +1124,100 @@ def test_stage_check_starts_from_the_saved_board(tmp_path, capsys):
     said = capsys.readouterr().out
     r = json.load(open(tmp_path / "o" / "result.json"))
     assert "from the last run" in said and r["clean"] and "route" not in r["timings"]
+
+
+def test_viewer_serves_a_run_and_its_progress(tmp_path):
+    """a run writes progress.json (stages, tries, an estimate of what is left) and result.json naming its script;
+    the viewer serves the page, three.js, the board (parts, pads, copper), the result and the progress"""
+    import json
+    import urllib.request
+    import pcb_cli
+    import pcb_view
+    here = Path(__file__).parent.parent
+    out = tmp_path / "o"
+    pcb_cli.main([str(here / "bench" / "blinker.py"), str(out), "--router", "harness", "--kicad-drc", "off"])
+    pr = json.load(open(out / "progress.json"))
+    assert pr["done"] and pr["eta"] == 0.0 and [s["name"] for s in pr["stages"]][-1] == "done"
+    assert json.load(open(out / "result.json"))["script"].endswith("blinker.py")
+    srv, url = pcb_view.serve(str(out), open_browser=False, block=False)
+    try:
+        op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        get = lambda p: op.open(url + p, timeout=120).read()
+        assert b"Zeus" in get("")
+        assert len(get("three.min.js")) > 100000
+        b = json.loads(get("api/board"))
+        assert b["name"] == "blinker" and len(b["comps"]) == 8 and b["tracks"] and b["copper"]
+        assert all(c["pads"] for c in b["comps"]) and b["outline"]
+        assert json.loads(get("api/result"))["board"] == "blinker"
+        assert json.loads(get("api/progress"))["done"]
+    finally:
+        srv.shutdown()
+
+
+def test_progress_estimate_counts_the_tries_left(tmp_path):
+    import pcb_view
+    p = pcb_view.Progress(str(tmp_path), "board.py", parts=20)
+    p.stage("place+route")
+    p.event({"kind": "tries", "tries": 6, "workers": 4})
+    p.event({"kind": "try", "k": 0, "seconds": 10.0, "clean": False, "line": "try 1"})
+    assert abs(p.eta() - (2 * 10.0 + 2.0)) < 1e-6          # (5 tries left, 4 at a time: two batches, then export)
+    p.event({"kind": "try", "k": 1, "seconds": 10.0, "clean": True, "line": "try 2"})
+    assert p.d["tries"] == 2 and p.eta() == 2.0
+
+
+def test_parts_symbol_pin_names_pin_check_and_erc():
+    """a part placed with its KiCad symbol: nets name its pins by name (all of a name's pads), the check matches
+    pins to pads both ways, and the ERC finds an open input, an unconnected power pin and two outputs tied"""
+    import parts
+    import pcb
+    s = parts.symbol("Driver_Motor:DRV8833PWP")
+    assert {p["key"]: p["num"] for p in s["pins"]}["AIN2"] == "15" and s["datasheet"].endswith(".pdf")
+    b = pcb.Board("ps", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("U1", None, (15, 10), 0, symbol="Driver_Motor:DRV8833PWP")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (4, 10), 0)
+    b.net("GND", [("U1", "GND"), ("J1", "1")])
+    b.net("VM", [("U1", "VM"), ("J1", "2")])
+    b.net("AIN2", [("U1", "AIN2"), ("J1", "3")])
+    b.net("OUT", [("U1", "AOUT1"), ("U1", "BOUT1")])
+    assert sorted(b.nets["GND"]["pins"]) == [("J1", "1"), ("U1", "13"), ("U1", "17")]
+    assert parts.pin_check(b) == []
+    text = [n["text"] for n in parts.erc(b) if n["severity"] == "error"]
+    assert any("U1.16 (AIN1, input) is left open" in t for t in text), text
+    assert any("U1.14 (VINT, power in) is not connected" in t for t in text), text
+    assert any("net OUT: outputs" in t for t in text), text
+    w = pcb.Board("pw", [(0, 0), (30, 0), (30, 20), (0, 20)])            # (the wrong footprint for the symbol)
+    w.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (15, 10), 0, symbol="Driver_Motor:DRV8833PWP")
+    assert any("symbol pin 16 (AIN1) has no pad" in p for p in w.check_placement())
+
+
+def test_datasheet_pin_table_is_held_against_the_symbol():
+    """the datasheet's pin table (its text, as pypdf reads it) confirms each symbol pin by name and number, and a
+    pin the table numbers otherwise is reported with the table's numbers"""
+    import parts
+    page = ("5 Pin Configuration and Functions Pin Functions PIN NAME WQFN HTSSOP\\n"
+            "Both the GND pin and device PowerPADGND 13 —PPAD has PowerPAD.\\nVINT 12 14 — Internal supply\\n"
+            "VM 10 12 — Device power supply\\nX7RVCP 9 11 IO High-side gate drive\\nAIN1 14 16 I Bridge A input 1\\n"
+            "AIN2 13 15 I Bridge A input 2\\nBIN1 7 9 I\\nBIN2 8 10 I\\nnSLEEP 15 1 I Sleep mode input\\n"
+            "nFAULT 16 8 OD Fault output\\nAISEN 2 3 IO\\nBISEN 5 6 IO\\nAOUT1 1 2 O\\nAOUT2 3 4 O\\nBOUT1 6 7 O\\nBOUT2 4 5 O\\n")
+    r = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=["contents", page.replace("\\\\n", "\\n")])
+    assert r["agree"] == r["total"] == 17 and r["page"] == 2, [p for p in r["pins"] if p["status"] != "agrees"]
+    bad = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=[page.replace("AIN1 14 16", "AIN1 14 99")])
+    assert [(p["name"], p["status"]) for p in bad["pins"] if p["status"] != "agrees"] == [("AIN1", "differs")]
+
+
+def test_datasheet_numbered_list_and_other_names():
+    """a datasheet that lists its pins number first ("2- VOUT") under another name than the symbol's (VO), and one
+    that spells a pin in other case (RS for Rs), still confirms the symbol; a swapped pair is still caught"""
+    import parts
+    ams = "PIN CONNECTIONS\n3 PIN FIXED/ADJUSTABLE VERSION\n1- Ground/Adjust\n2- VOUT\n3- VIN\nSOT-223 Top View"
+    r = parts.datasheet_check("Regulator_Linear:AMS1117-3.3", pages=["front page", ams])
+    assert r["agree"] == r["total"] == 3 and r["page"] == 2, r["pins"]
+    bad = parts.datasheet_check("Regulator_Linear:AMS1117-3.3", pages=[ams.replace("2- VOUT\n3- VIN", "2- VIN\n3- VOUT")])
+    assert sorted(p["name"] for p in bad["pins"] if p["status"] == "differs") == ["VI", "VO"], bad["pins"]
+    can = ("Pin Functions\n1D 8  RS \n2GND 7  CANH\n3VCC 6  CANL\n4R 5  Vref\nD 1 I Driver input\nGND 2 GND\n"
+           "VCC 3 Supply\nR 4 O Receiver output\nVref 5 O\nCANL 6 I/O\nCANH 7 I/O\nRS\n8\nI Mode select")
+    r = parts.datasheet_check("Interface_CAN_LIN:SN65HVD230", pages=[can])
+    assert r["agree"] == r["total"] == 8, [p for p in r["pins"] if p["status"] != "agrees"]
+    # no pin table (a pinout drawing only): nothing is called wrong
+    r = parts.datasheet_check("Interface_CAN_LIN:SN65HVD230", pages=["Features\nD 1 GND 2 R 4\nTypical application"])
+    assert r["page"] is None and {p["status"] for p in r["pins"]} == {"not checked"}

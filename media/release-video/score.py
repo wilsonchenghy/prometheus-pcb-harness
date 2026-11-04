@@ -3,12 +3,12 @@ with the film, and sound on its events - the title's copper reveal, the parts la
 passing, each order file, each board under the inspection beam, the panel, the end card. Times are the film's own
 (video.html). Writes score.wav (48 kHz stereo).
 
-    python score.py && ffmpeg -i pcb-harness-release.mp4 -i score.wav -c:v copy -c:a aac -b:a 192k -shortest out.mp4
+    python score.py && ffmpeg -i zeus-release.mp4 -i score.wav -c:v copy -c:a aac -b:a 192k -shortest out.mp4
 """
 import numpy as np
 from scipy.signal import butter, fftconvolve, sosfilt
 
-SR, T_END = 48000, 67.0
+SR, T_END = 48000, 74.0
 N = int(SR * T_END)
 rng = np.random.default_rng(7)
 L = np.zeros(N)
@@ -78,17 +78,17 @@ for b in range(nb):
     s = sum(saw(hz(m), n, d) for m in ch for d in (-0.004, 0.004)) / (2 * len(ch))
     e = np.minimum(1, np.minimum(np.arange(n) / (0.4 * SR), (n - np.arange(n)) / (0.3 * SR)))
     pad[i0:i1] += s * e
-cut = 500 + 2200 * fade(16.0, 25.0) - 900 * fade(57.6, 63.0) + 1600 * fade(63.4, 64.0) * (1 - fade(64.5, 67))
+cut = 500 + 2200 * fade(16.0, 25.0) - 900 * fade(57.6, 63.0) + 500 * fade(63.4, 64.4) * (1 - fade(71.5, 74)) + 1100 * fade(70.4, 71.0) * (1 - fade(71.5, 74))
 pad = sum(lp(pad, f) * ((cut > lo) & (cut <= hi)) for lo, hi, f in
           ((0, 700, 600), (700, 1300, 1000), (1300, 2000, 1600), (2000, 9999, 2600)))
 pad = hp(pad, 220)                                  # (the bass has the low end to itself)
-pad_gain = 0.05 + 0.12 * fade(0.0, 4.0) + 0.04 * fade(16, 24) - 0.06 * fade(64.5, 67.0)
+pad_gain = 0.05 + 0.12 * fade(0.0, 4.0) + 0.04 * fade(16, 24) - 0.06 * fade(71.5, 74.0)
 L += pad * pad_gain * 0.9
 R += np.roll(pad, int(0.011 * SR)) * pad_gain * 0.9
 
 # drone under the opening and the close
 dr = (np.sin(2 * np.pi * hz(38) * t_all) + 0.5 * np.sin(2 * np.pi * hz(50) * t_all + 0.3))
-dr_g = 0.10 * (fade(0, 2.2) * (1 - fade(4.6, 6.0)) + fade(62.5, 63.4) * (1 - fade(65.5, 67)))
+dr_g = 0.10 * (fade(0, 2.2) * (1 - fade(4.6, 6.0)) + fade(69.5, 70.4) * (1 - fade(72.5, 74)))
 L += dr * dr_g
 R += dr * dr_g
 
@@ -133,6 +133,8 @@ def level(t):                       # the groove's energy by section
         return 2                    # the panel
     if t < 63.4:
         return 1                    # the agent loop: breathing
+    if t < 70.4:
+        return 2                    # the viewer
     return 0
 
 
@@ -248,14 +250,20 @@ for j in range(20):
 # the agent loop: four steps round the ring
 for j in range(4):
     put(chime([74, 76, 77, 81][j], 0.9), 58.2 + j * 1.1, [-0.6, -0.2, 0.2, 0.6][j], 0.07)
+# the viewer: into the browser, a chime as each view comes up
+put(whoosh(1.2, 300, 7000), 62.4, 0, 0.09)
+put(hit(0.35), 63.4, 0)
+for j, ts in enumerate((63.9, 66.1, 68.3)):
+    put(chime([81, 83, 86][j], 1.2), ts, [-0.4, 0.0, 0.4][j], 0.07)
+    put(tick(4200, 0.02), ts, 0, 0.08)
 # the end card: the last hit, a wide final chord ringing out
-put(whoosh(1.6, 150, 6000), 62.2, 0, 0.13)
-put(hit(0.7), 63.4, 0)
+put(whoosh(1.6, 150, 6000), 69.2, 0, 0.13)
+put(hit(0.7), 70.4, 0)
 end_n = int(3.6 * SR)
 tt = np.arange(end_n) / SR
 fin = sum(saw(hz(m), end_n, d) for m in (38, 50, 57, 62, 65, 69) for d in (-0.003, 0.003)) / 12
-put(lp(fin, 1800) * np.exp(-tt * 0.9) * np.minimum(1, tt / 0.05), 63.4, 0, 0.22)
-put(chime(86, 3.0), 63.45, 0.3, 0.06)
+put(lp(fin, 1800) * np.exp(-tt * 0.9) * np.minimum(1, tt / 0.05), 70.4, 0, 0.22)
+put(chime(86, 3.0), 70.45, 0.3, 0.06)
 
 # ---- room, glue, level ----
 ir_n = int(2.2 * SR)

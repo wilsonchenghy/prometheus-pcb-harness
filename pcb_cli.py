@@ -212,6 +212,20 @@ def main(argv=None) -> int:
         return report()
     if argv[:1] == ["setup"]:
         return setup()
+    if argv[:1] == ["part"]:                             # (a part's symbol: pins, datasheet, footprint, the check)
+        import parts
+        if len(argv) < 2:
+            print("usage: zeus part Lib:Symbol   e.g. zeus part Driver_Motor:DRV8833PWP", file=sys.stderr)
+            return 2
+        try:
+            print(parts.describe(argv[1]))
+        except parts.SymbolNotFound as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        return 0
+    if argv[:1] == ["view"]:
+        import pcb_view
+        return pcb_view.main(argv[1:])
     import fab
     import pcb
     ap = argparse.ArgumentParser(prog="python -m pcb_cli", description=__doc__.split("\n\n")[0])
@@ -239,6 +253,10 @@ def main(argv=None) -> int:
     ap.add_argument("--spec", help="a requirements file (JSON: size_mm, layers, house, nets, pairs, near, edge, holes, "
                                    "assembly, max_parts) the critic checks the board against")
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
+    ap.add_argument("--datasheets", action="store_true", help="also read each symbol part's datasheet and check its "
+                    "pins against the datasheet's pin table (fetched once, then cached)")
+    ap.add_argument("--view", action="store_true", help="open the board in a browser while the run goes (its stage, "
+                    "the try it is on, about how long is left) and keep it open after; 'zeus view OUT' later")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
         real_stdout, sys.stdout = sys.stdout, sys.stderr
@@ -247,10 +265,24 @@ def main(argv=None) -> int:
     import critic
     spec = critic.load_spec(a.spec) if a.spec else {}
     os.makedirs(a.out, exist_ok=True)
-    b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
+    import pcb_view
+    prog = pcb_view.Progress(a.out, a.script)
+    pcb.PROGRESS = prog.event
+    if a.view:
+        srv, url = pcb_view.serve(a.out, block=False)
+    try:
+        b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
+    except pcb.FootprintNotFound as e:                   # (a mistyped footprint: one clear line, not a traceback)
+        print(f"error: {e}", file=sys.stderr)
+        if a.json:
+            sys.stdout = real_stdout
+            print(json.dumps({"clean": False, "error": "footprint", "footprint": e.name,
+                              "suggestions": e.suggestions, "text": str(e)}, indent=1))
+        return 2
     for note in getattr(b, "import_notes", []):
         print("note:", note)
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers  [stage: {a.stage}]")
+    prog.d["parts"] = len(b.comps)
     stage = a.stage
     if spec.get("near"):                                 # (the placer holds these parts within their distance)
         b.near = list(getattr(b, "near", [])) + [tuple(x) for x in spec["near"]]
@@ -262,6 +294,7 @@ def main(argv=None) -> int:
     timings = {}
     if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()) and not a.no_route:
         t = time.perf_counter()
+        prog.stage("place+route" if route_ok else "place")
         if route_ok:
             probs = pcb.place_and_route(b, router=a.router)
             print(f"placed and routed ({getattr(b, 'router_used', '')}): "
@@ -280,6 +313,7 @@ def main(argv=None) -> int:
         print("placement:", *place, sep="\n  ")
     if route_ok and probs is None and not b.tracks:
         t = time.perf_counter()
+        prog.stage("route")
         probs = pcb.route_board(b, a.router)
         timings["route"] = round(time.perf_counter() - t, 2)
         print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({timings['route']} s)")
@@ -287,7 +321,12 @@ def main(argv=None) -> int:
     if stage in ("place", "route", "all") and timings:
         save_state(b, a.out, key)
     t = time.perf_counter()
+    prog.stage("critic")
     notes = critic.review(b, spec)
+    if a.datasheets:                                     # (the manufacturer's pin table, for each symbol part)
+        import parts
+        notes += parts.datasheet_notes(b)
+        notes.sort(key=lambda n: {"error": 0, "warning": 1, "info": 2}[n["severity"]])
     timings["critic"] = round(time.perf_counter() - t, 3)
     crit_err = [n for n in notes if n["severity"] == "error"]
     chk, fchk, kchk, kicad, files = [], [], [], {"run": False}, {}
@@ -296,17 +335,20 @@ def main(argv=None) -> int:
         chk = place                                       # (no copper yet: the placement is what can be checked)
     else:
         t = time.perf_counter()
+        prog.stage("check")
         chk = b.check()
         fchk = fab.fab_check(b, a.rules or spec.get("house"))
         timings["check"] = round(time.perf_counter() - t, 2)
     if stage in ("export", "all"):
         t = time.perf_counter()
+        prog.stage("export")
         files = fab.order(b, a.out, boards=a.boards)
         kpaths = pcb.export_kicad(b, os.path.join(a.out, "kicad"))
         if a.kicad_drc != "off":                        # a third, independent judge: KiCad's own DRC
             ver = pcb.kicad_version()
             major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
             if major >= 9:
+                prog.stage("kicad drc")
                 d = pcb.kicad_drc(kpaths[0])
                 kchk = d["errors"] + d["unconnected"]
                 kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
@@ -324,6 +366,8 @@ def main(argv=None) -> int:
                 ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else [])
     if stage in ("place", "critic"):
         sections = [s_ for s_ in sections if s_[0] != "house check"]
+    if not b.tracks and not probs:                       # (nothing routed yet: no routing to call clean)
+        sections = [s_ for s_ in sections if s_[0] != "routing"]
     for name, ps in sections:
         print(f"{name}: {'clean' if not ps else ''}")
         for p in ps[:20]:
@@ -337,7 +381,7 @@ def main(argv=None) -> int:
         print(f"wrote {a.out}: review {files['report']}, parts {files['html']}")
     print(f"({time.perf_counter() - t0:.1f} s: " + ", ".join(f"{k} {v} s" for k, v in timings.items()) + ")")
     clean = not (probs or chk or fchk or kchk or crit_err) and (routed or stage in ("place", "critic"))
-    result = {"board": b.name, "stage": stage, "clean": clean, "kicad_drc": kicad,
+    result = {"board": b.name, "script": os.path.abspath(a.script), "stage": stage, "clean": clean, "kicad_drc": kicad,
               "router": getattr(b, "router_used", "none (routed by the script)"),
               "environment": {k: r["ok"] for k, r in doctor().items()},   # (what this machine had: docs/setup.md)
               "parts": len(b.comps), "nets": len(b.nets), "layers": len(b.layers),
@@ -350,9 +394,18 @@ def main(argv=None) -> int:
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)
+    prog.finish(result["clean"])
+    pcb.PROGRESS = None
     if a.json:
         sys.stdout = real_stdout
         print(json.dumps(result, indent=1))
+    if a.view:                                           # (the page stays up for a look at the result)
+        print(f"viewer: {url}  - the board stays there until Ctrl-C", file=sys.stderr, flush=True)
+        try:
+            while True:
+                time.sleep(3600)
+        except KeyboardInterrupt:
+            srv.shutdown()
     return 0 if result["clean"] else 1
 
 if __name__ == "__main__":
