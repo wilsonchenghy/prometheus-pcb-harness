@@ -135,6 +135,13 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 #tip .m { font-family: var(--mono); color: var(--accent2); }
 #msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--text3); pointer-events: none; text-align: center; }
 #render { position: absolute; inset: 0; display: none; background: #000; } #render img { width: 100%; height: 100%; object-fit: contain; }
+.spot { position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: radial-gradient(360px circle at var(--mx, -999px) var(--my, -999px), rgba(139,149,255,.075), transparent 70%); }
+.loupe { position: absolute; z-index: 8; width: 200px; height: 200px; border-radius: 50%; pointer-events: none; display: none; overflow: hidden;
+  background: #0a0b0d; box-shadow: 0 0 0 1px rgba(255,255,255,.22), 0 0 0 6px rgba(10,11,13,.6), 0 18px 40px rgba(0,0,0,.6); transform: translate(-50%, -50%); }
+.loupe svg { width: 100%; height: 100%; }
+.loupe::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 28px rgba(0,0,0,.6); }
+.loupe .lz { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font: 500 10px var(--mono); color: var(--text2); background: rgba(10,11,13,.8); padding: 2px 7px; border-radius: 9px; }
 .flow { stroke-dasharray: 0.6 0.9; animation: flow .9s linear infinite; }
 @keyframes flow { to { stroke-dashoffset: -1.5; } }
 .netdim { opacity: .18; transition: opacity .2s; }
@@ -168,7 +175,8 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     <div class="view on" id="layout"><svg id="lsvg" class="pan"></svg></div>
     <div class="view" id="v3d"><div id="three" style="position:absolute;inset:0"></div><div class="float" id="mtagbox" style="left:14px;top:14px;padding:6px 11px;font-size:12px;color:var(--text2)"><span id="mtag"></span></div><div id="render"><img id="rimg" alt="KiCad 3D render"></div></div>
     <div class="view" id="schem"><svg id="ssvg" class="pan"></svg></div>
-    <div class="shimmer"></div>
+    <div class="shimmer"></div><div class="spot"></div>
+    <div class="loupe" id="loupe"><svg id="lpsvg"><use href="#lroot"/></svg><span class="lz">4×</span></div>
     <div class="float prog" id="prog">
       <svg class="ring" viewBox="0 0 54 54"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c3c8ff"/><stop offset="1" stop-color="#7b86ff"/></linearGradient></defs>
         <circle cx="27" cy="27" r="22" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="4"/>
@@ -180,7 +188,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     </div>
     <div class="float tools" id="tools">
       <button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">−</button><button id="fit" title="Fit">⤢</button>
-      <div class="sep"></div><button id="flip" title="View from below">⇅</button><button id="krender" title="KiCad photoreal render" style="display:none">◐</button>
+      <div class="sep"></div><button id="flip" title="View from below">⇅</button><button id="loupeb" title="Loupe (L)">◎</button><button id="explode" title="Exploded view (E)" style="display:none">⇡</button><button id="krender" title="KiCad photoreal render" style="display:none">◐</button>
     </div>
     <div class="float looks" id="looks"><button class="on" data-m="glow">Light</button><button data-m="board">As made</button><button data-m="xray">Layers</button></div>
     <div id="msg"></div>
@@ -223,6 +231,8 @@ $$("#seg button").forEach(b => b.onclick = () => {
   $("#looks").style.display = b.dataset.v === "layout" ? "" : "none";
   $("#krender").style.display = b.dataset.v === "v3d" ? "" : "none";
   $("#flip").style.display = b.dataset.v === "layout" ? "" : "none";
+  $("#loupeb").style.display = b.dataset.v === "layout" ? "" : "none"; $("#explode").style.display = b.dataset.v === "v3d" ? "" : "none";
+  if (b.dataset.v !== "layout") setLoupe(false);
   if (b.dataset.v === "v3d") init3d(); if (b.dataset.v === "schem") drawSchem(); if (b.dataset.v === "layout") fitLayout();
 });
 $$(".tabs2 button").forEach(b => b.onclick = () => { $$(".tabs2 button").forEach(x => x.classList.toggle("on", x === b)); $$(".pane").forEach(p => p.classList.toggle("on", p.id === "p-" + b.dataset.p)); });
@@ -269,7 +279,7 @@ function hover(node, html, net) {
 }
 // a net in focus: everything else dims, and current flows along its tracks
 function focusNet(net, on) {
-  const svg = $("#lsvg"); svg.querySelectorAll(".flowg").forEach(g => g.remove());
+  const svg = $("#lroot") || $("#lsvg"); svg.querySelectorAll(".flowg").forEach(g => g.remove());
   svg.querySelectorAll("[data-net]").forEach(e => e.classList.toggle("netdim", !!(on && net && e.dataset.net !== net)));
   $$("#ssvg [data-net]").forEach(e => e.style.opacity = on && net && e.dataset.net !== net ? .25 : "");
   if (!on || !net || !B) return;
@@ -288,8 +298,9 @@ function defs(svg) {
 }
 const topL = () => flipped ? "B" : "F", botL = () => flipped ? "F" : "B";
 function drawLayout() {
-  const svg = $("#lsvg"); svg.innerHTML = ""; defs(svg);
+  const host = $("#lsvg"); host.innerHTML = ""; defs(host);
   if (!B || B.error) return;
+  const svg = el("g", { id: "lroot" }, host);
   const glow = look === "glow", made = look === "board";
   el("path", { d: ring(B.outline), fill: made ? "#0b3a26" : glow ? "rgba(14,17,21,.92)" : "#0d0f12", stroke: made ? "#e8e0c8" : "rgba(255,255,255,.35)", "stroke-width": 0.14 }, svg);
   const layers = made ? [topL()] : [botL(), topL()];
@@ -333,6 +344,20 @@ function drawLayout() {
       el("circle", { cx: x, cy: y, r: 0.22, fill: c }, pg);
       hover(pg, esc(f.text)); pg.addEventListener("click", () => openIssue(i)); window._pins[i] = pg; }); }
   if (selNet) focusNet(selNet, true);
+  if (!window._built) { window._built = true; buildUp(host, svg); }
+}
+function buildUp(host, root) {
+  const [x0, y0, x1, y1] = B.bounds, L = flipped ? -x1 - 2 : x0 - 2, W = x1 - x0 + 4, T = -y1 - 2, H = y1 - y0 + 4;
+  const d = host.querySelector("defs"), cp = el("clipPath", { id: "wipe" }, d), r = el("rect", { x: L, y: T, width: 0, height: H }, cp);
+  const g2 = el("linearGradient", { id: "sweepg", x1: 0, y1: 0, x2: 1, y2: 0 }, d);
+  [["0", "rgba(139,149,255,0)"], [".7", "rgba(180,187,255,.35)"], ["1", "rgba(255,255,255,.9)"]].forEach(([o, c]) => el("stop", { offset: o, "stop-color": c }, g2));
+  root.setAttribute("clip-path", "url(#wipe)");
+  const beam = el("rect", { x: L, y: T, width: 3, height: H, fill: "url(#sweepg)", style: "pointer-events:none" }, host);
+  const t0 = performance.now(), dur = 1300;
+  const step = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3), w = W * e;
+    r.setAttribute("width", w); beam.setAttribute("x", L + w - 3); beam.setAttribute("opacity", 1 - Math.pow(k, 6));
+    if (k < 1) requestAnimationFrame(step); else { root.removeAttribute("clip-path"); beam.remove(); } };
+  requestAnimationFrame(step);
 }
 function findPad(pin) { const [ref, num] = pin.split("."); const c = B && B.comps.find(c => c.ref === ref); return c && c.pads.find(p => p.num === num); }
 function issueAt(f) { if (f.at && f.stage !== "kicad") return f.at; for (const p of f.pins || []) { const pad = findPad(p); if (pad) return pad.at; }
@@ -340,6 +365,22 @@ function issueAt(f) { if (f.at && f.stage !== "kicad") return f.at; for (const p
 function fitLayout(anim) { if (!B || B.error) return; const [x0, y0, x1, y1] = B.bounds, m = Math.max(4, (x1 - x0) * 0.12);
   fitW = x1 - x0 + 2 * m; LZ.set((flipped ? -x1 : x0) - m, -y1 - m, x1 - x0 + 2 * m, y1 - y0 + 2 * m, anim); }
 $("#flip").onclick = () => { flipped = !flipped; $("#flip").classList.toggle("on", flipped); drawLayout(); fitLayout(true); };
+
+// ---------- a light that follows the cursor, and the loupe ----------
+let loupeOn = false;
+function setLoupe(on) { loupeOn = on; $("#loupeb").classList.toggle("on", on); if (!on) $("#loupe").style.display = "none"; }
+$("#loupeb").onclick = () => setLoupe(!loupeOn);
+$("#canvas").addEventListener("pointermove", e => {
+  const r = $("#canvas").getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  $("#canvas").style.setProperty("--mx", mx + "px"); $("#canvas").style.setProperty("--my", my + "px");
+  const lp = $("#loupe");
+  if (!loupeOn || activeView() !== "layout") return;
+  const sr = $("#lsvg").getBoundingClientRect(), [x, y, w, h] = LZ.vb, k = 4;
+  const bx = x + (e.clientX - sr.left) / sr.width * w, by = y + (e.clientY - sr.top) / sr.height * h, lw = w / sr.width * 200 / k;
+  $("#lpsvg").setAttribute("viewBox", `${bx - lw / 2} ${by - lw / 2} ${lw} ${lw}`);
+  lp.style.left = mx + "px"; lp.style.top = my + "px"; lp.style.display = "block";
+});
+$("#canvas").addEventListener("pointerleave", () => { $("#loupe").style.display = "none"; $("#canvas").style.setProperty("--mx", "-999px"); });
 
 // ---------- the layer and net panels ----------
 function drawLayers() {
@@ -541,6 +582,28 @@ function styleModel(m) {
     o.material = seen.get(key);
   });
 }
+// each part's node (named by its reference); its rest height; an animation of its height
+function partsOf(m) { const refs = new Set(B.comps.map(c => c.ref)), out = []; m.traverse(o => { if (o !== m && refs.has(o.name)) out.push(o); }); return out; }
+function tweenZ(o, from, to, dur, delay, ease) { const t0 = performance.now() + delay;   // (the part's up: glTF's y)
+  const step = (t) => { if (t < t0) { o.position.y = from; place3d(); return requestAnimationFrame(step); }
+    const k = Math.min(1, (t - t0) / dur); o.position.y = from + (to - from) * ease(k); place3d(); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step); }
+const outBack = (k) => { const c = 1.4; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
+const outCubic = (k) => 1 - Math.pow(1 - k, 3);
+let MU = 0.001;                                          // (the model's units per mm: metres in KiCad's glTF)
+function dropIn(p, i) { const z0 = p.userData.z0, h = 16 * MU; p.position.y = z0 + h; tweenZ(p, z0 + h, z0, 750, 250 + i * 70, outBack); }
+let exploded = false;
+$("#explode").onclick = () => {
+  const m = root && root.children.find(o => !o.userData.simple && o.type !== "Mesh"); if (!m) return;
+  exploded = !exploded; $("#explode").classList.toggle("on", exploded);
+  const span = Math.max(B.bounds[2] - B.bounds[0], B.bounds[3] - B.bounds[1]), lift = span * 0.16 * MU;
+  const d0 = orbit.dist, d1 = exploded ? d0 * 1.22 : d0 / 1.22, t0 = performance.now();     // (and the camera eases back)
+  const ease = (t) => { const k = Math.min(1, (t - t0) / 650); orbit.dist = d0 + (d1 - d0) * outCubic(k); place3d(); if (k < 1) requestAnimationFrame(ease); };
+  requestAnimationFrame(ease);
+  partsOf(m).forEach((p, i) => { const z0 = p.userData.z0 ?? p.position.y; p.userData.z0 = z0;
+    tweenZ(p, p.position.y, exploded ? z0 + lift * (1 + (i % 3) * 0.5) : z0, 650, i * 35, outCubic); });
+  spin = false;
+};
 // the real thing: KiCad's 3D export of the board, every part's library model (when KiCad is installed)
 let modelState = "";
 async function loadModel() {
@@ -561,6 +624,8 @@ async function loadModel() {
     styleModel(m);
     root.children.filter(o => o.userData.simple).forEach(o => root.remove(o));
     root.add(m); modelState = "kicad";
+    MU = k === 1000 ? 0.001 : 1;
+    partsOf(m).forEach((p, i) => { p.userData.z0 = p.position.y; dropIn(p, i); });
     $("#mtag").textContent = "KiCad 3D models";
     place3d();
   }, undefined, () => { $("#mtag").textContent = "Simplified parts (the model did not load)"; });
@@ -615,7 +680,9 @@ async function poll() {
 window.addEventListener("resize", () => fitLayout());
 window.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return;
   if (e.key === "f") fitLayout(true); if (e.key === "1") $$("#seg button")[0].click(); if (e.key === "2") $$("#seg button")[1].click(); if (e.key === "3") $$("#seg button")[2].click();
-  if (e.key === "Escape") selectNet(null); });
+  if (e.key === "Escape") { selectNet(null); setLoupe(false); }
+  if (e.key === "l" && activeView() === "layout") setLoupe(!loupeOn);
+  if (e.key === "e" && activeView() === "v3d") $("#explode").click(); });
 </script>
 </body>
 </html>
