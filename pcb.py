@@ -37,6 +37,24 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+
+def _kicad_on_path():
+    """put kicad-cli on the PATH from KiCad's usual install place when it is not there already (the macOS app and
+    the Windows installer do not add it), so the DRC and the viewer's 3D parts work without setup"""
+    import glob
+    import os
+    import shutil
+    if shutil.which("kicad-cli"):
+        return
+    for d in ["/Applications/KiCad/KiCad.app/Contents/MacOS",
+              *sorted(glob.glob(r"C:\Program Files\KiCad\*\bin"), reverse=True)]:
+        if os.path.exists(os.path.join(d, "kicad-cli")) or os.path.exists(os.path.join(d, "kicad-cli.exe")):
+            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+            return
+
+
+_kicad_on_path()
+
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
@@ -4034,8 +4052,8 @@ def kicad_version() -> Optional[str]:
 
 KICAD_INSTALL = {"linux": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad "
                           "(or your distribution's kicad package, version 9 or newer)",
-                 "darwin": "brew install --cask kicad (kicad-cli is in KiCad.app/Contents/MacOS: put it on the PATH)",
-                 "win32": "the installer from kicad.org (kicad-cli.exe is in KiCad's bin folder: put it on the PATH)"}
+                 "darwin": "brew install --cask kicad (found in /Applications/KiCad without a PATH entry)",
+                 "win32": "the installer from kicad.org (found in Program Files\\KiCad without a PATH entry)"}
 
 
 def kicad_drc(pcb_path: str, refill: bool = False) -> Dict[str, list]:

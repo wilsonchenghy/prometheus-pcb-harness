@@ -255,8 +255,9 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
     ap.add_argument("--datasheets", action="store_true", help="also read each symbol part's datasheet and check its "
                     "pins against the datasheet's pin table (fetched once, then cached)")
-    ap.add_argument("--view", action="store_true", help="open the board in a browser while the run goes (its stage, "
-                    "the try it is on, about how long is left) and keep it open after; 'zeus view OUT' later")
+    ap.add_argument("--view", action="store_true", help="serve the viewer from this run and wait for Ctrl-C at the end "
+                    "(by default the viewer opens on its own in the background; 'zeus view OUT' later)")
+    ap.add_argument("--no-view", action="store_true", help="do not open the viewer (also off when CI is set)")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
         real_stdout, sys.stdout = sys.stdout, sys.stderr
@@ -270,6 +271,8 @@ def main(argv=None) -> int:
     pcb.PROGRESS = prog.event
     if a.view:
         srv, url = pcb_view.serve(a.out, block=False)
+    elif not a.no_view and not os.environ.get("CI"):     # (the board in a browser, live, without holding the run)
+        print(f"viewer: {pcb_view.launch(a.out)}", file=sys.stderr, flush=True)
     try:
         b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
     except pcb.FootprintNotFound as e:                   # (a mistyped footprint: one clear line, not a traceback)

@@ -359,6 +359,30 @@ def serve(out_dir: str, port: int = 0, open_browser: bool = True, block: bool = 
     return srv, url
 
 
+def launch(out_dir: str) -> Optional[str]:
+    """``zeus view OUT_DIR`` in the background, once per folder: it opens the browser and outlives the run; a viewer
+    already up for the folder is reused (its page follows the new run), so a run-edit-run loop opens one tab"""
+    import socket
+    import subprocess
+    import urllib.request
+    f = Path(out_dir) / "viewer.json"
+    try:
+        url = json.loads(f.read_text())["url"]
+        urllib.request.urlopen(url, timeout=1)
+        return url
+    except Exception:
+        pass
+    with socket.socket() as s:                           # (a free port, so the address is known before it starts)
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    url = f"http://127.0.0.1:{port}/"
+    subprocess.Popen([sys.executable, "-m", "pcb_cli", "view", str(Path(out_dir).resolve()), "--port", str(port)],
+                     cwd=os.path.dirname(os.path.abspath(__file__)), start_new_session=True,
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    f.write_text(json.dumps({"url": url}))
+    return url
+
+
 def main(argv) -> int:
     import argparse
     ap = argparse.ArgumentParser(prog="zeus view", description="look at a board run's folder in a browser")

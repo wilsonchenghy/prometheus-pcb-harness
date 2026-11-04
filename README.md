@@ -44,8 +44,9 @@ What it does (`pcb.py`, its docstring has the details):
   `zeus part Lib:Symbol` shows a symbol's pins and footprint and holds them against the maker's datasheet's pin
   table (`--datasheets` does it for every part of a run). The motor driver, CAN node, LED ring and blinker in
   `bench/` are wired this way.
-- **Viewer**: `zeus board.py out/ --view` opens the board in your browser while it runs (the stage, the
-  try it is on, about how long is left) and keeps it open after; `zeus view out/` opens a finished run.
+- **Viewer**: every run opens the board in your browser (the stage, the try it is on, about how long is left)
+  and leaves it open after, one tab per output folder (`--no-view`, or `CI` set, turns it off); `zeus view out/`
+  opens a finished run.
   Layout with layers to switch, an interactive 3D view (and KiCad's photoreal render when KiCad is installed), a
   net-label schematic, and every finding: click one and the board zooms to it.
 

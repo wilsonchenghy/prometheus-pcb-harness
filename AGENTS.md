@@ -54,9 +54,10 @@ the shorter net, kept only when the check finds nothing new).
 
 ## Showing the user
 
-For a person following along, add `--view` to the run (or run `zeus view out/` after): a local page with
-the layout, a 3D view, the schematic and the findings, and live progress with an estimate of the time left. Give
-them the address it prints. Leave it off in unattended runs: with `--view` the command waits for Ctrl-C at the end.
+Every run opens a local page in the browser by itself (or run `zeus view out/` after): the layout, a 3D view of
+KiCad's part models, the schematic and the findings, and live progress with an estimate of the time left. It runs
+in the background, so the command still returns; later runs into the same folder reuse the page. Give the user the
+address it prints (`viewer: ...` on stderr). Pass `--no-view` in unattended runs (it is off when `CI` is set).
 
 ## KiCad's DRC
 
