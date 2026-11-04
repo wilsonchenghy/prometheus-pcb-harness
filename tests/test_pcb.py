@@ -1238,3 +1238,19 @@ def test_nudge_vias_parts_two_nets_drills():
     assert a["at"] == (10.0, 10.0)                                   # (two tracks on it: it stays)
     gapnow = math.hypot(v["at"][0] - a["at"][0], v["at"][1] - a["at"][1]) - 0.3
     assert 0.5 <= gapnow < 0.53 and b.tracks[0]["pts"][0] == v["at"]
+
+
+def test_tidy_takes_away_a_via_that_joins_nothing():
+    """a via with a track on one layer only joins nothing and goes; a via joining two layers' tracks stays; tracks
+    meeting in a dead via still meet"""
+    import pcb
+    b = pcb.Board("tidy", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.via("A", (5.0, 5.0), 0.3, 0.6)                                 # dead: F only, two tracks meeting in it
+    b.tracks.append({"net": "A", "layer": "F", "pts": [(2.0, 5.0), (5.0, 5.0)], "w": 0.2, "amps": 0.1})
+    b.tracks.append({"net": "A", "layer": "F", "pts": [(5.1, 5.0), (8.0, 5.0)], "w": 0.2, "amps": 0.1})
+    b.via("B", (12.0, 12.0), 0.3, 0.6)                               # live: F and B
+    b.tracks.append({"net": "B", "layer": "F", "pts": [(9.0, 12.0), (12.0, 12.0)], "w": 0.2, "amps": 0.1})
+    b.tracks.append({"net": "B", "layer": "B", "pts": [(12.0, 12.0), (15.0, 12.0)], "w": 0.2, "amps": 0.1})
+    assert b.tidy() == 1
+    assert [v["net"] for v in b.vias] == ["B"]
+    assert any(t["pts"] == [(5.1, 5.0), (5.0, 5.0)] for t in b.tracks)   # (the end brought to where it met)

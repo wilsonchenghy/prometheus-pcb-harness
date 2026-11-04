@@ -255,6 +255,7 @@ def esc_build():
     esc_nets(b)
     pour_all(b, pours)
     rp = esc_route(b, pours)
+    b.tidy()                                             # (the via rows' vias no route went on through)
     return b, rp
 
 F4 = {"VBAT": "1", "PC14": "3", "PC15": "4", "OSC_IN": "5", "OSC_OUT": "6", "NRST": "7", "PC2": "10", "VSSA": "12",
@@ -415,6 +416,7 @@ def fc_build():
     b.pour("GND", "B", [(-18.5, -18.5), (18.5, -18.5), (18.5, 18.5), (-18.5, 18.5)], amps=1.5)
     b.pour("GND", "F", [(-18.5, -18.5), (18.5, -18.5), (18.5, 18.5), (-18.5, 18.5)], amps=1.5)
     rp = fc_route(b)
+    b.tidy()
     return b, rp
 
 

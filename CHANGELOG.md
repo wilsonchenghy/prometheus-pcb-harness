@@ -31,6 +31,10 @@
   screw holes moved 0.25 mm inboard to x = 20.75 (0.54 mm from the 7.2 mm cut-outs; the shell's bosses move with
   them), Twilight's buck regulators' thermal vias drilled at JLCPCB's 0.3 mm and two via pairs parted to 0.5 mm.
   Every bench and example board passes; KiCad's DRC finds no errors or unconnected items on them.
+- Board.tidy(), run after routing: a via that meets its net on fewer than two layers joins nothing and is taken
+  away (KiCad's "via dangling"; the tracks meeting in it brought to its centre): 13 on the ESC, 2 on the controller.
+- The install lines use the repository's current address (github.com/wilsonchenghy/pcb-harness), which keeps
+  working after a rename.
 - pcb.nudge_vias(board, gap): two nets' vias closer than the house's drill gap are parted by the shortfall, their
   tracks' ends with them, when every clearance holds.
 - A near-rule can name a pin: ["C4", "U1.VDDA", 3.0] (by number or symbol name), in the placer, the misses and the

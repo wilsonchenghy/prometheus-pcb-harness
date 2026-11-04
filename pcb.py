@@ -913,6 +913,47 @@ class Board:
                 good[sel] |= shapely.dwithin(g, pts[sel], 0.005)
         return [(k, tuple(e)) for (k, e), ok in zip(ends, good) if not ok]
 
+    def tidy(self) -> int:
+        """dead vias taken away: a via that meets its own net's copper on fewer than two layers joins nothing (KiCad
+        warns "via dangling"); the track ends meeting in it are brought to its centre first, so they still meet.
+        Kept only when check() finds nothing new. Returns how many vias it removed"""
+        from shapely.geometry import Point
+        before = set(self.check())
+        vias0, tracks0 = list(self.vias), [dict(t, pts=list(t["pts"])) for t in self.tracks]
+        self.vias = []                                   # (each net's copper without its vias: what a via meets;
+        self.__dict__.pop("_cu_memo", None)              # pour islands kept, the ones only a via joins too)
+        cu = self.copper(prune=False)
+        self.vias = list(vias0)
+        self.__dict__.pop("_cu_memo", None)
+        keep_v = []
+        for v in self.vias:
+            disk = Point(v["at"]).buffer(v["dia"] / 2 - 0.01, 16)
+            touched = sum(1 for L in self.layers if (v["net"], L) in cu and cu[(v["net"], L)].intersects(disk))
+            others = [w for w in self.vias if w is not v and w["net"] == v["net"]
+                      and Point(w["at"]).distance(Point(v["at"])) < (w["dia"] + v["dia"]) / 2]
+            if touched >= 2 or others:
+                keep_v.append(v)
+        for v in self.vias:                              # (a via the tracks of one layer meet at: their ends are
+            if v in keep_v:                              # brought to its centre first, so they still meet)
+                continue
+            c = Point(v["at"])
+            for t in list(self.tracks):
+                if t["net"] != v["net"]:
+                    continue
+                for e in (t["pts"][0], t["pts"][-1]):
+                    if 1e-6 < Point(e).distance(c) < v["dia"] / 2:
+                        self.tracks.append({**t, "pts": [tuple(e), tuple(v["at"])]})
+        changed = len(vias0) - len(keep_v)
+        if not changed:
+            return 0
+        self.vias = keep_v
+        self.__dict__.pop("_cu_memo", None)
+        if set(self.check()) - before:                   # (it broke something: put it all back)
+            self.vias, self.tracks = vias0, tracks0
+            self.__dict__.pop("_cu_memo", None)
+            return 0
+        return changed
+
     def prune_spurs(self, tracks: Optional[Sequence[int]] = None, rounds: int = 4) -> int:
         """trim the dangling ends of ``tracks`` (default: all) back to where they last lie inside other copper of
         their net, and drop tracks that reach nothing past their other end: a fine-pitch pad's way-out stub that the
