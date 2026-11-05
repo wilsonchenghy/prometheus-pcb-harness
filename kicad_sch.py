@@ -125,14 +125,61 @@ def box_symbol(ref: str, c: dict) -> str:
     return name
 
 
+KICAD9_LIB = "9.0.9.1"                                   # (KiCad 9's symbol library: the format the sheet is in)
+
+
+def _symbol9(lib: str, sym: str) -> Optional[str]:
+    """the symbol's text from KiCad 9's library (one file per library there), cut out once and cached; None when
+    KiCad 9's library does not have it (a symbol added since)"""
+    import urllib.parse
+    import urllib.request
+    from vendor_parts import CACHE
+    one = CACHE / "kicad_sym9" / f"{lib}__{sym}.kicad_sym"
+    if one.exists():
+        return one.read_text() or None
+    whole = CACHE / "kicad_sym9" / f"{lib}.kicad_sym"
+    if not whole.exists():
+        url = f"https://gitlab.com/kicad/libraries/kicad-symbols/-/raw/{KICAD9_LIB}/{urllib.parse.quote(lib)}.kicad_sym"
+        with urllib.request.urlopen(url, timeout=120) as r:
+            data = r.read().decode()
+        whole.parent.mkdir(parents=True, exist_ok=True)
+        whole.write_text(data)
+    text = whole.read_text()
+    m = re.search(r'\n\t\(symbol "' + re.escape(sym) + r'"\n', text)
+    out = ""
+    if m:                                                # (its parentheses matched to the end of the symbol)
+        i, depth, q = m.start() + 2, 0, False
+        for j in range(i, len(text)):
+            ch = text[j]
+            if ch == '"' and text[j - 1] != "\\":
+                q = not q
+            elif not q and ch == "(":
+                depth += 1
+            elif not q and ch == ")":
+                depth -= 1
+                if depth == 0:
+                    out = text[i:j + 1]
+                    break
+    one.write_text(out)
+    return out or None
+
+
 def _lib_symbol(name: str) -> list:
-    """the symbol's definition from KiCad's library, named "Lib:Name" as a schematic embeds it; an alias
-    (``extends``) flattened onto its parent's drawing"""
+    """the symbol's definition from KiCad's library, named "Lib:Name" as a schematic embeds it: KiCad 9's (so the
+    sheet opens in KiCad 9 and later), else today's with its newer tokens taken out; an alias (``extends``)
+    flattened onto its parent's drawing"""
     if name in _BOX:
         return _BOX[name][0]
     lib, sym = name.split(":", 1)
-    tree = _sx_parse(parts._fetch(f"{lib}.kicad_symdir/{sym}.kicad_sym"))
-    top = next(s for s in tree if isinstance(s, list) and s[:1] == ["symbol"] and s[1] == sym)
+    try:
+        t9 = _symbol9(lib, sym)
+    except Exception:                                    # (offline with nothing cached: today's library)
+        t9 = None
+    if t9:
+        top = _sx_parse(t9)
+    else:
+        tree = _sx_parse(parts._fetch(f"{lib}.kicad_symdir/{sym}.kicad_sym"))
+        top = next(s for s in tree if isinstance(s, list) and s[:1] == ["symbol"] and s[1] == sym)
     ext = next((x[1] for x in top if isinstance(x, list) and x[:1] == ["extends"]), None)
     if ext:
         base = _lib_symbol(f"{lib}:{ext}")
