@@ -8,7 +8,7 @@ footprint the harness mishandles, a board house's rules, a faster or better rout
 ```
 git clone https://github.com/wilsonchenghy/pcb-harness && cd pcb-harness
 pip install -e ".[dev]"
-zeus setup          # FreeRouting (needs Java); KiCad 9 is optional, see docs/setup.md
+prometheus setup          # FreeRouting (needs Java); KiCad 9 is optional, see docs/setup.md
 pytest -q                  # about 30 s
 ```
 

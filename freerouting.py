@@ -54,12 +54,12 @@ def java_version(exe: str) -> int:
 
 
 def find_java(least: int = 17) -> Optional[Tuple[str, int]]:
-    """a Java FreeRouting runs on (17+): $ZEUS_JAVA, macOS's java_home, $JAVA_HOME, the PATH's, then the usual
+    """a Java FreeRouting runs on (17+): $PROMETHEUS_JAVA, macOS's java_home, $JAVA_HOME, the PATH's, then the usual
     installs (Homebrew, /usr/lib/jvm) - the first new enough, so a machine whose default Java is older (kept for
     something else) still routes; None when there is none"""
     if _JAVA:
         return _JAVA[0]
-    cands = [os.environ.get("ZEUS_JAVA")]
+    cands = [os.environ.get("PROMETHEUS_JAVA") or os.environ.get("ZEUS_JAVA")]   # (its name before: still read)
     if os.path.exists("/usr/libexec/java_home"):
         try:
             home = subprocess.run(["/usr/libexec/java_home", "-v", f"{least}+"], capture_output=True, text=True,
@@ -110,7 +110,7 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
     skip = set(skip_nets)
     L_ = list(board.layers)
     lines = [f"(pcb {_q(os.path.basename(path))}",
-             '  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "Zeus") (host_version "1"))',
+             '  (parser (string_quote ") (space_in_quoted_tokens on) (host_cad "Prometheus") (host_version "1"))',
              "  (resolution um 10)", "  (unit um)", "  (structure"]
     for i, L in enumerate(L_):
         lines.append(f"    (layer {_layer_name(L)} (type signal) (property (index {i})))")

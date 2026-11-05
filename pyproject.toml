@@ -3,9 +3,9 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "zeus-pcb"
+name = "prometheus-pcb"
 version = "0.1.0"
-description = "Zeus, the AI PCB harness: design PCBs in Python: parts on real KiCad footprints, nets, routed copper, IPC-2221 checks, Gerbers, KiCad export, schematics and 3D boards"
+description = "Prometheus, the AI PCB harness: design PCBs in Python: parts on real KiCad footprints, nets, routed copper, IPC-2221 checks, Gerbers, KiCad export, schematics and 3D boards"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
@@ -17,7 +17,8 @@ schematic = ["schemdraw", "cairosvg", "pypdf"]
 dev = ["pytest", "build123d", "schemdraw", "cairosvg", "pypdf", "gerbonara", "kiutils"]
 
 [project.scripts]
-zeus = "pcb_cli:main"
+prometheus = "pcb_cli:main"
+zeus = "pcb_cli:main"            # (the name before Prometheus: still works)
 pcb-harness = "pcb_cli:main"   # (the old name, kept working)
 
 [tool.setuptools]

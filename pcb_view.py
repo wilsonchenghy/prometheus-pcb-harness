@@ -1,6 +1,6 @@
-"""``zeus view out/``: a local page to look at a board - its layout (layers to switch on and off), a 3D view,
+"""``prometheus view out/``: a local page to look at a board - its layout (layers to switch on and off), a 3D view,
 a net-label schematic, every finding (click one: the board zooms to it) - and, while a run is going
-(``zeus board.py out/ --view``), its stage, the try it is on and about how long is left.
+(``prometheus board.py out/ --view``), its stage, the try it is on and about how long is left.
 
 Python's standard library only (http.server); the 3D view's three.js (r128, MIT) ships beside the page.
 """
@@ -225,7 +225,7 @@ def compact_glb(path: Path) -> None:
     raw = path.read_bytes()
     jl = struct.unpack_from("<I", raw, 12)[0]
     j = json.loads(raw[20:20 + jl])
-    if j.get("asset", {}).get("extras", {}).get("zeus_compact"):
+    if j.get("asset", {}).get("extras", {}).get("prometheus_compact"):
         return
     bl = struct.unpack_from("<I", raw, 20 + jl)[0]
     blob = memoryview(raw)[28 + jl:28 + jl + bl]
@@ -278,7 +278,7 @@ def compact_glb(path: Path) -> None:
             prims.append(np_)
         m["primitives"] = prims
     j["accessors"], j["bufferViews"], j["buffers"] = accs, views, [{"byteLength": len(out)}]
-    j.setdefault("asset", {}).setdefault("extras", {})["zeus_compact"] = 1
+    j.setdefault("asset", {}).setdefault("extras", {})["prometheus_compact"] = 1
     js = json.dumps(j).encode()
     js += b" " * (-len(js) % 4)
     out += b"\0" * (-len(out) % 4)
@@ -485,7 +485,7 @@ def serve(out_dir: str, port: int = 0, open_browser: bool = True, block: bool = 
 
 
 def launch(out_dir: str) -> Optional[str]:
-    """``zeus view OUT_DIR`` in the background, once per folder: it opens the browser and outlives the run; a viewer
+    """``prometheus view OUT_DIR`` in the background, once per folder: it opens the browser and outlives the run; a viewer
     already up for the folder is reused (its page follows the new run), so a run-edit-run loop opens one tab"""
     import socket
     import subprocess
@@ -515,13 +515,13 @@ def launch(out_dir: str) -> Optional[str]:
 
 def main(argv) -> int:
     import argparse
-    ap = argparse.ArgumentParser(prog="zeus view", description="look at a board run's folder in a browser")
+    ap = argparse.ArgumentParser(prog="prometheus view", description="look at a board run's folder in a browser")
     ap.add_argument("out", help="the run's output folder (the one result.json is in)")
     ap.add_argument("--port", type=int, default=0)
     ap.add_argument("--no-open", action="store_true", help="do not open a browser (print the address)")
     a = ap.parse_args(argv)
     if not (Path(a.out) / "result.json").exists() and not (Path(a.out) / "progress.json").exists():
-        print(f"{a.out}: no run here yet: zeus board.py {a.out} first (or add --view to that run)", file=sys.stderr)
+        print(f"{a.out}: no run here yet: prometheus board.py {a.out} first (or add --view to that run)", file=sys.stderr)
         return 2
     serve(a.out, a.port, not a.no_open)
     return 0

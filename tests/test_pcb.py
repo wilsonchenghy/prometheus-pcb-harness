@@ -1161,7 +1161,7 @@ def test_viewer_serves_a_run_and_its_progress(tmp_path):
     try:
         op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         get = lambda p: op.open(url + p, timeout=120).read()
-        assert b"Zeus" in get("")
+        assert b"Prometheus" in get("")
         assert len(get("three.min.js")) > 100000
         b = json.loads(get("api/board"))
         assert b["name"] == "blinker" and len(b["comps"]) == 8 and b["tracks"] and b["copper"]
