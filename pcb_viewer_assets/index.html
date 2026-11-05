@@ -353,10 +353,12 @@ function focusNet(net, on) {
   svg.querySelectorAll("[data-net]").forEach(e => e.classList.toggle("netdim", !!(on && net && e.dataset.net !== net)));
   $$("#ssvg [data-net]").forEach(e => e.style.opacity = on && net && e.dataset.net !== net ? .25 : "");
   if (!on || !net || !B) return;
-  const g = el("g", { class: "flowg", "pointer-events": "none" }, svg);
-  for (const t of B.tracks.filter(t => t.net === net && (layerOn[t.layer]))) {
+  const g = el("g", { class: "flowg", "pointer-events": "none" }, svg), pads = svg.querySelector("#padsg");
+  if (pads) svg.insertBefore(g, pads);                  // (under the pads: the flow is in the copper, not over it)
+  const shown = look === "board" ? [topL()] : Object.keys(layerOn).filter(L => layerOn[L]);
+  for (const t of B.tracks.filter(t => t.net === net && shown.includes(t.layer))) {
     const d = "M" + t.pts.map(p => X(p[0]).toFixed(3) + "," + Y(p[1]).toFixed(3)).join("L");
-    el("path", { d, fill: "none", stroke: "#fff", "stroke-width": Math.max(0.08, t.w * 0.35), "stroke-linecap": "round", class: "flow", opacity: .85 }, g);
+    el("path", { d, fill: "none", stroke: "#fff", "stroke-width": Math.max(0.06, t.w * 0.25), "stroke-linecap": "round", class: "flow", opacity: .5 }, g);
   }
 }
 function defs(svg) {
@@ -388,7 +390,7 @@ function drawLayout() {
       p.addEventListener("click", () => selectNet(c.net));
     }
   }
-  if (layerOn.pads) { const g = el("g", {}, svg);
+  if (layerOn.pads) { const g = el("g", { id: "padsg" }, svg);
     for (const c of B.comps) for (const p of c.pads) {
       if (!p.drill && (made ? p.layer !== topL() : !layerOn[p.layer])) continue;
       const fill = made ? "url(#enig)" : glow ? "#efe3d1" : "url(#enig)";
@@ -767,7 +769,8 @@ function init3d() {
   if (threeReady) { resize3d(); return; } if (!B || B.error) return;
   if (typeof THREE === "undefined") { $("#msg").textContent = "3D needs three.js"; return; }
   threeReady = true; const host = $("#three");
-  ren = new THREE.WebGLRenderer({ antialias: true, alpha: true }); ren.setPixelRatio(window.devicePixelRatio || 1); host.appendChild(ren.domElement);
+  ren = new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });   // (0.035 mm copper on a 100 mm view: no z-fighting)
+  ren.setPixelRatio(window.devicePixelRatio || 1); host.appendChild(ren.domElement);
   scene = new THREE.Scene(); cam = new THREE.PerspectiveCamera(30, 1, 0.1, 3000);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x101418, 0.7));
   const k = new THREE.DirectionalLight(0xfff1dc, 1.05); k.position.set(50, -70, 110); scene.add(k);
@@ -804,8 +807,10 @@ function build3d() {
   const bs = new THREE.Shape(B.outline.map(p => new THREE.Vector2(p[0], p[1])));
   for (const h of B.holes) { const c = new THREE.Path(); c.absarc(h[0], h[1], h[2] / 2, 0, Math.PI * 2, true); bs.holes.push(c); }
   const bg = new THREE.ExtrudeGeometry(bs, { depth: T, bevelEnabled: false, curveSegments: 28 }); bg.translate(0, 0, -T);
+  root.add(new THREE.Mesh(bg, [new THREE.MeshBasicMaterial({ visible: false }),     // (the board's edge: KiCad's export has
+    new THREE.MeshStandardMaterial({ color: new THREE.Color(0x6b734a).convertSRGBToLinear(), roughness: 0.8 })]));  // no walls)
   const simple = new THREE.Group(); simple.userData.simple = true; root.add(simple); const _root = root; root = simple;
-  root.add(new THREE.Mesh(bg, [new THREE.MeshStandardMaterial({ color: 0x0c3d28, roughness: 0.38, metalness: 0.05 }), new THREE.MeshStandardMaterial({ color: 0xcfc39a, roughness: 0.8 })]));
+  root.add(new THREE.Mesh(bg, [new THREE.MeshStandardMaterial({ color: 0x0c3d28, roughness: 0.38, metalness: 0.05 }), new THREE.MeshBasicMaterial({ visible: false })]));
   const under = new THREE.MeshStandardMaterial({ color: 0x24804f, roughness: 0.32, metalness: 0.1, side: THREE.DoubleSide });
   for (const c of B.copper) for (const p of c.poly) { try { const m = new THREE.Mesh(new THREE.ShapeGeometry(shapeOf(p)), under); m.position.z = c.layer === "F" ? 0.02 : -T - 0.02; root.add(m); } catch (e) {} }
   const gold = new THREE.MeshStandardMaterial({ color: 0xe8b75a, roughness: 0.22, metalness: 0.92, side: THREE.DoubleSide });
@@ -834,7 +839,10 @@ function styleModel(m) {
     if (!ref) {                                                // the board: mask, copper, silk, the core
       if (!seen.has(mat)) { const n = mat.clone(); if (n.color) n.color.convertSRGBToLinear();
         if (c.r > .6 && c.g > .5 && c.b < .1) { seen.set(mat, gold); }   // (the exposed copper: ENIG gold)
-        else { n.side = THREE.DoubleSide; if (n.transparent) n.opacity = Math.max(n.opacity, .92); n.roughness = .38; seen.set(mat, n); } }
+        else { n.side = THREE.DoubleSide; n.roughness = .38;
+          if (n.transparent && n.opacity > .95) { n.transparent = false; n.opacity = 1; }   // (the core: solid, no vias seen through its edge)
+          else if (n.transparent) n.opacity = Math.max(n.opacity, .92);                     // (the mask: the copper shows under it)
+          seen.set(mat, n); } }
       o.material = seen.get(mat); return; }
     const k = kinds[ref] || "other";
     const solid = ["ic", "res", "diode", "inductor", "switch", "other"].includes(k);   // (one material in KiCad's export:
@@ -883,9 +891,12 @@ async function loadModel() {
     const box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3());
     const k = size.x > 0.5 ? 1 : 1000;                          // (metres, or already mm)
     m.scale.setScalar(k); m.updateMatrixWorld(true);
-    const b2 = new THREE.Box3().setFromObject(m), ctr = b2.getCenter(new THREE.Vector3());
+    const b2 = new THREE.Box3().setFromObject(m);
+    const refs = new Set(B.comps.map(c => c.ref)), bb = new THREE.Box3();     // (the board alone: pins hang below it)
+    m.traverse(o => { if (!o.isMesh) return; let a = o; while (a && !refs.has(a.name)) a = a.parent; if (!a) bb.expandByObject(o); });
     const [bx0, by0, bx1, by1] = B.bounds, cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
-    m.position.set(cx - ctr.x, cy - ctr.y, -(B.thickness || 1.6) - b2.min.z);   // (over the board, its bottom face down)
+    const bc = (bb.isEmpty() ? b2 : bb).getCenter(new THREE.Vector3());
+    m.position.set(cx - bc.x, cy - bc.y, -bc.z - (B.thickness || 1.6) / 2);    // (its board on the outline, mid-plane at -T/2)
     styleModel(m);
     root.children.filter(o => o.userData.simple).forEach(o => root.remove(o));
     root.add(m); modelState = "kicad";
