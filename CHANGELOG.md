@@ -33,6 +33,7 @@ board house needs to make and assemble it - explaining each finding, so the engi
 - A KiCad project with the board and its schematic on KiCad's own symbols: functional blocks, decoupling drawn as
   banks on one rail, a regulator's power stage wired, large designs on A3 pages joined by global labels; KiCad reads
   its netlist back equal to the board's.
+- The same project in KiCad 8's format (`out/kicad8.zip`), for Altium Designer's KiCad import and older KiCad.
 
 **The viewer** (`prometheus view out/`, opened by every run): the layout with its layers and nets, KiCad's 3D models,
 KiCad's schematic page by page, each part's symbol beside its land pattern, the findings, and the run's progress.
