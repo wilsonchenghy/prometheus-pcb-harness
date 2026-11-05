@@ -136,7 +136,7 @@ installing KiCad (it needs root); approve it, or in auto mode switch to *Accept 
 
 ### Try it in Claude Code on your machine
 
-1. Install Prometheus and its skill (Python 3.10+; Java 17+ adds FreeRouting, KiCad 9 adds KiCad's DRC, both optional):
+1. Install Prometheus and its skill (Python 3.10+; Java 17+, FreeRouting and KiCad 9 to route and run KiCad's DRC):
 
    ```
    git clone https://github.com/wilsonchenghy/prometheus-pcb-harness && cd prometheus-pcb-harness

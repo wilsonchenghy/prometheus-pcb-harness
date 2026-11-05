@@ -258,9 +258,9 @@ def main(argv=None) -> int:
     ap.add_argument("--kicad-drc", choices=("auto", "off", "require"), default="auto",
                     help="KiCad's own DRC on the exported board: auto (when KiCad 9+ is installed; default), off, "
                          "or require (fail when KiCad is missing)")
-    ap.add_argument("--router", choices=("auto", "freerouting", "harness"), default="auto",
-                    help="auto (FreeRouting when Java and its jar are installed, else the built-in router; default), "
-                         "freerouting, or harness")
+    ap.add_argument("--router", choices=("freerouting", "harness"), default="freerouting",
+                    help="freerouting (FreeRouting through KiCad, the default: needs KiCad, Java and the jar, and stops "
+                         "saying which is missing) or harness (the built-in grid router, no installs)")
     ap.add_argument("--stage", choices=("schematic", "critic", "place", "route", "check", "export", "all"), default="all",
                     help="run one stage: schematic (the schematic, shown in the viewer, then stop: for the engineer's "
                          "go before any layout), critic (the design review, instant), place (place what has no position), "
@@ -331,7 +331,11 @@ def main(argv=None) -> int:
         t = time.perf_counter()
         prog.stage("place+route" if route_ok else "place")
         if route_ok:
-            probs = pcb.place_and_route(b, router=a.router)
+            try:
+                probs = pcb.place_and_route(b, router=a.router)
+            except RuntimeError as e:                    # (a router that cannot run: one clear line, what to install)
+                print(f"error: {e}", file=sys.stderr)
+                return 2
             print(f"placed and routed ({getattr(b, 'router_used', '')}): "
                   f"{'clean' if not probs else f'{len(probs)} problems'} ({time.perf_counter() - t:.1f} s)")
         else:
@@ -349,7 +353,11 @@ def main(argv=None) -> int:
     if route_ok and probs is None and not b.tracks:
         t = time.perf_counter()
         prog.stage("route")
-        probs = pcb.route_board(b, a.router)
+        try:
+            probs = pcb.route_board(b, a.router)
+        except RuntimeError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
         timings["route"] = round(time.perf_counter() - t, 2)
         print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({timings['route']} s)")
     probs = probs or []

@@ -11,7 +11,8 @@ and let them choose; explain each fix with its finding's `why`. Build end to end
 
 1. Once per machine: `prometheus doctor`. If KiCad, Java or FreeRouting is missing, run `prometheus setup`
    (FreeRouting, no root) and show the user the setup guide (`docs/setup.md`, https://github.com/wilsonchenghy/prometheus-pcb-harness/blob/main/docs/setup.md) for the rest; install system software only with their
-   approval. Everything is optional; the harness falls back to its own router and checks.
+   approval. Routing needs them: without them a run stops and names what is missing (`--router harness` routes a
+   simple board with the built-in router, chosen explicitly).
 2. Write `board.py` with a `build()` returning a `pcb.Board` (outline, parts with real KiCad footprints and pin
    numbers from the datasheet, nets with their current, pours), or start from a KiCad netlist (`.net`); for a revision of a finished KiCad
    board, `prometheus import design.kicad_pcb rev2/` writes that board.py (AGENTS.md). Place
