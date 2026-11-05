@@ -168,7 +168,9 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 #tip .m { font-family: var(--mono); color: #f0d29a; }
 #msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: var(--text2); pointer-events: none; text-align: center; font: 500 11px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
 #render { position: absolute; inset: 0; display: none; background: #e6e8ea; } #render img { width: 100%; height: 100%; object-fit: contain; }
-.flow { stroke-dasharray: 0.6 0.9; animation: flow .9s linear infinite; } @keyframes flow { to { stroke-dashoffset: -1.5; } }
+.flow { stroke-dasharray: 1.4 6.6; animation: flow 1.1s linear infinite; } @keyframes flow { to { stroke-dashoffset: -8; } }
+.neton { filter: url(#netglow); }
+@media (prefers-reduced-motion: reduce) { .flow { animation: none; } }
 .netdim { opacity: .2; transition: opacity .2s; }
 .pin { cursor: pointer; } .pin circle.halo { animation: halo 2s ease-out infinite; transform-box: fill-box; transform-origin: center; }
 @keyframes halo { from { transform: scale(.6); opacity: .9; } to { transform: scale(2.2); opacity: 0; } }
@@ -350,7 +352,8 @@ function hover(node, html, net) {
 // a net in focus: everything else dims, and current flows along its tracks
 function focusNet(net, on) {
   const svg = $("#lroot") || $("#lsvg"); svg.querySelectorAll(".flowg").forEach(g => g.remove());
-  svg.querySelectorAll("[data-net]").forEach(e => e.classList.toggle("netdim", !!(on && net && e.dataset.net !== net)));
+  svg.querySelectorAll("[data-net]").forEach(e => { e.classList.toggle("netdim", !!(on && net && e.dataset.net !== net));
+    e.classList.toggle("neton", !!(on && net && e.dataset.net === net)); });
   $$("#ssvg [data-net]").forEach(e => e.style.opacity = on && net && e.dataset.net !== net ? .25 : "");
   if (!on || !net || !B) return;
   const g = el("g", { class: "flowg", "pointer-events": "none" }, svg), pads = svg.querySelector("#padsg");
@@ -358,13 +361,18 @@ function focusNet(net, on) {
   const shown = look === "board" ? [topL()] : Object.keys(layerOn).filter(L => layerOn[L]);
   for (const t of B.tracks.filter(t => t.net === net && shown.includes(t.layer))) {
     const d = "M" + t.pts.map(p => X(p[0]).toFixed(3) + "," + Y(p[1]).toFixed(3)).join("L");
-    el("path", { d, fill: "none", stroke: "#fff", "stroke-width": Math.max(0.06, t.w * 0.25), "stroke-linecap": "round", class: "flow", opacity: .5 }, g);
+    el("path", { d, fill: "none", stroke: "#fff3c4", "stroke-width": Math.max(0.3, t.w * 1.1), "stroke-linecap": "round", class: "flow", opacity: .35, filter: "url(#glow)" }, g);
+    el("path", { d, fill: "none", stroke: "#fffdf4", "stroke-width": Math.max(0.08, t.w * 0.3), "stroke-linecap": "round", class: "flow", opacity: .95 }, g);   // (pulses: a halo, a bright core)
   }
 }
 function defs(svg) {
   const d = el("defs", {}, svg);
   const f = el("filter", { id: "glow", x: "-20%", y: "-20%", width: "140%", height: "140%" }, d);
   el("feGaussianBlur", { stdDeviation: 0.35, result: "b" }, f); const m = el("feMerge", {}, f); el("feMergeNode", { in: "b" }, m); el("feMergeNode", { in: "SourceGraphic" }, m);
+  const n = el("filter", { id: "netglow", x: "-30%", y: "-30%", width: "160%", height: "160%" }, d);   // (a net in focus: lit,
+  el("feColorMatrix", { type: "matrix", values: "1.25 0 0 0 .06  0 1.3 0 0 .08  0 0 1.2 0 .05  0 0 0 1 0", result: "lit" }, n);   // with a halo)
+  el("feGaussianBlur", { in: "lit", stdDeviation: 0.6, result: "b" }, n); const nm = el("feMerge", {}, n);
+  el("feMergeNode", { in: "b" }, nm); el("feMergeNode", { in: "lit" }, nm);
   const g = el("linearGradient", { id: "enig", x1: 0, y1: 0, x2: 1, y2: 1 }, d);
   [["0", "#b07a2c"], [".5", "#f6d48f"], ["1", "#c99044"]].forEach(([o, c]) => el("stop", { offset: o, "stop-color": c }, g));
 }
@@ -608,8 +616,10 @@ function fitText(t, w) {
 }
 function drawParts() {
   if (!B || B.error) return; drawPartList();
-  const svg = $("#psvg"); svg.innerHTML = ""; const c = B.comps.find(x => x.ref === curPart); if (!c) return;
-  const R_ = svg.getBoundingClientRect(), W = R_.width || 900, H = R_.height || 600, pad = 26, gap = 90, cw = Math.min(560, (W - 2 * pad - gap) / 2);
+  const svg = $("#psvg"), R_ = svg.getBoundingClientRect();
+  if (!R_.width) { if (activeView() === "parts") requestAnimationFrame(drawParts); return; }   // (not laid out yet: no cramped first frame)
+  svg.innerHTML = ""; const c = B.comps.find(x => x.ref === curPart); if (!c) return;
+  const W = R_.width, H = R_.height || 600, pad = 26, gap = 90, cw = Math.min(560, (W - 2 * pad - gap) / 2);
   let ch = H - 2 * pad;                                  // (the cards as tall as the symbol needs, centred)
   if (c.symbol && c.symbol.pins.length) { const ys = c.symbol.pins.map(p => p.at[1]).concat(c.symbol.body.flatMap(r => [r[1], r[3]])),
       xs = c.symbol.pins.map(p => p.at[0]).concat(c.symbol.body.flatMap(r => [r[0], r[2]]));
@@ -769,7 +779,7 @@ function init3d() {
   if (threeReady) { resize3d(); return; } if (!B || B.error) return;
   if (typeof THREE === "undefined") { $("#msg").textContent = "3D needs three.js"; return; }
   threeReady = true; const host = $("#three");
-  ren = new THREE.WebGLRenderer({ antialias: true, alpha: true, logarithmicDepthBuffer: true });   // (0.035 mm copper on a 100 mm view: no z-fighting)
+  ren = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   ren.setPixelRatio(window.devicePixelRatio || 1); host.appendChild(ren.domElement);
   scene = new THREE.Scene(); cam = new THREE.PerspectiveCamera(30, 1, 0.1, 3000);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x101418, 0.7));
@@ -853,6 +863,20 @@ function styleModel(m) {
     o.material = seen.get(key);
   });
 }
+// KiCad's model comes as ~2000 small meshes (each pad, track, silk stroke, part face): merged per part (or the board)
+// and material, one draw each; a part stays its own node, so it still moves as one
+function mergeModel(m, refs) {
+  m.updateMatrixWorld(true); const by = new Map(), drop = [];
+  m.traverse(o => { if (!o.isMesh) return; let a = o; while (a && !refs.has(a.name)) a = a.parent; const own = a || m;
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    g.applyMatrix4(new THREE.Matrix4().copy(own.matrixWorld).invert().multiply(o.matrixWorld));
+    const key = own.uuid + o.material.uuid; if (!by.has(key)) by.set(key, [own, o.material, []]); by.get(key)[2].push(g); drop.push(o); });
+  drop.forEach(o => o.parent.remove(o));
+  for (const [own, mat, gs] of by.values()) { const n = gs.reduce((t, g) => t + g.attributes.position.count, 0), pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
+    let k = 0; for (const g of gs) { pos.set(g.attributes.position.array, k * 3); if (g.attributes.normal) nor.set(g.attributes.normal.array, k * 3); k += g.attributes.position.count; }
+    const mg = new THREE.BufferGeometry(); mg.setAttribute("position", new THREE.BufferAttribute(pos, 3)); mg.setAttribute("normal", new THREE.BufferAttribute(nor, 3));
+    own.add(new THREE.Mesh(mg, mat)); }
+}
 // each part's node (named by its reference); its rest height; an animation of its height
 function partsOf(m) { const refs = new Set(B.comps.map(c => c.ref)), out = []; m.traverse(o => { if (o !== m && refs.has(o.name)) out.push(o); }); return out; }
 function tweenZ(o, from, to, dur, delay, ease) { const t0 = performance.now() + delay;   // (the part's up: glTF's y)
@@ -897,7 +921,7 @@ async function loadModel() {
     const [bx0, by0, bx1, by1] = B.bounds, cx = (bx0 + bx1) / 2, cy = (by0 + by1) / 2;
     const bc = (bb.isEmpty() ? b2 : bb).getCenter(new THREE.Vector3());
     m.position.set(cx - bc.x, cy - bc.y, -bc.z - (B.thickness || 1.6) / 2);    // (its board on the outline, mid-plane at -T/2)
-    styleModel(m);
+    styleModel(m); mergeModel(m, refs);
     root.children.filter(o => o.userData.simple).forEach(o => root.remove(o));
     root.add(m); modelState = "kicad";
     MU = k === 1000 ? 0.001 : 1;
@@ -908,6 +932,7 @@ async function loadModel() {
 }
 function place3d() { if (!cam) return; const ce = Math.cos(orbit.el);
   cam.position.set(orbit.tx + orbit.dist * ce * Math.sin(orbit.az), orbit.ty - orbit.dist * ce * Math.cos(orbit.az), orbit.dist * Math.sin(orbit.el));
+  cam.near = orbit.dist / 40; cam.far = orbit.dist * 40; cam.updateProjectionMatrix();   // (depth range to the view: 0.035 mm copper, no z-fighting)
   cam.up.set(0, 0, 1); cam.lookAt(orbit.tx, orbit.ty, 0); ren.render(scene, cam); }
 function resize3d() { if (!ren) return; const h = $("#three"), w = h.clientWidth || 800, hh = h.clientHeight || 600; ren.setSize(w, hh); cam.aspect = w / hh; cam.updateProjectionMatrix(); place3d(); }
 $("#krender").onclick = async () => {
@@ -958,7 +983,9 @@ async function poll() {
   setTimeout(poll, P && !P.done ? 1000 : 4000);
 }
 (async () => { P = await getJ("/api/progress"); await loadAll(); poll(); })();
-window.addEventListener("resize", () => { fitLayout(); if (activeView() === "parts") drawParts(); });
+window.addEventListener("resize", fitLayout);
+let pW = 0; new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width);     // (the cards fit the panel as it
+  if (w && w !== pW && activeView() === "parts") { pW = w; drawParts(); } }).observe($("#psvg"));   // settles, not a frame late)
 window.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return;
   if (e.key === "f") fitLayout(true); for (const i of [1, 2, 3, 4]) if (e.key === String(i)) $$("#seg button")[i - 1].click();
   if (e.key === "Escape") { selectNet(null); setLoupe(false); }
