@@ -840,7 +840,8 @@ function styleModel(m) {
   const kinds = {}; for (const c of B.comps) kinds[c.ref] = c.kind;
   const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
   const metal = new THREE.MeshStandardMaterial({ color: lin(0xd8dbe0), metalness: .9, roughness: .26 });
-  const gold = new THREE.MeshStandardMaterial({ color: lin(0xe9b95c), metalness: .95, roughness: .2 });
+  const gold = new THREE.MeshStandardMaterial({ color: lin(0xe9b95c), metalness: .55, roughness: .3 });   // (half metal: with no
+                                                                     // surroundings to reflect, full metal renders black)
   const seen = new Map();
   m.traverse(o => {
     if (!o.isMesh || !o.material) return;
@@ -849,9 +850,13 @@ function styleModel(m) {
     if (!ref) {                                                // the board: mask, copper, silk, the core
       if (!seen.has(mat)) { const n = mat.clone(); if (n.color) n.color.convertSRGBToLinear();
         if (c.r > .6 && c.g > .5 && c.b < .1) { seen.set(mat, gold); }   // (the exposed copper: ENIG gold)
+        else if (mat.metalness > .5 && Math.abs(c.r - c.g) < .02 && Math.abs(c.g - c.b) < .02)   // (HASL pads: tin, lit)
+          seen.set(mat, new THREE.MeshStandardMaterial({ color: lin(0xc9ccd0), roughness: .35, metalness: .55, side: THREE.DoubleSide }));
         else { n.side = THREE.DoubleSide; n.roughness = .38;
           if (n.transparent && n.opacity > .95) { n.transparent = false; n.opacity = 1; }   // (the core: solid, no vias seen through its edge)
-          else if (n.transparent) n.opacity = Math.max(n.opacity, .92);                     // (the mask: the copper shows under it)
+          else if (n.transparent && c.g > c.r && c.g > c.b) { n.color = lin(0x1d5e3c); n.opacity = .88; }   // (the mask: a fab's
+                                       // green; KiCad's own is so dark that over bare laminate it renders black)
+          else if (n.transparent) n.opacity = Math.max(n.opacity, .92);
           seen.set(mat, n); } }
       o.material = seen.get(mat); return; }
     const k = kinds[ref] || "other";

@@ -76,7 +76,7 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
         used = sum(g.area for g in map(board.courtyard, board.comps) if g is not None) / board.outline.area
         if used < 0.15:                                # (the bench boards run 26-57 %)
             k = (used / 0.35) ** 0.5
-            notes.append(_note("warning", "size", f"the parts cover {used:.0%} of the {w:.0f} x {h:.0f} mm board; "
+            notes.append(_note("error", "size", f"the parts cover {used:.0%} of the {w:.0f} x {h:.0f} mm board; "
                                f"about {w * k:.0f} x {h * k:.0f} mm would do", hint="shrink the outline, or give size_mm "
                                "in the requirements when the enclosure sets it"))
     if "layers" in spec and len(board.layers) != int(spec["layers"]):
