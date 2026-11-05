@@ -11,7 +11,7 @@ Use it to:
 - **Import a design**: start from your KiCad board or your schematic's netlist
 - **Do a revision**: ask for a change, and every check runs again on the whole board
 
-[![Prometheus: the release film](media/prometheus.webp)](https://github.com/wilsonchenghy/prometheus-pcb-harness/releases/download/v0.1.0/prometheus-v0.1.0.mp4)
+https://github.com/user-attachments/assets/54ecb6bb-a091-4cb0-8be0-735dff966da7
 
 ## Install
 
