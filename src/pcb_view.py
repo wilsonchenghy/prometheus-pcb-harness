@@ -33,7 +33,8 @@ class Progress:
         self.path = Path(out_dir) / "progress.json"
         self.t0 = time.time()
         self.d = {"script": os.path.abspath(script), "started": self.t0, "stage": "loading", "done": False,
-                  "tries": None, "tries_done": 0, "try_times": [], "workers": 1, "parts": parts, "stages": []}
+                  "tries": None, "tries_done": 0, "try_times": [], "workers": 1, "parts": parts, "stages": [],
+                  "snap": 0}
         self._write()
 
     def stage(self, name: str):
@@ -55,6 +56,12 @@ class Progress:
             self.d["last_try"] = ev.get("line", "")
             if ev.get("clean"):
                 self.d["tries"] = self.d["tries_done"]      # (a clean try ends the search)
+        self._write()
+
+    def snapshot(self, b, script: str):
+        """the board as it stands (out/board.json): the page shows it at once, before the run is done"""
+        write_board(b, str(self.path.parent), script)
+        self.d["snap"] += 1
         self._write()
 
     def finish(self, clean: bool):

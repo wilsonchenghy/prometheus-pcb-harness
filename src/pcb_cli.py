@@ -305,6 +305,11 @@ def main(argv=None) -> int:
         print("note:", note)
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers  [stage: {a.stage}]")
     prog.d["parts"] = len(b.comps)
+    viewing = a.view or (not a.no_view and not os.environ.get("CI"))
+    if viewing:                                          # (the schematic and the parts at once: the engineer reviews
+        import kicad_sch                                 #  them while the layout is still being worked out)
+        kicad_sch.write(b, os.path.join(a.out, "kicad"))
+        prog.snapshot(b, os.path.abspath(a.script))
     stage = a.stage
     if spec.get("near"):                                 # (the placer holds these parts within their distance)
         b.near = list(getattr(b, "near", [])) + [tuple(x) for x in spec["near"]]
@@ -346,6 +351,8 @@ def main(argv=None) -> int:
             print(f"tidied: {n_} via{'s' if n_ > 1 else ''} that joined nothing")
     if stage in ("place", "route", "all") and timings:
         save_state(b, a.out, key)
+        if viewing:                                      # (the placed and routed board, before the checks and export)
+            prog.snapshot(b, os.path.abspath(a.script))
     lcsc_auto = {}
     if stage in ("export", "all") and not a.no_lcsc and not os.environ.get("CI"):   # (JLCPCB assembly: a C-number each)
         import parts
