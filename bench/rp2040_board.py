@@ -36,7 +36,7 @@ def build():
     b.place("J2", HDR, (10.0, 2.0), 90, "GPIO 0-14", "")       # along the bottom edge, pin 1 at the left
     b.place("J3", HDR, (10.0, H - 2.0), 90, "GPIO 15-28", "")  # along the top edge
     # the rest: no position, place_and_route places them
-    b.place("U1", "Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm", None, 0, "RP2040", "Raspberry Pi RP2040",
+    b.place("U1", "Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm_ThermalVias", None, 0, "RP2040", "Raspberry Pi RP2040",
             lcsc="C2040")
     b.place("U2", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", None, 0, "W25Q128JV", "Winbond W25Q128JVSIQ")
     b.place("U3", "Package_TO_SOT_SMD:SOT-23-5", None, 0, "AP2112K-3.3", "Diodes Inc AP2112K-3.3TRG1")
