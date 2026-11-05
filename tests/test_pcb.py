@@ -1512,3 +1512,7 @@ def test_kicad8_copy_opens_in_kicad8(tmp_path):
     assert [v for v in drc["violations"] if v["severity"] == "error"] == []
     b, _ = pcb_cli.load(str(here / "bench" / "blinker.py"))
     assert kicad_sch.check(b, str(k8 / "blinker.kicad_sch")) == []
+    fc, _ = pcb_cli.load(str(here / "examples" / "twilight_fc.py"))      # (a multi-page sheet: its page boxes too)
+    kicad_sch.write(fc, str(tmp_path / "fc9"))
+    pcb.export_kicad8(str(tmp_path / "fc9"), str(tmp_path / "fc8"))
+    assert kicad_sch.check(fc, str(tmp_path / "fc8" / "twilight_fc.kicad_sch")) == []

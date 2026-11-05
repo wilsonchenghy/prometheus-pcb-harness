@@ -39,6 +39,8 @@ What it does (`pcb.py`, its docstring has the details):
 - **Schematics**: every run writes a KiCad schematic (`kicad_sch.py`, `out/kicad/<name>.kicad_sch`) on KiCad's own
   symbols, grouped into a block per IC, every pin wired to a net label, nothing overlapping; KiCad reads it back and
   its netlist must be the board's. Hand-drawn sheets in an IC's datasheet form: `schem.py` (needs `schemdraw`).
+- **Altium**: every run also writes the KiCad project in KiCad 8's format (`out/kicad8/`, `out/kicad8.zip`), the
+  format Altium Designer's KiCad import reads (File > Import Wizard > KiCad Design Files); KiCad 8 opens it clean.
 - **Fab and parts** (`fab.py`): design-rule presets for JLCPCB, PCBWay and OSH Park and a check against them
   (`fab_check`); the pick-and-place file and the JLCPCB assembly BOM; a parts cart (BOM-upload CSVs for DigiKey,
   Mouser and LCSC, and a `buy.html` with a search link per line at each shop); `fab.order()` writes it all.

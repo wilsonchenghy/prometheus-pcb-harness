@@ -4159,7 +4159,7 @@ _K8_LAYERS = {"F.Cu": 0, **{f"In{i}.Cu": i for i in range(1, 31)}, "B.Cu": 31, "
               "B.Paste": 34, "F.Paste": 35, "B.SilkS": 36, "F.SilkS": 37, "B.Mask": 38, "F.Mask": 39, "Dwgs.User": 40,
               "Cmts.User": 41, "Eco1.User": 42, "Eco2.User": 43, "Edge.Cuts": 44, "Margin": 45, "B.CrtYd": 46,
               "F.CrtYd": 47, "B.Fab": 48, "F.Fab": 49, **{f"User.{i}": 49 + i for i in range(1, 10)}}
-_K8_DROP = {"embedded_fonts", "embedded_files", "tenting"}
+_K8_DROP = {"embedded_fonts", "embedded_files", "tenting", "placement"}   # (a rule area's placement: KiCad 9's)
 
 
 def export_kicad8(src_dir: str, out_dir: str) -> List[str]:
@@ -4172,7 +4172,13 @@ def export_kicad8(src_dir: str, out_dir: str) -> List[str]:
     def clean(node):
         if not isinstance(node, list):
             return node
-        return [clean(x) for x in node if not (isinstance(x, list) and x and x[0] in _K8_DROP)]
+        node = [clean(x) for x in node if not (isinstance(x, list) and x and x[0] in _K8_DROP)]
+        if node and node[0] == "sheet":                  # (a page's box: KiCad 9 gave it these flags)
+            node = [x for x in node if not (isinstance(x, list) and x and x[0] in
+                                            ("exclude_from_sim", "in_bom", "on_board", "dnp"))]
+        if node and node[0] in ("pin_names", "pin_numbers") and ["hide", "yes"] in node:
+            node = [x for x in node if x != ["hide", "yes"]] + ["hide"]            # (KiCad 8: a bare flag there)
+        return node
     out = []
     for f in sorted(os.listdir(src_dir)):
         src, dst = os.path.join(src_dir, f), os.path.join(out_dir, f)
@@ -4186,8 +4192,10 @@ def export_kicad8(src_dir: str, out_dir: str) -> List[str]:
                 elif isinstance(x, list) and x and x[0] == "layers" and f.endswith(".kicad_pcb"):
                     rows = [[_K8_LAYERS[str(r[1])]] + r[1:] for r in x[1:]]
                     tree[i] = ["layers"] + sorted(rows, key=lambda r: r[0])
+            text = _sx_dump(tree)                        # (KiCad 8 reads the bare hide flag only after the offset)
+            text = re.sub(r"\((pin_names|pin_numbers) hide((?: \([^()]*\))*)\)", r"(\1\2 hide)", text)
             with open(dst, "w") as fh:
-                fh.write(_sx_dump(tree) + "\n")
+                fh.write(text + "\n")
             out.append(dst)
         elif f.endswith(".kicad_pro"):
             shutil.copyfile(src, dst)
