@@ -4159,7 +4159,7 @@ _K8_LAYERS = {"F.Cu": 0, **{f"In{i}.Cu": i for i in range(1, 31)}, "B.Cu": 31, "
               "B.Paste": 34, "F.Paste": 35, "B.SilkS": 36, "F.SilkS": 37, "B.Mask": 38, "F.Mask": 39, "Dwgs.User": 40,
               "Cmts.User": 41, "Eco1.User": 42, "Eco2.User": 43, "Edge.Cuts": 44, "Margin": 45, "B.CrtYd": 46,
               "F.CrtYd": 47, "B.Fab": 48, "F.Fab": 49, **{f"User.{i}": 49 + i for i in range(1, 10)}}
-_K8_DROP = {"embedded_fonts", "embedded_files"}
+_K8_DROP = {"embedded_fonts", "embedded_files", "tenting"}
 
 
 def export_kicad8(src_dir: str, out_dir: str) -> List[str]:
