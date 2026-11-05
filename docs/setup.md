@@ -29,7 +29,9 @@ zeus setup          # downloads FreeRouting 2.0.1 into ~/.cache/prometheus/freer
 or put the jar anywhere and set `FREEROUTING_JAR=/path/to/freerouting.jar`.
 
 **Java 17+**: Ubuntu / Debian `sudo apt install openjdk-21-jre-headless`; macOS `brew install openjdk`;
-Windows: the Temurin installer from adoptium.net.
+Windows: the Temurin installer from adoptium.net. It need not be the default Java: the harness finds any Java 17+
+(`$ZEUS_JAVA`, macOS's `java_home`, `$JAVA_HOME`, the PATH, Homebrew, `/usr/lib/jvm`), so a machine that keeps an
+older default for something else still routes. `zeus doctor` says which one it uses.
 
 **KiCad 9+**:
 

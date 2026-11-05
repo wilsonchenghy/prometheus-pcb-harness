@@ -104,7 +104,8 @@ def doctor() -> dict:
     import freerouting
     ver = pcb.kicad_version()
     major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
-    java = shutil.which("java")
+    java = freerouting.find_java()
+    old = shutil.which("java")                           # (the PATH's, when it is too old for FreeRouting)
     jar = freerouting.find_jar()
     rows = {
         "kicad": {"ok": major >= 9, "have": ver or "not installed",
@@ -113,7 +114,9 @@ def doctor() -> dict:
         "kicad_python": {"ok": freerouting.kicad_available(), "have": "pcbnew importable" if freerouting.kicad_available()
                          else "no", "gives": "KiCad writes FreeRouting's input (exact pads, net classes)",
                          "without": "the harness writes the Specctra file itself"},
-        "java": {"ok": bool(java), "have": java or "not installed", "gives": "runs FreeRouting",
+        "java": {"ok": bool(java), "have": f"Java {java[1]}: {java[0]}" if java else
+                 (f"only Java {freerouting.java_version(old)} ({old}): FreeRouting needs 17+" if old else "not installed"),
+                 "gives": "runs FreeRouting (any Java 17+ found, the default one may stay older; or set ZEUS_JAVA)",
                  "without": "no FreeRouting: the built-in grid router"},
         "freerouting": {"ok": bool(jar), "have": jar or "not found", "gives": "the router KiCad users use",
                         "without": "the built-in grid router (fine for simple boards; dense 0.4 mm pitch chips fail)"},

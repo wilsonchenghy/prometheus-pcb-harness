@@ -37,8 +37,55 @@ def find_jar() -> Optional[str]:
     return found[-1] if found else None
 
 
+_JAVA: List = []
+
+
+def java_version(exe: str) -> int:
+    """a Java's major version (``java -version``: "1.8.0_x" is 8, "17.0.2" is 17), 0 when it does not run"""
+    try:
+        r = subprocess.run([exe, "-version"], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    m = re.search(r'version "(\d+)(?:\.(\d+))?', r.stderr + r.stdout)
+    if not m:
+        return 0
+    major = int(m.group(1))
+    return int(m.group(2) or 0) if major == 1 else major
+
+
+def find_java(least: int = 17) -> Optional[Tuple[str, int]]:
+    """a Java FreeRouting runs on (17+): $ZEUS_JAVA, macOS's java_home, $JAVA_HOME, the PATH's, then the usual
+    installs (Homebrew, /usr/lib/jvm) - the first new enough, so a machine whose default Java is older (kept for
+    something else) still routes; None when there is none"""
+    if _JAVA:
+        return _JAVA[0]
+    cands = [os.environ.get("ZEUS_JAVA")]
+    if os.path.exists("/usr/libexec/java_home"):
+        try:
+            home = subprocess.run(["/usr/libexec/java_home", "-v", f"{least}+"], capture_output=True, text=True,
+                                  timeout=30).stdout.strip()
+            cands.append(os.path.join(home, "bin", "java") if home else None)
+        except (OSError, subprocess.SubprocessError):
+            pass
+    if os.environ.get("JAVA_HOME"):
+        cands.append(os.path.join(os.environ["JAVA_HOME"], "bin", "java"))
+    cands += [shutil.which("java"), "/opt/homebrew/opt/openjdk/bin/java", "/usr/local/opt/openjdk/bin/java"]
+    cands += sorted(glob.glob("/opt/homebrew/opt/openjdk@*/bin/java"), reverse=True)
+    cands += sorted(glob.glob("/usr/lib/jvm/*/bin/java"), reverse=True)
+    seen = set()
+    for c in cands:
+        if not c or c in seen or not os.path.exists(c):
+            continue
+        seen.add(c)
+        v = java_version(c)
+        if v >= least:
+            _JAVA.append((c, v))
+            return _JAVA[0]
+    return None
+
+
 def available() -> bool:
-    return bool(find_jar() and shutil.which("java"))
+    return bool(find_jar() and find_java())
 
 
 def _q(s: str) -> str:
@@ -246,7 +293,7 @@ def run(dsn: str, ses: str, passes: int = 100, timeout: int = 1800, threads: int
     jar = find_jar()
     if not jar:
         raise RuntimeError("FreeRouting jar not found: set FREEROUTING_JAR or put it in ~/.cache/prometheus/freerouting")
-    cmd = ["java", "-Djava.awt.headless=true", "-jar", jar, "-de", dsn, "-do", ses, "-mp", str(passes),
+    cmd = [find_java()[0], "-Djava.awt.headless=true", "-jar", jar, "-de", dsn, "-do", ses, "-mp", str(passes),
            "-mt", str(threads), "--gui.enabled=false"]
     log = ""
     for attempt in range(3):                            # (run alongside other copies, FreeRouting now and then
