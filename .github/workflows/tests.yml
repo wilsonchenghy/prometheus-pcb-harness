@@ -21,8 +21,8 @@ jobs:
           restore-keys: kicad-parts-
       - run: pip install -e ".[dev]"
       - run: pytest -q
-      - run: python -m pcb_cli bench/blinker.py out/blinker
-      - run: python -m pcb_cli examples/netlist/blinker_sch.net out/netlist --size 35x25 --at J1=4,12.5
+      - run: python -m pcb_cli bench/blinker.py out/blinker --router harness
+      - run: python -m pcb_cli examples/netlist/blinker_sch.net out/netlist --size 35x25 --at J1=4,12.5 --router harness
   kicad-drc:                              # KiCad's own DRC as a third judge of the exported boards
     runs-on: ubuntu-24.04
     steps:
@@ -36,9 +36,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends kicad
           kicad-cli version
       - run: pip install -e .
-      - run: python -m pcb_cli bench/blinker.py out/blinker --kicad-drc require
-      - run: python -m pcb_cli bench/esp32_sensor.py out/esp32 --kicad-drc require
-      - run: python -m pcb_cli examples/netlist/blinker_sch.net out/netlist --size 35x25 --at J1=4,12.5 --kicad-drc require
+      - run: python -m pcb_cli bench/blinker.py out/blinker --kicad-drc require --router harness
+      - run: python -m pcb_cli bench/esp32_sensor.py out/esp32 --kicad-drc require --router harness
+      - run: python -m pcb_cli examples/netlist/blinker_sch.net out/netlist --size 35x25 --at J1=4,12.5 --kicad-drc require --router harness
   kicad8:                                 # the KiCad 8 copy (what Altium's KiCad import reads) opened by KiCad 8
     runs-on: ubuntu-24.04
     steps:
@@ -53,28 +53,6 @@ jobs:
           kicad-cli version
       - run: pip install -e ".[schematic]" pytest
       - run: python -m pytest -q tests/test_pcb.py -k kicad8 -rs
-  freerouting:                            # the router KiCad users use, on the hardest bench board
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "21"
-      - run: |
-          mkdir -p ~/.cache/prometheus/freerouting
-          curl -sSL -o ~/.cache/prometheus/freerouting/freerouting-2.0.1.jar \
-            https://github.com/freerouting/freerouting/releases/download/v2.0.1/freerouting-2.0.1.jar
-          echo "d7fd0f63f52e6d74b0fad6715f87ca9f0ffd7109d66b2a584638000270592ecf  $HOME/.cache/prometheus/freerouting/freerouting-2.0.1.jar" | sha256sum -c
-      - run: pip install -e ".[dev]"
-      - run: pytest -q -k freerouting
-      # (FreeRouting's own Specctra round trip, no KiCad here: two boards it routes clean that way; the RP2040
-      # board needs the KiCad round trip: the freerouting-kicad job)
-      - run: python -m pcb_cli bench/motor_driver.py out/motor --spec bench/specs/motor_driver.json --router freerouting --kicad-drc off
-      - run: python -m pcb_cli bench/can_node.py out/can --spec bench/specs/can_node.json --router freerouting --kicad-drc off
   freerouting-kicad:                      # FreeRouting through KiCad (KiCad writes the Specctra design, reads the
     runs-on: ubuntu-24.04                 # session): the path every machine with KiCad takes
     steps:
@@ -94,9 +72,11 @@ jobs:
           curl -sSL -o ~/.cache/prometheus/freerouting/freerouting-2.0.1.jar \
             https://github.com/freerouting/freerouting/releases/download/v2.0.1/freerouting-2.0.1.jar
           echo "d7fd0f63f52e6d74b0fad6715f87ca9f0ffd7109d66b2a584638000270592ecf  $HOME/.cache/prometheus/freerouting/freerouting-2.0.1.jar" | sha256sum -c
-      - run: pip install -e .
+      - run: pip install -e ".[dev]"
+      - run: pytest -q -k freerouting
+      - run: python -m pcb_cli bench/motor_driver.py out/motor --spec bench/specs/motor_driver.json --kicad-drc require
       # (the RP2040 board is left out: through KiCad it is clean on some machines and one pad short on others,
       # after minutes of placement tries; run it by hand with bench/run.py)
-      - run: python -m pcb_cli bench/can_node.py out/can --spec bench/specs/can_node.json --router freerouting --kicad-drc require
+      - run: python -m pcb_cli bench/can_node.py out/can --spec bench/specs/can_node.json --kicad-drc require
       - run: |
           grep -q '"router": "freerouting (through KiCad)"' out/can/result.json

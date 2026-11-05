@@ -1,8 +1,9 @@
 # Setting up a machine (or an AI agent's environment) for the harness
 
-The harness works with Python alone. KiCad and FreeRouting make it as good as it gets: KiCad's own design-rule
-check judges every board, and FreeRouting (the router KiCad users use) routes the dense ones. Check what a
-machine has at any time:
+Routing needs KiCad, Java and FreeRouting: FreeRouting (the router KiCad users use) routes through KiCad, and KiCad's
+own design-rule check judges every board. A run without them stops and says what is missing; `--router harness`
+routes with the built-in grid router instead, chosen explicitly (fine for simple boards, not for dense fine-pitch
+ones). Check what a machine has at any time:
 
 ```
 prometheus doctor
@@ -11,8 +12,8 @@ prometheus doctor
 | Piece | What it gives | Without it |
 |---|---|---|
 | Python 3.10+ and `pip install prometheus-pcb` | everything: parts, placement, routing, the design check, the house check, Gerbers, KiCad project, BOM, cart | (required) |
-| KiCad 9+ (`kicad-cli`, and its Python `pcbnew`) | KiCad's own DRC on every run; FreeRouting through KiCad's Specctra export | the harness's design check and house check only |
-| Java 17+ and FreeRouting | the router KiCad users use; dense boards (0.4 mm pitch chips) route clean | the built-in grid router: fine for simple boards, dense fine-pitch boards leave pins unrouted |
+| KiCad 9+ (`kicad-cli`, and its Python `pcbnew`) | FreeRouting through KiCad's Specctra export; KiCad's own DRC on every run | routing stops and says so (or `--router harness`); no KiCad DRC |
+| Java 17+ and FreeRouting | the router: dense boards (0.4 mm pitch chips) route clean | routing stops and says so (or `--router harness`: the built-in grid router, fine for simple boards) |
 | `pip install "prometheus-pcb[3d]"` (build123d) | STEP of the assembled board | no STEP |
 | `pip install "prometheus-pcb[schematic]"` | schematic sheets | no sheets |
 
