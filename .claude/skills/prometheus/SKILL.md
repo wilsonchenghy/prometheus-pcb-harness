@@ -18,14 +18,16 @@ and let them choose; explain each fix with its finding's `why`. Build end to end
    every IC with its KiCad symbol (`symbol="Lib:Name"`; `prometheus part Lib:Name` shows it) and wire its pins by
    name: pins are then checked against pads both ways and an ERC runs. Place
    connectors, buttons and mounting holes yourself; give other parts `at=None` for the placer.
-3. Put what the board must meet in `req.json` (size, nets' current, `near`, `pairs`, `edge`, holes: AGENTS.md, https://github.com/wilsonchenghy/prometheus-pcb-harness/blob/main/AGENTS.md) and
+3. On a new board, show the schematic first: `prometheus board.py out/ --stage schematic` writes it and opens it in
+   the viewer, then stops. Wait for the engineer's go or changes before placing and routing.
+4. Put what the board must meet in `req.json` (size, nets' current, `near`, `pairs`, `edge`, holes: AGENTS.md, https://github.com/wilsonchenghy/prometheus-pcb-harness/blob/main/AGENTS.md) and
    run `prometheus board.py out/ --spec req.json --json`. Read `clean`, `findings` (kind, pins, at, hint) and
    `critic` in the JSON. `--stage critic` reviews in milliseconds; `--stage check` / `export` reuse the last
    placement and routing (`out/board_state.pkl`).
    For a person watching, `prometheus view out/` (or `--view` on the run) opens the board in their browser:
    layout, 3D, schematic, findings, and live progress with the time left; give them the address it prints.
-4. Fix each finding by changing the design (positions, widths, outline), never by loosening rules; run again.
-5. Done only when `clean` is true. Say which router ran (`router`) and whether KiCad's DRC ran (`kicad_drc.run`);
+5. Fix each finding by changing the design (positions, widths, outline), never by loosening rules; run again.
+6. Done only when `clean` is true. Say which router ran (`router`) and whether KiCad's DRC ran (`kicad_drc.run`);
    name any pin numbers you assumed. The order files are in `out/`: `gerbers.zip`, `bom_jlc.csv`, `cpl.csv`,
    `cart/`, `report.html`, `kicad/`.
 
