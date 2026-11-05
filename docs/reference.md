@@ -116,18 +116,18 @@ place big or dense boards yourself.
 **One command** (Python 3.10+):
 
 ```
-pip install "prometheus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness"
+pip install "prometheus-pcb @ git+https://github.com/wilsonchenghy/prometheus-pcb-harness"
 prometheus setup        # adds FreeRouting (needs Java), then reports what the machine has
 ```
 
-or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash`, which does
+or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/install.sh | bash`, which does
 both. KiCad 9 (for KiCad's own DRC) is a system install: `prometheus doctor` says whether it is there, and
 `docs/setup.md` has the commands per OS. Everything beyond Python is optional; see the table there for what you
 get without it.
 
 **With Claude Code or another AI agent** (on your machine or in a cloud session): give it the link and the job.
 
-> Install https://github.com/wilsonchenghy/pcb-harness (follow its docs/setup.md), then design a board that ...
+> Install https://github.com/wilsonchenghy/prometheus-pcb-harness (follow its docs/setup.md), then design a board that ...
 
 In a Claude Code cloud session, add the repository to the session (or let the agent clone it). The repository
 carries a Claude Code skill (`.claude/skills/prometheus`) and `AGENTS.md`, so the agent follows the harness's
@@ -139,12 +139,12 @@ installing KiCad (it needs root); approve it, or in auto mode switch to *Accept 
 1. Install Prometheus and its skill (Python 3.10+; Java 17+ adds FreeRouting, KiCad 9 adds KiCad's DRC, both optional):
 
    ```
-   git clone https://github.com/wilsonchenghy/pcb-harness && cd pcb-harness
+   git clone https://github.com/wilsonchenghy/prometheus-pcb-harness && cd prometheus-pcb-harness
    bash install.sh --skill       # the package, FreeRouting, and the skill in ~/.claude/skills/prometheus
    prometheus doctor                   # what the machine has, and what each missing piece would add
    ```
 
-   Without a clone: `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash -s -- --skill`.
+   Without a clone: `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/install.sh | bash -s -- --skill`.
    Inside a clone the skill is there anyway (`.claude/skills/prometheus`); `--skill` makes it work in any folder.
 2. Start Claude Code in an empty folder (`mkdir myboard && cd myboard && claude`) and ask for a board. To test:
 

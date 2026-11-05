@@ -11,17 +11,17 @@ Use it to:
 - **Import a design**: start from your KiCad board or your schematic's netlist
 - **Do a revision**: ask for a change, and every check runs again on the whole board
 
-[![Prometheus: the release film](media/prometheus.gif)](https://github.com/wilsonchenghy/pcb-harness/releases/download/v0.1.0/prometheus-v0.1.0.mp4)
+[![Prometheus: the release film](media/prometheus.gif)](https://github.com/wilsonchenghy/prometheus-pcb-harness/releases/download/v0.1.0/prometheus-v0.1.0.mp4)
 
 ## Install
 
 Open [Claude Code](https://claude.com/claude-code) and type:
 
-> Install https://github.com/wilsonchenghy/pcb-harness
+> Install https://github.com/wilsonchenghy/prometheus-pcb-harness
 
-That's it. Without an agent: `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash`
+That's it. Without an agent: `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/install.sh | bash`
 
-<sub>For the agent: run `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash -s -- --skill`,
+<sub>For the agent: run `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/install.sh | bash -s -- --skill`,
 then `prometheus doctor`. KiCad and Java are optional; ask before installing them (`docs/setup.md`).</sub>
 
 ## Use

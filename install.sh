@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prometheus: install the harness, fetch FreeRouting, and report what this machine has.
 #   bash install.sh            (from a clone)
-#   curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/install.sh | bash
 #   ... install.sh --skill     (also the Claude Code skill in ~/.claude/skills/prometheus: Claude Code then uses
 #                               Prometheus in any folder, not only inside a clone)
 # Installs no system software: KiCad and Java are listed by `prometheus doctor` with the commands to add them
@@ -14,8 +14,8 @@ PY="${PYTHON:-python3}"
 if [ -n "$HERE" ] && [ -f "$HERE/pyproject.toml" ]; then
   "$PY" -m pip install --quiet -e "$HERE[3d,schematic]" || "$PY" -m pip install --quiet -e "$HERE"
 else
-  "$PY" -m pip install --quiet "prometheus-pcb[3d,schematic] @ git+https://github.com/wilsonchenghy/pcb-harness" \
-    || "$PY" -m pip install --quiet "prometheus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness"
+  "$PY" -m pip install --quiet "prometheus-pcb[3d,schematic] @ git+https://github.com/wilsonchenghy/prometheus-pcb-harness" \
+    || "$PY" -m pip install --quiet "prometheus-pcb @ git+https://github.com/wilsonchenghy/prometheus-pcb-harness"
 fi
 if command -v java >/dev/null 2>&1; then
   prometheus setup
@@ -29,7 +29,7 @@ if [ "$SKILL" = 1 ]; then
   if [ -n "$HERE" ] && [ -f "$HERE/.claude/skills/prometheus/SKILL.md" ]; then
     cp "$HERE/.claude/skills/prometheus/SKILL.md" "$DEST/SKILL.md"
   else
-    curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/.claude/skills/prometheus/SKILL.md \
+    curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/.claude/skills/prometheus/SKILL.md \
       -o "$DEST/SKILL.md"
   fi
   echo "Claude Code skill installed: $DEST/SKILL.md (restart Claude Code to pick it up)"
