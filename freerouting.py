@@ -122,6 +122,10 @@ def export_dsn(board, path: str, skip_nets: Sequence[str] = (), via: Tuple[float
             if L in k["layers"] or (L not in "FB" and "F" in k["layers"] and "B" in k["layers"]):
                 c = list(Polygon(k["poly"]).exterior.coords)
                 lines.append(f"    (keepout (polygon {_layer_name(L)} 0 {_pts(c)}))")
+    for r in board.outline.interiors:                    # (a cut-out: the edge gap round it, on every layer)
+        c = list(Polygon(r).buffer(max(board.edge - board.clear, 0.0), join_style=2).exterior.coords)
+        for L in L_:
+            lines.append(f"    (keepout (polygon {_layer_name(L)} 0 {_pts(c)}))")
     hko = getattr(board, "_hole_ko", {})
     for x, y, d in board.all_holes():
         r = max(hko.get((x, y), 0.0), d / 2)

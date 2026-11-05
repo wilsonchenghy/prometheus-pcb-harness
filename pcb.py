@@ -397,6 +397,7 @@ def ipc2221_width(amps: float, oz: float, rise_c: float = 20.0, external: bool =
 # ---- the board -------------------------------------------------------------------------------------------------------
 class Board:
     hole_gap = HOLE_GAP                                  # drill wall to drill wall, mm
+    hole_clear = HOLE_CLEAR                              # copper to a bare hole's wall, mm
     edge = EDGE                                          # copper to the board edge, mm
 
     def __init__(self, name: str, outline: Sequence[Tuple[float, float]], thickness: float = 1.6, copper_oz: float = 1.0,
@@ -440,7 +441,7 @@ class Board:
     def place(self, ref: str, fp: str, at: Optional[Tuple[float, float]] = None, rot: float = 0.0, value: str = "", mpn: str = "",
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
               overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None,
-              symbol: Optional[str] = None):
+              symbol: Optional[str] = None, label=None):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
         KiCad 3D model path (vendor_parts.kicad; default: the one the footprint names) or ``body`` a build123d shape in
         the footprint frame for one KiCad lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
@@ -450,7 +451,8 @@ class Board:
         the board's fab preset's plated-drill minimum; a part's pin holes are never changed: its leads must fit).
         ``symbol``: its KiCad symbol "Lib:Name" (``parts.symbol``): nets may then name its pins by name, the check
         matches every pin to a pad and the critic runs an ERC on its pin types; with ``fp=None`` the symbol's own
-        footprint is used"""
+        footprint is used. ``label``: its reference designator's place on the silkscreen, (x, y, angle, size) board mm,
+        or False to leave it off (default: placed clear of everything, ``place_refs``)"""
         sym = None
         if symbol:
             import parts
@@ -503,6 +505,8 @@ class Board:
                            "pads_key": f"{min_drill}" if min_drill else ""}    # (the pads differ from the footprint's)
         if at is None:                                   # (autoplace() puts it somewhere)
             self.comps[ref].update(at=(0.0, 0.0), unplaced=True)
+        if label is not None:
+            self.comps[ref]["label"] = tuple(label) if label else None
         if sym:
             self.comps[ref]["symbol"] = sym
 
@@ -711,13 +715,50 @@ class Board:
                 for pad in lst:
                     if pad["drill"] and (pad.get("kind") == "np_thru_hole" or not pad["layers"]):
                         g = _pad_poly(pad, (c["at"][0], c["at"][1], c["rot"]))
-                        out.append((round(g.centroid.x, 4), round(g.centroid.y, 4), float(pad["drill"])))
+                        d = max(pad["slot"]) if pad.get("slot") else pad["drill"]   # (a slot: kept clear as its length)
+                        out.append((round(g.centroid.x, 4), round(g.centroid.y, 4), float(d)))
         self._npth_memo = (key, out)
         return list(out)
 
     def all_holes(self) -> List[Tuple[float, float, float]]:
         """the mounting holes and the footprints' non-plated holes: every bare hole in the board"""
         return list(self.holes) + self.npth()
+
+    def cutout(self, poly: Sequence[Tuple[float, float]]):
+        """a hole cut through the board inside its outline (a window, a slot for a cable): routed like the edge"""
+        from shapely.geometry import Polygon
+        self.outline = self.outline.difference(Polygon(poly))
+
+    def drill_list(self) -> List[Dict]:
+        """every drill in the board: {"name", "at", "d", "plated", "slot", "geom"}; ``slot`` is None for a round hole,
+        else its centre line ((x0, y0), (x1, y1)) with ``d`` its width; ``geom`` the hole's shape"""
+        from shapely.geometry import LineString, Point
+        out = [{"name": f"via {v['net']}", "at": tuple(v["at"]), "d": v["drill"], "plated": True, "slot": None}
+               for v in self.vias] + \
+              [{"name": "hole", "at": (x, y), "d": d, "plated": False, "slot": None} for x, y, d in self.holes]
+        for ref, c in self.comps.items():
+            for num, lst in c["pads"].items():
+                for pad in lst:
+                    if not pad["drill"]:
+                        continue
+                    place = (c["at"][0], c["at"][1], c["rot"])
+                    plated = bool(pad["layers"]) and pad.get("kind") != "np_thru_hole"
+                    d = dict(name=f"{ref} pad {num}" if plated else "hole", plated=plated, slot=None)
+                    if pad.get("slot") and abs(pad["slot"][0] - pad["slot"][1]) > 1e-6:
+                        g = _pad_poly({**pad, "shape": "oval", "size": pad["slot"], "prims": []}, place)
+                        q = list(g.minimum_rotated_rectangle.exterior.coords)
+                        a, b = max(((q[0], q[1]), (q[1], q[2])), key=lambda e: math.dist(*e))
+                        L, w = math.dist(a, b), min(pad["slot"])
+                        ux, uy = (b[0] - a[0]) / L * (L - w) / 2, (b[1] - a[1]) / L * (L - w) / 2
+                        cx, cy = g.centroid.x, g.centroid.y
+                        d.update(at=(cx, cy), d=w, slot=((cx - ux, cy - uy), (cx + ux, cy + uy)))
+                    else:
+                        g = _pad_poly(pad, place)
+                        d.update(at=(g.centroid.x, g.centroid.y), d=float(pad["drill"]))
+                    out.append(d)
+        for d in out:
+            d["geom"] = (LineString(d["slot"]) if d["slot"] else Point(d["at"])).buffer(d["d"] / 2, 16)
+        return out
 
     def keepout(self, poly: Sequence[Tuple[float, float]], layers: str = "FB", why: str = ""):
         """a copper-free zone (under an antenna, a high-voltage gap): pours are carved round it, the router stays out
@@ -1426,35 +1467,36 @@ class Board:
                              f"({amps} A, {self.oz_of(pz['layer'])} oz): widen it or add the other layer in parallel")
         # drills keep the hole gap apart, wall to wall (a via drilled into a pin's hole, or a web too thin to survive)
         from shapely.geometry import Point as _Pt
-        holes_ = [(f"via {v['net']}", _Pt(v["at"]), v["drill"]) for v in self.vias] + \
-                 [(f"{ref} pad {num}", g.centroid, d) for ref, num, L, g, d in pads if d and L == "F"] + \
-                 [("hole", _Pt(x, y), d) for x, y, d in self.all_holes()]
+        drl = self.drill_list()                          # (each hole as its shape: a slot is not a round hole)
+        holes_ = [(h["name"], _Pt(h["at"]), h["geom"], h) for h in drl]
         tight = []
         from shapely.strtree import STRtree as _STRh       # (the pairs within reach only: every pair was 0.4 M
-        _ht = _STRh([p for _, p, _ in holes_]) if holes_ else None    # distances on a 56-part board)
-        _reach = self.hole_gap + max((d for _, _, d in holes_), default=0.0)
+        _ht = _STRh([g for _, _, g, _ in holes_]) if holes_ else None    # distances on a 56-part board)
         for i in range(len(holes_)):
-            for j in sorted(int(j) for j in _ht.query(holes_[i][1], predicate="dwithin", distance=_reach)):
+            for j in sorted(int(j) for j in _ht.query(holes_[i][2], predicate="dwithin", distance=self.hole_gap)):
                 if j <= i:
                     continue
-                (na, pa, da), (nb, pb, db) = holes_[i], holes_[j]
-                gap = pa.distance(pb) - da / 2 - db / 2
+                (na, pa, ga, ha), (nb, pb, gb, hb) = holes_[i], holes_[j]
+                if not ha["slot"] and not hb["slot"]:    # (round ones exactly; a slot by its shape)
+                    gap = pa.distance(pb) - ha["d"] / 2 - hb["d"] / 2
+                else:
+                    gap = ga.distance(gb) - (ga.intersection(gb).area ** 0.5 if ga.intersects(gb) else 0.0)
                 if gap < self.hole_gap - 1e-6 and not (na == nb and pa.distance(pb) < 1e-6):
                     tight.append(f"{na} and {nb} drills {gap:.2f} mm apart at ({pa.x:.1f}, {pa.y:.1f}) "
                                  f"(keep {self.hole_gap} mm)")
         probs += tight[:20] + ([f"... and {len(tight) - 20} more drills too close"] if len(tight) > 20 else [])
-        hc = max(self.clear, HOLE_CLEAR)                      # copper keeps clear of every bare hole (KiCad's "hole
-        bare = self.all_holes()                               # clearance"): a track over a peg hole is cut by the drill
+        hc = max(self.clear, self.hole_clear)                 # copper keeps clear of every bare hole (KiCad's "hole
+        bare = [h for h in drl if not h["plated"]]            # clearance"): a track over a peg hole is cut by the drill
         if bare and (self.tracks or self.vias):
             from shapely.strtree import STRtree as _STh
             items_ = self.tracks + self.vias
             shp = [self._item_shape(it) for it in items_]
             th = _STh(shp)
-            for x, y, d in bare:
-                c = _Pt(x, y)
-                for i in th.query(c, predicate="dwithin", distance=d / 2 + hc - 1e-6):
+            for h in bare:
+                (x, y), hg = h["at"], h["geom"]
+                for i in th.query(hg, predicate="dwithin", distance=hc - 1e-6):
                     it = items_[int(i)]
-                    gap = shp[int(i)].distance(c) - d / 2
+                    gap = shp[int(i)].distance(hg)
                     probs.append(f"{'track' if 'pts' in it else 'via'} {it['net']} {max(gap, 0):.2f} mm from the bare "
                                  f"hole at ({x:.1f}, {y:.1f}) (keep {hc:.2f} mm)")
         inner = self.outline.buffer(-self.edge)               # copper keeps the edge gap from the routed edge
@@ -1468,7 +1510,7 @@ class Board:
             import numpy as _npe
             axes = _npe.array([_LS(it["pts"]) if "pts" in it else _Pt(it["at"]) for it in items], dtype=object)
             rad = _npe.array([it["w"] / 2 if "pts" in it else it["dia"] / 2 for it in items])
-            ok_ = shapely.contains(self.outline, axes) & ~shapely.dwithin(axes, self.outline.exterior,
+            ok_ = shapely.contains(self.outline, axes) & ~shapely.dwithin(axes, self.outline.boundary,
                                                                           rad + self.edge - 1e-6)
         for it, ok1 in zip(items, ok_ if items else []):
             if not ok1:
@@ -3382,26 +3424,39 @@ def export_step(board: Board, path: str, models: bool = True, z0: float = 0.0) -
     return path
 
 
-def _text_poly(txt: str, x: float, y: float, size: float, angle: float = 0.0):
-    """``txt`` as filled outline polygons (a sans font from matplotlib), ``size`` mm cap height, centred on (x, y),
-    turned ``angle`` degrees: silkscreen text a fab can print"""
+def _text_poly(txt: str, x: float, y: float, size: float, angle: float = 0.0, justify: str = "",
+               mirror: bool = False):
+    """``txt`` as filled outline polygons (a sans font from matplotlib), ``size`` mm cap height, on (x, y) as KiCad
+    anchors it (centred, or ``justify`` "left" / "right" / "top" / "bottom"; lines split at newlines), mirrored for
+    the bottom side, turned ``angle`` degrees: silkscreen text a fab can print"""
     from matplotlib.font_manager import FontProperties
     from matplotlib.textpath import TextPath
     from shapely import affinity
     from shapely.geometry import Polygon
     from shapely.ops import unary_union
-    tp = TextPath((0, 0), txt, size=size * 1.38, prop=FontProperties(family="DejaVu Sans", weight="bold"))
-    shape = None
-    for ring in tp.to_polygons():                        # rings alternate outline / hole: even-odd fill
-        if len(ring) < 3:
+    lines = []
+    for k, line in enumerate(txt.split("\n")):
+        tp = TextPath((0, 0), line or " ", size=size * 1.38, prop=FontProperties(family="DejaVu Sans", weight="bold"))
+        shape = None
+        for ring in tp.to_polygons():                    # rings alternate outline / hole: even-odd fill
+            if len(ring) < 3:
+                continue
+            p_ = Polygon(ring).buffer(0)
+            shape = p_ if shape is None else shape.symmetric_difference(p_)
+        if shape is None or shape.is_empty:
             continue
-        p_ = Polygon(ring).buffer(0)
-        shape = p_ if shape is None else shape.symmetric_difference(p_)
-    if shape is None or shape.is_empty:
+        x0, _, x1, _ = shape.bounds                      # (each line on the anchor's side, lines 1.62 x size apart)
+        dx = -x0 if "left" in justify else -x1 if "right" in justify else -(x0 + x1) / 2
+        lines.append(affinity.translate(shape, dx, -k * size * 1.62))
+    if not lines:
         return Polygon()
-    c = shape.envelope.centroid
-    shape = affinity.translate(shape, x - c.x, y - c.y)
-    return affinity.rotate(shape, angle, origin=(x, y)) if angle else shape
+    shape = unary_union(lines)
+    _, y0, _, y1 = shape.bounds
+    shape = affinity.translate(shape, 0, -y1 if "top" in justify else -y0 if "bottom" in justify else -(y0 + y1) / 2)
+    if mirror:
+        shape = affinity.scale(shape, -1, 1, origin=(0, 0))
+    shape = affinity.rotate(shape, angle, origin=(0, 0)) if angle else shape
+    return affinity.translate(shape, x, y)
 
 
 def _fp_silk(board: Board, ref: str):
@@ -3419,6 +3474,18 @@ def _fp_silk(board: Board, ref: str):
                         for x1, y1, x2, y2, w in footprint(c["fp"]).get("silk", [])])
 
 
+def _graphic(g):
+    """one of ``board.graphics`` (a logo's or a drawing's stroke or shape, imported from KiCad: {"layer", "pts", "w",
+    "closed", "fill"}) as shapely geometry"""
+    from shapely.geometry import LineString, Polygon
+    w = g.get("w") or 0.0
+    if g.get("closed") and g.get("fill") and len(g["pts"]) > 2:
+        p = Polygon(g["pts"]).buffer(0)
+        return p.buffer(w / 2, 8) if w > 0 else p
+    pts = g["pts"] + (g["pts"][:1] if g.get("closed") else [])
+    return LineString(pts).buffer(max(w, 0.1) / 2, 8) if len(pts) > 1 else Polygon()
+
+
 def silkscreen(board: Board, layer: str = "F"):
     """the silkscreen of one side as shapely geometry: each part's footprint silk lines (as KiCad draws them) and its
     reference designator where ``place_refs`` finds room, the board's own ``silk_text``; clipped clear of the pads
@@ -3429,10 +3496,11 @@ def silkscreen(board: Board, layer: str = "F"):
     for ref, at in place_refs(board).items():
         if at and board.comps[ref].get("side", "F") == layer:
             x, y, ang, size = at
-            geoms.append(_text_poly(ref, x, y, size, ang))
-    if layer == "F":
-        for txt, (x, y), size, ang in getattr(board, "silk_text", []):
-            geoms.append(_text_poly(txt, x, y, size, ang))
+            geoms.append(_text_poly(ref, x, y, size, ang, "", layer == "B"))
+    for txt, (x, y), size, ang, *on in getattr(board, "silk_text", []):     # (then the side, "B", and the justify)
+        if (on[0] if on else "F") == layer:
+            geoms.append(_text_poly(txt, x, y, size, ang, on[1] if len(on) > 1 else "", layer == "B"))
+    geoms += [_graphic(g) for g in getattr(board, "graphics", []) if g["layer"] == f"{layer}.SilkS"]
     silk = unary_union([g for g in geoms if not g.is_empty]) if geoms else None
     if silk is None or silk.is_empty:
         return silk
@@ -3502,7 +3570,8 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
         files.append(write(nm, ff, body))
     for L, nm, ff in (("F", "F_Mask.gts", "Soldermask,Top"), ("B", "B_Mask.gbs", "Soldermask,Bot")):
         body = []
-        pads = unary_union([g.buffer(0.05) for r, n, l, g, d in board.pad_shapes() if l == L] or [])
+        pads = unary_union([g.buffer(0.05) for r, n, l, g, d in board.pad_shapes() if l == L] +
+                           [_graphic(g) for g in getattr(board, "graphics", []) if g["layer"] == f"{L}.Mask"] or [])
         regions(pads, body)
         files.append(write(nm, ff, body))
     for L, nm, ff in (("F", "F_Silkscreen.gto", "Legend,Top"), ("B", "B_Silkscreen.gbo", "Legend,Bot")):
@@ -3521,18 +3590,14 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
             regions(unary_union(smd), body)
             files.append(write(nm, ff, body))
     body = ["%ADD10C,0.100000*%", "D10*"]
-    pts = list(board.outline.exterior.coords)
-    body.append(f"X{fmt(pts[0][0])}Y{fmt(pts[0][1])}D02*")
-    body += [f"X{fmt(x)}Y{fmt(y)}D01*" for x, y in pts[1:]]
+    for ring in [board.outline.exterior] + list(board.outline.interiors):   # (the edge and each cut-out)
+        pts = list(ring.coords)
+        body.append(f"X{fmt(pts[0][0])}Y{fmt(pts[0][1])}D02*")
+        body += [f"X{fmt(x)}Y{fmt(y)}D01*" for x, y in pts[1:]]
     files.append(write("Edge_Cuts.gm1", "Profile,NP", body))
     drills = {}
-    for r, n, l, g, d in board.pad_shapes():
-        if d and l == "F":
-            drills.setdefault(("PTH", d), []).append((g.centroid.x, g.centroid.y))
-    for v in board.vias:
-        drills.setdefault(("PTH", v["drill"]), []).append(v["at"])
-    for x, y, d in board.all_holes():                     # (the footprints' own bare holes too: USB-C pegs)
-        drills.setdefault(("NPTH", d), []).append((x, y))
+    for h in board.drill_list():                          # (the footprints' own bare holes too: USB-C pegs)
+        drills.setdefault(("PTH" if h["plated"] else "NPTH", round(h["d"], 3)), []).append(h)
     for kind in ("PTH", "NPTH"):
         tools = sorted(d for (k, d) in drills if k == kind)
         if not tools:
@@ -3540,7 +3605,9 @@ def export_gerbers(board: Board, out_dir: str) -> List[str]:
         lines = ["M48", "METRIC,TZ", f"; {kind}"] + [f"T{i + 1}C{d:.3f}" for i, d in enumerate(tools)] + ["%", "G05"]
         for i, d in enumerate(tools):
             lines.append(f"T{i + 1}")
-            lines += [f"X{x:.3f}Y{y:.3f}" for x, y in drills[(kind, d)]]
+            for h in drills[(kind, d)]:                   # (a slot: routed from end to end, G85)
+                (x, y), (a, b) = h["at"], h["slot"] or (None, None)
+                lines.append(f"X{a[0]:.3f}Y{a[1]:.3f}G85X{b[0]:.3f}Y{b[1]:.3f}" if a else f"X{x:.3f}Y{y:.3f}")
         lines.append("M30")
         path = os.path.join(out_dir, f"{board.name}-{kind}.drl")
         with open(path, "w") as f:
@@ -3565,13 +3632,14 @@ def _sx_parse(text: str):
             done, cur = cur, stack.pop()
             cur.append(done)
         else:
-            cur.append(_Q(re.sub(r'\\(.)', r'\1', t[1:-1])) if t.startswith('"') else t)
+            cur.append(_Q(re.sub(r'\\(.)', lambda m: "\n" if m.group(1) == "n" else m.group(1), t[1:-1]))
+                       if t.startswith('"') else t)
     return cur[0] if cur else []
 
 
 def _sx_atom(v) -> str:
     if isinstance(v, _Q):
-        return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        return '"' + v.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n") + '"'
     if isinstance(v, bool):
         return "yes" if v else "no"
     if isinstance(v, (int, float)):
@@ -3679,6 +3747,7 @@ def place_refs(board: "Board", sizes: Sequence[float] = (1.0, 0.8), gap: float =
     if memo is not None and memo[0] == key:
         return dict(memo[1])
     got = _place_refs(board, sizes, gap)
+    got.update({r: c["label"] for r, c in board.comps.items() if "label" in c})   # (where the designer put them)
     board._refs_memo = (key, got)
     return dict(got)
 
@@ -3695,10 +3764,10 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
     crt = {r: board.courtyard(r) for r in board.comps}
     silk = {r: _fp_silk(board, r) for r in board.comps}
     taken = {"F": [], "B": []}
-    for txt, (x, y), size, ang in getattr(board, "silk_text", []):     # (the board's own text: a title)
+    for txt, (x, y), size, ang, *on in getattr(board, "silk_text", []):     # (the board's own text: a title)
         w, h = len(txt) * size * 0.78 + 0.2, size + 0.25
         w, h = (w, h) if abs(ang % 180) < 45 else (h, w)
-        taken["F"].append(box(x - w / 2, y - h / 2, x + w / 2, y + h / 2).buffer(gap))
+        taken[on[0] if on else "F"].append(box(x - w / 2, y - h / 2, x + w / 2, y + h / 2).buffer(gap))
     out: Dict[str, Optional[Tuple]] = {}
     order = sorted(board.comps, key=lambda r: crt[r].area if crt[r] is not None else 0.0)
     for r in order:
@@ -3863,8 +3932,11 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
         var = re.match(r"\$\{\w+\}/", str(old[0][1])).group(0) if old and re.match(r"\$\{\w+\}/", str(old[0][1])) \
             else "${KICAD9_3DMODEL_DIR}/"
         ox, oy, oz = c.get("model_offset") or (0.0, 0.0, 0.0)
-        fp.append(["model", _Q(var + c["model"]), ["offset", ["xyz", ox, oy, oz]], ["scale", ["xyz", 1, 1, 1]],
-                   ["rotate", ["xyz", 0, 0, 0]]])
+        if old and c["model"] == footprint(c["fp"]).get("model") and not (ox or oy or oz):   # (the footprint's own:
+            fp.append([old[0][0], _Q(var + c["model"])] + old[0][2:])                     #  its offset and turn kept)
+        else:
+            fp.append(["model", _Q(var + c["model"]), ["offset", ["xyz", ox, oy, oz]], ["scale", ["xyz", 1, 1, 1]],
+                       ["rotate", ["xyz", 0, 0, 0]]])
     if c.get("body") is not None and body_dir:              # a part drawn in the program: its STEP, in place of the
         import build123d as bd                               # library model, or beside a ``model`` named as well (a
                                                              # module drawn on its library sockets)
@@ -4268,13 +4340,26 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
                       ["fill", "no"], ["layer", _Q("Cmts.User")], ["uuid", _uuid(board.name, "hole", i, "c")]],
                      ["pad", _Q(""), "np_thru_hole", "circle", ["at", 0, 0, 0], ["size", d, d], ["drill", d],
                       ["layers", _Q("*.Cu"), _Q("*.Mask")], ["uuid", _uuid(board.name, "hole", i, "pad")]]])
-    pts = list(board.outline.exterior.coords)[:-1]
-    pcb_.append(["gr_poly", ["pts"] + [["xy", tx(x), ty(y)] for x, y in pts], ["stroke", ["width", 0.1], ["type", "solid"]],
-                 ["fill", "no"], ["layer", _Q("Edge.Cuts")], ["uuid", _uuid(board.name, "edge")]])
-    for i, (txt, (x, y), size, ang) in enumerate(getattr(board, "silk_text", [])):
-        pcb_.append(["gr_text", _Q(txt), ["at", tx(x), ty(y), ang], ["layer", _Q("F.SilkS")],
+    for k_, ring in enumerate([board.outline.exterior] + list(board.outline.interiors)):   # (the edge, the cut-outs)
+        pcb_.append(["gr_poly", ["pts"] + [["xy", tx(x), ty(y)] for x, y in list(ring.coords)[:-1]],
+                     ["stroke", ["width", 0.1], ["type", "solid"]], ["fill", "no"], ["layer", _Q("Edge.Cuts")],
+                     ["uuid", _uuid(board.name, "edge", *([k_] if k_ else []))]])
+    for i, (txt, (x, y), size, ang, *on) in enumerate(getattr(board, "silk_text", [])):
+        back = bool(on) and on[0] == "B"
+        just = (on[1].split() if len(on) > 1 else []) + (["mirror"] if back else [])
+        pcb_.append(["gr_text", _Q(txt), ["at", tx(x), ty(y), ang], ["layer", _Q("B.SilkS" if back else "F.SilkS")],
                      ["uuid", _uuid(board.name, "silk", i)],
-                     ["effects", ["font", ["size", size, size], ["thickness", round(size * 0.15, 3)]]]])
+                     ["effects", ["font", ["size", size, size], ["thickness", round(size * 0.15, 3)]]] +
+                     ([["justify"] + just] if just else [])])
+    for i, g in enumerate(getattr(board, "graphics", [])):       # (logos and drawings, as imported)
+        xy = ["pts"] + [["xy", tx(x), ty(y)] for x, y in g["pts"]]
+        st = ["stroke", ["width", g.get("w") or 0], ["type", "solid"]]
+        if g.get("closed"):
+            pcb_.append(["gr_poly", xy, st, ["fill", "yes" if g.get("fill") else "no"], ["layer", _Q(g["layer"])],
+                         ["uuid", _uuid(board.name, "art", i)]])
+        else:
+            pcb_ += [["gr_line", ["start", tx(a[0]), ty(a[1])], ["end", tx(b[0]), ty(b[1])], st, ["layer", _Q(g["layer"])],
+                      ["uuid", _uuid(board.name, "art", i, j)]] for j, (a, b) in enumerate(zip(g["pts"], g["pts"][1:]))]
     for i, t in enumerate(board.tracks):
         for j, (a, b) in enumerate(zip(t["pts"], t["pts"][1:])):
             if abs(a[0] - b[0]) < 1e-9 and abs(a[1] - b[1]) < 1e-9:
@@ -4298,7 +4383,8 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
         fill = _fractured(fills[key].intersection(zp))
         pcb_.append(["zone", ["net", netnum[pz["net"]]], ["net_name", _Q(pz["net"])], ["layer", LN[pz["layer"]]],
                      ["uuid", _uuid(board.name, "zone", i)], ["hatch", "edge", 0.5],
-                     ["priority", i],                     # (KiCad wants overlapping zones ranked; the fills hold anyway)
+                     ["priority", 0 if pz.get("fill") else i + 1],   # (KiCad ranks overlapping zones: a background
+                                                                     #  fill below the power pours it goes round)
                      ["connect_pads", "yes", ["clearance", board.clear]], ["min_thickness", MIN_FILL],
                      ["filled_areas_thickness", "no"],
                      ["fill", "yes", ["thermal_gap", 0.5], ["thermal_bridge_width", 0.5], ["island_removal_mode", 0]],
@@ -4324,11 +4410,16 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     pro = {"meta": {"filename": f"{board.name}.kicad_pro", "version": 3},
            "board": {"design_settings": {"rules": {"min_clearance": board.clear, "min_track_width": round(w_min, 4),
                                                    "min_via_diameter": v_min["dia"], "min_through_hole_diameter": d_min,
-                                                   "min_copper_edge_clearance": board.edge}}},
+                                                   "min_copper_edge_clearance": board.edge,
+                                                   "min_hole_clearance": board.hole_clear}}},
            "net_settings": {"meta": {"version": 4},
                             "classes": [{"name": "Default", "clearance": board.clear, "track_width": round(w_min, 4),
                                          "via_diameter": v_min["dia"], "via_drill": v_min["drill"],
                                          "priority": 2147483647}]}}
+    kr = getattr(board, "kicad_rules", None) or {}       # (an imported design's own rules and DRC severities kept)
+    pro["board"]["design_settings"]["rules"] = {**kr.get("rules", {}), **pro["board"]["design_settings"]["rules"]}
+    if kr.get("rule_severities"):
+        pro["board"]["design_settings"]["rule_severities"] = kr["rule_severities"]
     # each net's routed width as a net class (KiCad's interactive router and FreeRouting, through KiCad's
     # Specctra export, then route each net as wide as the harness does)
     widths = {n: round(board.net_width(n), 4) for n in board.nets}

@@ -139,14 +139,14 @@ def read(path: str, fp_dir: str):
     if not polys:
         raise ValueError(f"{path}: no closed board outline on Edge.Cuts")
     edge = polys[0]
-    if any(edge.contains(p.representative_point()) for p in polys[1:]):
-        notes.append("the outline's cut-outs were left out: the board is its outer edge")
+    cuts = [p for p in polys[1:] if Polygon(edge.exterior).contains(p.representative_point())
+            and not any(q.contains(p.representative_point()) for q in polys[1:] if q is not p and q.area > p.area)]
     X0, _, _, Y1 = edge.bounds
     tx = lambda x, y: (round(float(x) - X0, 6), round(Y1 - float(y), 6))     # (KiCad's page, y down -> board mm, y up)
     outline = [tx(x, y) for x, y in list(edge.exterior.coords)[:-1]]
     # the board's rules: the project's default clearance and edge gap, the stackup's copper
     pro = Path(path).with_suffix(".kicad_pro")
-    clear, edge_gap, hole_gap = 0.2, None, None
+    clear, edge_gap, hole_gap, hole_clear, kicad_rules = 0.2, None, None, None, {}
     if pro.exists():
         pj = json.loads(pro.read_text())
         cls = (pj.get("net_settings") or {}).get("classes") or []
@@ -154,6 +154,9 @@ def read(path: str, fp_dir: str):
         clear = float(d.get("clearance", clear))
         rules = ((pj.get("board") or {}).get("design_settings") or {}).get("rules") or {}
         edge_gap, hole_gap = rules.get("min_copper_edge_clearance"), rules.get("min_hole_to_hole")
+        hole_clear = rules.get("min_hole_clearance")
+        kicad_rules = {"rules": rules, "rule_severities":
+                       ((pj.get("board") or {}).get("design_settings") or {}).get("rule_severities") or {}}
     else:
         notes.append(f"no {pro.name} beside it: its rules unknown, clearance {clear} mm taken (set Board(clearance=...))")
     thick = float(_find(_find(tree, "general")[0], "thickness")[0][1]) if _find(tree, "general") else 1.6
@@ -168,6 +171,43 @@ def read(path: str, fp_dir: str):
         b.edge = float(edge_gap)
     if hole_gap is not None:
         b.hole_gap = float(hole_gap)
+    if hole_clear is not None:
+        b.hole_clear = float(hole_clear)
+    b.kicad_rules = kicad_rules
+    for p in cuts:
+        b.cutout([tx(x, y) for x, y in list(p.exterior.coords)[:-1]])
+    b.graphics = []
+
+    def art(g, place=None):                              # (a stroke or shape on the silkscreen or the mask: kept)
+        lay = str(_find(g, "layer")[0][1]) if _find(g, "layer") else ""
+        if lay not in ("F.SilkS", "B.SilkS", "F.Mask", "B.Mask"):
+            return False
+        k = str(g[0])[3:]
+        if k == "line":
+            pts, closed = [_xy(g, "start"), _xy(g, "end")], False
+        elif k == "arc":
+            pts, closed = _arc(_xy(g, "start"), _xy(g, "mid"), _xy(g, "end"), 0.05), False
+        elif k == "rect":
+            (x0, y0), (x1, y1) = _xy(g, "start"), _xy(g, "end")
+            pts, closed = [(x0, y0), (x1, y0), (x1, y1), (x0, y1)], True
+        elif k == "circle":
+            (cx, cy), (ex, ey) = _xy(g, "center"), _xy(g, "end")
+            r_ = math.hypot(ex - cx, ey - cy)
+            pts, closed = [(cx + r_ * math.cos(i / 64 * 2 * math.pi), cy + r_ * math.sin(i / 64 * 2 * math.pi))
+                           for i in range(64)], True
+        elif k == "poly":
+            pts, closed = _pts(g), True
+        else:                                            # (a bezier curve: not carried)
+            return False
+        if place is not None:                            # (a footprint's own: its frame -> the page)
+            ax, ay, a = place
+            pts = [(ax + x * math.cos(a) + y * math.sin(a), ay - x * math.sin(a) + y * math.cos(a)) for x, y in pts]
+        st = _find(g, "stroke")
+        w = _find(st[0], "width") if st else _find(g, "width")
+        fill = _find(g, "fill")
+        b.graphics.append({"layer": lay, "pts": [tx(x, y) for x, y in pts], "w": float(w[0][1]) if w else 0.0,
+                           "closed": closed, "fill": bool(fill) and str(fill[0][1]) in ("yes", "solid")})
+        return True
     # the parts, each on the footprint the board carries
     fp_root = Path(fp_dir)
     if str(fp_root) not in map(str, pcb.FP_DIRS):
@@ -190,8 +230,13 @@ def read(path: str, fp_dir: str):
                 b.hole(tx(float(at[1]) + lx * math.cos(a) + ly * math.sin(a),
                           float(at[2]) - lx * math.sin(a) + ly * math.cos(a)), d)
             continue
-        if not pads and not drills:
-            notes.append(f"{props.get('Reference', fp[1])} ({fp[1]}): no pads (a logo or a drawing): left out")
+        if not pads and not drills:                      # (a logo: its strokes and shapes, as board artwork)
+            at = _find(fp, "at")[0]
+            place = (float(at[1]), float(at[2]), math.radians(float(at[3]) if len(at) > 3 else 0.0))
+            kept = [art(g, place) for g in fp if isinstance(g, list) and g and str(g[0]).startswith("fp_")
+                    and g[0] != "fp_text"]
+            if not any(kept):
+                notes.append(f"{props.get('Reference', fp[1])} ({fp[1]}): nothing on the silkscreen or mask: left out")
             continue
         ref = props.get("Reference", "")
         if not ref or "*" in ref or ref in seen:
@@ -215,7 +260,20 @@ def read(path: str, fp_dir: str):
         mpn = next((low[k] for k in MPN_KEYS if k in low), "")
         lcsc = next((low[k] for k in LCSC_KEYS if k in low), "")
         x, y = tx(at[1], at[2])
-        b.place(ref, name, (x, y), round((rot - 180.0 if back else rot) % 360.0, 6), props.get("Value", ""), mpn, side="B" if back else "F", lcsc=lcsc)
+        label = False                                    # (its designator where the designer put it, or off)
+        for t in [p for p in _find(fp, "property") if len(p) > 2 and p[1] == "Reference"] + \
+                 [p for p in _find(fp, "fp_text") if len(p) > 2 and p[1] == "reference"]:
+            lay_ = str(_find(t, "layer")[0][1]) if _find(t, "layer") else ""
+            hid = ["hide", "yes"] in t or "hide" in t or any("hide" in e for e in _find(t, "effects"))
+            if "SilkS" in lay_ and not hid and _find(t, "at"):
+                la = _find(t, "at")[0]
+                lx, ly, a = float(la[1]), float(la[2]), math.radians(rot)
+                size = next((float(z[1]) for e in _find(t, "effects") for f in _find(e, "font") for z in _find(f, "size")), 1.0)
+                label = tx(float(at[1]) + lx * math.cos(a) + ly * math.sin(a), float(at[2]) - lx * math.sin(a) + ly * math.cos(a)) + \
+                    (float(la[3]) if len(la) > 3 and la[3] != "unlocked" else 0.0, size)
+            break
+        b.place(ref, name, (x, y), round((rot - 180.0 if back else rot) % 360.0, 6), props.get("Value", ""), mpn,
+                side="B" if back else "F", lcsc=lcsc, label=label)
         for p in pads:
             n = net_of(p)
             if n:
@@ -261,21 +319,37 @@ def read(path: str, fp_dir: str):
             pr = int(_find(z, "priority")[0][1]) if _find(z, "priority") else 0
             zones += [(pr, n, L, polys) for L in lays]
     for pr, n, L, polys in zones:                        # (a zone under a higher-priority one of another net is
-        over = [[(round(x, 4), round(y, 4)) for x, y in Polygon(q[0]).buffer(b.clear + 0.002, 8).exterior.coords[:-1]]
-                for p2, n2, L2, q in zones                #  filled round it, its clearance apart, as KiCad fills it)
-                if L2 == L and n2 != n and p2 > pr and Polygon(q[0]).intersects(Polygon(polys[0]))]
-        b.pour(n, L, polys[0], holes=(polys[1:] + over) or None)
+        area = Polygon(polys[0], polys[1:]).buffer(0)     #  filled round it, its clearance apart, as KiCad fills it)
+        over = [Polygon(q[0], q[1:]).buffer(b.clear + 0.002, 8) for p2, n2, L2, q in zones
+                if L2 == L and n2 != n and p2 > pr and Polygon(q[0], q[1:]).intersects(area)]
+        if over:
+            area = area.difference(unary_union(over))
+        for g in getattr(area, "geoms", [area]):
+            if g.geom_type == "Polygon" and g.area > 1e-3:
+                ring = lambda r_: [(round(x, 6), round(y, 6)) for x, y in r_.coords[:-1]]
+                b.pour(n, L, ring(g.exterior), holes=[ring(h) for h in g.interiors] or None)
     b.silk_text = []
     for t in _find(tree, "gr_text"):
-        if _find(t, "layer") and _find(t, "layer")[0][1] == "F.SilkS" and _find(t, "at"):
+        lay = _find(t, "layer")[0][1] if _find(t, "layer") else ""
+        if lay in ("F.SilkS", "B.SilkS") and _find(t, "at"):
             a = _find(t, "at")[0]
             size = next((float(s[1]) for e in _find(t, "effects") for f in _find(e, "font") for s in _find(f, "size")), 1.0)
-            b.silk_text.append((str(t[1]), tx(a[1], a[2]), size, float(a[3]) if len(a) > 3 else 0.0))
-    other = sum(1 for g in tree if isinstance(g, list) and g and str(g[0]).startswith("gr_") and g[0] != "gr_text"
-                and _find(g, "layer") and _find(g, "layer")[0][1] != "Edge.Cuts")
+            just = " ".join(str(w) for e in _find(t, "effects") for j in _find(e, "justify") for w in j[1:]
+                            if w != "mirror")
+            b.silk_text.append((str(t[1]), tx(a[1], a[2]), size, float(a[3]) if len(a) > 3 else 0.0) +
+                               ((("B" if lay == "B.SilkS" else "F"), just) if just or lay == "B.SilkS" else ()))
+    other = [g for g in tree if isinstance(g, list) and g and str(g[0]).startswith("gr_") and g[0] != "gr_text"
+             and _find(g, "layer") and _find(g, "layer")[0][1] != "Edge.Cuts" and not art(g)]
     if other:
-        notes.append(f"{other} board drawings (lines, shapes on silkscreen or other layers) left out")
+        notes.append(f"{len(other)} drawings on layers the board house does not make (fab, user, comments) left out")
     return b, {"placement": pcb.placement(b), "tracks": tracks, "vias": vias}, notes
+
+
+def artwork(board, path: str) -> None:
+    """the logos and the silkscreen and mask drawings saved by ``prometheus import`` (``board.graphics``, drawn into
+    the Gerbers and the KiCad board), and the design's own KiCad rules and DRC severities, back on ``board``"""
+    a = json.loads(Path(path).read_text())
+    board.graphics, board.kicad_rules = a["graphics"], a["kicad_rules"]
 
 
 def routes(board, path: str) -> List[str]:
@@ -305,6 +379,7 @@ def write(path: str, out_dir: str) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     b, rt, notes = read(path, str(out / "footprints"))
     (out / "routes.json").write_text(json.dumps(rt))
+    (out / "artwork.json").write_text(json.dumps({"graphics": b.graphics, "kicad_rules": b.kicad_rules}))
     r = lambda v: round(v, 6)
     L = [f'"""{b.name}: imported from {Path(path).name} (prometheus import).',
          "",
@@ -317,10 +392,15 @@ def write(path: str, out_dir: str) -> dict:
         L.append(f"b.edge = {b.edge}")
     if b.hole_gap != pcb.HOLE_GAP:
         L.append(f"b.hole_gap = {b.hole_gap}")
+    if b.hole_clear != pcb.HOLE_CLEAR:
+        L.append(f"b.hole_clear = {b.hole_clear}")
+    for ring in b.outline.interiors:
+        L.append(f"b.cutout({[(r(x), r(y)) for x, y in ring.coords[:-1]]!r})")
     L.append("")
     for ref, c in b.comps.items():
         kw = "".join(f", {k}={v!r}" for k, v in (("mpn", c["mpn"]), ("lcsc", c["lcsc"])) if v)
         kw += ', side="B"' if c["side"] == "B" else ""
+        kw += f", label={tuple(round(v, 4) for v in c['label'])!r}" if c.get("label") else ", label=False"
         L.append(f"b.place({ref!r}, {c['fp']!r}, ({r(c['at'][0])}, {r(c['at'][1])}), {r(c['rot'])}, {c['value']!r}{kw})")
     L.append("")
     for n, d in b.nets.items():
@@ -335,8 +415,9 @@ def write(path: str, out_dir: str) -> dict:
         L.append(f"b.keepout({k['poly']!r}, {k['layers']!r}, {k['why']!r})")
     if b.silk_text:
         L.append(f"b.silk_text = {b.silk_text!r}")
-    L += ["", 'PCB_ROUTE_PROBLEMS = kicad_import.routes(b, os.path.join(os.path.dirname(os.path.abspath(__file__)), '
-          '"routes.json"))', ""]
+    L += ["", "HERE = os.path.dirname(os.path.abspath(__file__))",
+          'kicad_import.artwork(b, os.path.join(HERE, "artwork.json"))   # logos, silkscreen and mask drawings, KiCad rules',
+          'PCB_ROUTE_PROBLEMS = kicad_import.routes(b, os.path.join(HERE, "routes.json"))', ""]
     (out / "board.py").write_text("\n".join(L))
     return {"script": str(out / "board.py"), "parts": len(b.comps), "nets": len(b.nets), "tracks": len(rt["tracks"]),
             "vias": len(rt["vias"]), "pours": len(b.pours), "notes": notes}

@@ -165,6 +165,7 @@ def board_data(b) -> dict:
     nets = {n: {"pins": [list(p) for p in v["pins"]], "amps": v.get("amps"), "width": b.net_width(n)}
             for n, v in b.nets.items()}
     return {"name": b.name, "outline": _poly(b.outline)[0][0] if not b.outline.is_empty else [],
+            "cutouts": _poly(b.outline)[0][1:] if not b.outline.is_empty else [],
             "bounds": list(b.outline.bounds), "layers": list(b.layers), "thickness": getattr(b, "thickness", 1.6),
             "comps": comps, "tracks": [{"net": t["net"], "layer": t["layer"], "pts": t["pts"], "w": t["w"]}
                                        for t in b.tracks],
