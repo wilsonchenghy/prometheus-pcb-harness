@@ -1,4 +1,6 @@
-# Zeus — AI PCB Harness
+<img src="media/prometheus-icon.png" width="72" alt="Prometheus">
+
+# Prometheus — AI PCB Harness
 
 Design printed circuit boards in Python, the way you would design them by hand: parts on real KiCad footprints, nets,
 routed copper and pours, then a first-order design review against IPC-2221 before anything goes to the fab.
@@ -30,7 +32,7 @@ What it does (`pcb.py`, its docstring has the details):
 - **Output**: a STEP of the assembled board (`export_step`, every part's KiCad 3D model by default) for the
   enclosure; Gerbers (copper, mask, paste for the stencil, silkscreen with the reference designators, outline) + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
   KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
-- **Footprints from a package drawing** (`fpgen.py`, `zeus footprint spec.json --drawing d.png`): the drawing's
+- **Footprints from a package drawing** (`fpgen.py`, `prometheus footprint spec.json --drawing d.png`): the drawing's
   dimensions in, the land pattern from IPC-7351B out (SOIC / SOP / SOT, QFP, QFN / DFN with exposed pad, BGA,
   through-hole grids, or the maker's own land table), checked and shown beside the drawing for a person to confirm.
   Within 0.1 mm of KiCad's own footprints for the same packages.
@@ -47,11 +49,11 @@ What it does (`pcb.py`, its docstring has the details):
 
 - **Parts and ERC**: `place(..., symbol="Driver_Motor:DRV8833PWP")` takes a part's KiCad symbol: nets name its
   pins by name, every pin is matched to a pad and every pad to a pin, and an ERC runs on the pin types;
-  `zeus part Lib:Symbol` shows a symbol's pins and footprint and holds them against the maker's datasheet's pin
+  `prometheus part Lib:Symbol` shows a symbol's pins and footprint and holds them against the maker's datasheet's pin
   table (`--datasheets` does it for every part of a run). The motor driver, CAN node, LED ring and blinker in
   `bench/` are wired this way.
 - **Viewer**: every run opens the board in your browser (the stage, the try it is on, about how long is left)
-  and leaves it open after, one tab per output folder (`--no-view`, or `CI` set, turns it off); `zeus view out/`
+  and leaves it open after, one tab per output folder (`--no-view`, or `CI` set, turns it off); `prometheus view out/`
   opens a finished run.
   Layout with layers to switch, an interactive 3D view (and KiCad's photoreal render when KiCad is installed), a
   the KiCad schematic as KiCad draws it, and every finding: click one and the board zooms to it.
@@ -61,7 +63,7 @@ parts cart, KiCad project, report; `--step` adds the 3D board; exit 0 when every
 
 ```
 python -m pcb_cli bench/esp32_sensor.py out/ --boards 10 --rules jlcpcb-2
-zeus bench/esp32_sensor.py out/          # the same, as installed by pip
+prometheus bench/esp32_sensor.py out/          # the same, as installed by pip
 ```
 
 Already have a KiCad schematic? Export its netlist (Eeschema: File > Export > Netlist) and give the board's size;
@@ -72,7 +74,7 @@ python -m pcb_cli examples/netlist/blinker_sch.net out/ --size 35x25 --at J1=4,1
 ```
 
 Setting up a machine or an agent's environment (KiCad, Java, FreeRouting, and what happens without them)?
-`docs/setup.md`; `zeus doctor` says what a machine has. Driving it from an agent? `AGENTS.md` gives the loop (write the script, run with `--json`, fix the findings).
+`docs/setup.md`; `prometheus doctor` says what a machine has. Driving it from an agent? `AGENTS.md` gives the loop (write the script, run with `--json`, fix the findings).
 New here? `docs/getting-started.md` walks a board from nothing to an order; `docs/ordering.md` says which file
 goes where when you order. `python bench/run.py` builds and times
 every example board.
@@ -112,12 +114,12 @@ place big or dense boards yourself.
 **One command** (Python 3.10+):
 
 ```
-pip install "zeus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness"
-zeus setup        # adds FreeRouting (needs Java), then reports what the machine has
+pip install "prometheus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness"
+prometheus setup        # adds FreeRouting (needs Java), then reports what the machine has
 ```
 
 or `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/pcb-harness/main/install.sh | bash`, which does
-both. KiCad 9 (for KiCad's own DRC) is a system install: `zeus doctor` says whether it is there, and
+both. KiCad 9 (for KiCad's own DRC) is a system install: `prometheus doctor` says whether it is there, and
 `docs/setup.md` has the commands per OS. Everything beyond Python is optional; see the table there for what you
 get without it.
 
@@ -126,7 +128,7 @@ get without it.
 > Install https://github.com/wilsonchenghy/pcb-harness (follow its docs/setup.md), then design a board that ...
 
 In a Claude Code cloud session, add the repository to the session (or let the agent clone it). The repository
-carries a Claude Code skill (`.claude/skills/zeus`) and `AGENTS.md`, so the agent follows the harness's
+carries a Claude Code skill (`.claude/skills/prometheus`) and `AGENTS.md`, so the agent follows the harness's
 loop: check the machine, write the board script, run, fix the findings until clean. The agent will ask before
 installing KiCad (it needs root); approve it, or in auto mode switch to *Accept edits* first.
 

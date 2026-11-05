@@ -88,11 +88,11 @@ _BOX: Dict[str, Tuple[list, dict]] = {}
 
 def box_symbol(ref: str, c: dict) -> str:
     """a box symbol made for a part from its own pads (KiCad has none for it, and its pads are not numbered 1..n,
-    as a USB-C's A5 / B6): each pad a passive pin named by its number, half down each side; "Zeus:<footprint>"
+    as a USB-C's A5 / B6): each pad a passive pin named by its number, half down each side; "Prometheus:<footprint>"
     """
     pads = sorted({p for p in c["pads"] if p}, key=lambda p: (re.sub(r"\d", "", p), int(re.sub(r"\D", "", p) or 0), p))
     fp = re.sub(r"[^A-Za-z0-9_.-]", "_", c["fp"].split(":")[-1])
-    name = f"Zeus:{fp}"
+    name = f"Prometheus:{fp}"
     if name in _BOX:
         return name
     half = (len(pads) + 1) // 2
@@ -120,7 +120,7 @@ def box_symbol(ref: str, c: dict) -> str:
             ["symbol", _Q(fp + "_0_1"), ["rectangle", ["start", body[0], body[1]], ["end", body[2], body[3]],
                                          ["stroke", ["width", 0.254], ["type", "default"]], ["fill", ["type", "background"]]]],
             ["symbol", _Q(fp + "_1_1")] + nodes]
-    _BOX[name] = (node, {"name": name, "lib": "Zeus", "footprint": c["fp"], "datasheet": "", "description": "",
+    _BOX[name] = (node, {"name": name, "lib": "Prometheus", "footprint": c["fp"], "datasheet": "", "description": "",
                          "value": fp, "pins": pins, "body": [body]})
     return name
 

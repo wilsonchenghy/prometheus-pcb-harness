@@ -223,7 +223,7 @@ function codeCard(t) {
     ["b.net(", "\"3V3\", [...], amps=0.3)"],
     ["b.pour(", "\"GND\", \"B\", outline)"],
     ["", ""],
-    ["$ ", "zeus board.py out/ --json --view"],
+    ["$ ", "prometheus board.py out/ --json --view"],
   ];
   const shown = (t - 4.9) * 115;                           // characters typed
   let acc = 0;
@@ -303,7 +303,7 @@ function agentLoop(t) {
   if (k <= 0) return;
   caption(t, 38.6, 44.4, "BUILT FOR AI AGENTS", "Run. Read the findings. Fix. Repeat.", "Every finding comes back as data: kind, pins, location, a hint.");
   const cx = 560, cy = 640, R = 190;
-  const steps = ["write board.py", "zeus --json", "read findings", "change the design"];
+  const steps = ["write board.py", "prometheus --json", "read findings", "change the design"];
   const spin = ease(span(t, 39.2, 43.6)) * Math.PI * 2;
   g.save(); g.globalAlpha = k;
   g.strokeStyle = C.line; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.stroke();
@@ -547,7 +547,7 @@ function title(t) {
   g.fillStyle = vg; g.fillRect(0, 0, W, H);
   const ck = ease(span(t, 2.2, 3.4));
   if (ck > 0) {
-    copperText("Zeus", W / 2, 590, 230, ck, { glint: span(t, 3.3, 4.6), track: -4 });
+    copperText("Prometheus", W / 2, 590, 230, ck, { glint: span(t, 3.3, 4.6), track: -4 });
     const sk = easeOut(span(t, 3.2, 3.9));
     silk("AI PCB HARNESS  ·  FROM A PARTS LIST TO A BOARD YOU CAN ORDER", W / 2, 690, 26, sk, { track: 6 });
     silk("REV 1.0", 140, 1010, 20, sk * 0.8, { align: "left" });
@@ -575,7 +575,7 @@ function endCard(t) {
   });
   g.restore();
   const ck = ease(span(t, 44.6, 45.6));
-  copperText("Zeus", W / 2, 470, 190, ck, { glint: span(t, 45.4, 46.6), track: -3 });
+  copperText("Prometheus", W / 2, 470, 190, ck, { glint: span(t, 45.4, 46.6), track: -3 });
   const sk = easeOut(span(t, 45.4, 46.1));
   silk("PARTS IN.  GERBERS, BOM AND A PARTS CART OUT.  CHECKED BY KICAD.", W / 2, 548, 22, sk, { track: 5 });
   const bk = easeOut(span(t, 45.9, 46.6));
@@ -583,7 +583,7 @@ function endCard(t) {
   g.strokeRect(W / 2 - 700, 620, 1400, 110);
   g.fillStyle = SILK; g.beginPath(); g.arc(W / 2 - 676, 644, 6, 0, 7); g.fill();
   g.restore();
-  text("pip install \"zeus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness\"", W / 2, 687, 27,
+  text("pip install \"prometheus-pcb @ git+https://github.com/wilsonchenghy/pcb-harness\"", W / 2, 687, 27,
        { align: "center", mono: true, weight: 500, color: SILK, alpha: bk });
   silk("J1  INSTALL", W / 2 - 700, 606, 18, bk, { align: "left" });
   const fk = easeOut(span(t, 46.5, 47.2));
@@ -591,12 +591,12 @@ function endCard(t) {
 }
 
 let LAYER = null;
-// 07: the viewer - the run in a browser: layout, 3D, every pin to its pad (screenshots of zeus view)
+// 07: the viewer - the run in a browser: layout, 3D, every pin to its pad (screenshots of prometheus view)
 const VIEWS = [["view_layout", "LAYOUT"], ["view_3d", "3D  ·  KICAD MODELS"], ["view_parts", "PARTS  ·  PIN TO PAD"]];
 function viewer(t) {                                      // t: 0 .. VIEW
   const k = fadeWindow(t, 0, VIEW, 0.6, 0.6);
   if (k <= 0) return;
-  caption(t, 0, VIEW, "SEE IT", "Watch it in your browser.", "zeus view out/: the board as made, in 3D, every pin to its pad.");
+  caption(t, 0, VIEW, "SEE IT", "Watch it in your browser.", "prometheus view out/: the board as made, in 3D, every pin to its pad.");
   const w = 1100, h = Math.round(w * 880 / 1440), x = (W - w) / 2, y = 296 + 18 * (1 - easeOut(span(t, 0, 0.9)));
   g.save(); g.globalAlpha = k;
   g.shadowColor = "rgba(0,0,0,0.55)"; g.shadowBlur = 60; g.shadowOffsetY = 24;
@@ -605,7 +605,7 @@ function viewer(t) {                                      // t: 0 .. VIEW
   g.fillStyle = "#e3e8ed"; g.beginPath(); g.roundRect(x, y - 40, w, 40, [12, 12, 0, 0]); g.fill();
   ["#d9dee3", "#d9dee3", "#d9dee3"].forEach((col, i) => { g.fillStyle = col; g.beginPath(); g.arc(x + 24 + i * 20, y - 20, 6, 0, 7); g.fill(); });
   g.fillStyle = "#ffffff"; g.beginPath(); g.roundRect(x + w / 2 - 190, y - 31, 380, 22, 6); g.fill();
-  text("127.0.0.1:8765  ·  Zeus", x + w / 2, y - 15, 14, { mono: true, color: "#5a6774", align: "center" });
+  text("127.0.0.1:8765  ·  Prometheus", x + w / 2, y - 15, 14, { mono: true, color: "#5a6774", align: "center" });
   g.save(); g.beginPath(); g.rect(x, y, w, h); g.clip();
   VIEWS.forEach(([key, label], i) => {                    // each view 2.2 s, crossfading, a slow push in
     const a = 0.5 + i * 2.2, vk = i === 0 ? 1 - span(t, a + 2.0, a + 2.5) : fadeWindow(t, a, a + 2.5 + (i === 2 ? 2 : 0), 0.5, 0.5);
