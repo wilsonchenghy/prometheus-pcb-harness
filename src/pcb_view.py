@@ -74,7 +74,7 @@ class Progress:
         d = self.d
         if d["done"]:
             return 0.0
-        export = 2.0
+        export = 5.0 + 0.15 * d.get("parts", 10)           # (Gerbers, KiCad project, schematic, KiCad's DRC)
         if d["stage"] in ("place+route", "place", "route"):
             times = d["try_times"]
             t_try = (sum(times) / len(times)) if times else 3.0 + 0.3 * d.get("parts", 10)
@@ -84,7 +84,8 @@ class Progress:
             batches = 0 if left == 0 else (1 if d["tries_done"] == 0 else math.ceil(left / w))
             if d["tries_done"] == 0:               # (the first try runs alone; the rest only if it is not clean)
                 started = time.time() - self.t0 - (d["stages"][-1]["start"] if d["stages"] else 0)
-                return max(0.5, t_try - started) + export
+                return None if started > t_try else t_try - started + export   # (past the guess: unknown,
+                                                                                #  not a number that stops counting)
             return batches * t_try + export
         if d["stage"] in ("check", "critic"):
             return export
