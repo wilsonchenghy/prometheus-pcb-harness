@@ -2,10 +2,13 @@
 schematic sheets. Some fetch KiCad footprints on first run (cached in ~/.cache/prometheus/parts)."""
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+os.environ["CI"] = "1"   # (no viewer tabs from the test runs)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -1071,6 +1074,8 @@ def test_cli_stages(tmp_path):
     pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "a"), "--kicad-drc", "off", "--router", "harness"])
     r = json.load(open(tmp_path / "a" / "result.json"))
     assert r["stage"] == "all" and "gerbers" in r["files"] and r["parts"] == 8
+    size = [c for c in r["critic"] if c["kind"] == "size"]      # (8 small parts on 35 x 25 mm: too much board)
+    assert size and size[0]["severity"] == "warning"
 
 
 def test_tune_pairs_lengthens_the_shorter_net():
