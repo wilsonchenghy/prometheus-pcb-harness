@@ -10,7 +10,7 @@ import pytest
 
 os.environ["CI"] = "1"   # (no viewer tabs from the test runs)
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 
 def test_pcb_board_routes_and_checks():
@@ -1474,7 +1474,7 @@ def test_every_rule_says_why_it_matters():
     import critic
     import pcb_cli
     here = Path(__file__).resolve().parent.parent
-    kinds = set(re.findall(r'_note\("\w+", "([\w ]+)"', (here / "critic.py").read_text()))
+    kinds = set(re.findall(r'_note\("\w+", "([\w ]+)"', (here / "src" / "critic.py").read_text()))
     kinds |= {k for k, _, _ in pcb_cli.HINTS}
     missing = sorted(k for k in kinds if not critic.WHY.get(k) and k not in ("parts", "net", "placement"))
     assert missing == []

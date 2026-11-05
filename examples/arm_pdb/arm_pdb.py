@@ -26,7 +26,7 @@ import math
 import os
 import sys
 
-sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."), os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), os.path.dirname(os.path.abspath(__file__))]
+sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src"), os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), os.path.dirname(os.path.abspath(__file__))]
 from pcb import Board, route, cached_route
 from pcb_bodies import xt30pw_body, xt90pw_body, brick_fuse_body
 

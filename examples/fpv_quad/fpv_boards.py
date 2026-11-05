@@ -9,7 +9,7 @@ import math
 import os
 import sys
 
-sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")]
+sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src")]
 from build123d import *
 from pcb import Board, route, cached_route, route_jobs, repair
 from vendor_parts import kicad
