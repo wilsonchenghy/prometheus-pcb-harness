@@ -26,6 +26,13 @@ read the findings, and edit the script until the run is clean.
 
 5. **Edit and run again.** Routes are cached per design, so a run after a small edit only re-routes what moved.
 
+## LCSC numbers
+
+A full run looks up an LCSC number (JLCPCB assembly) for every part without one: the MPN itself, else a resistor's
+exact value at 1 % or a capacitor's value at no less than its voltage, in the footprint's size; basic parts first,
+always in stock. It prints what it found and `result.json` lists it under `lcsc_auto`; a part it could not match
+stays blank (the critic lists it): give that one an MPN or `lcsc=`. `--no-lcsc` skips it (it is off when `CI` is set).
+
 ## Parts by symbol: pins by name, checked both ways, and an ERC
 
 Place a chip with its KiCad symbol and wire it by pin name, not by remembered pin numbers:

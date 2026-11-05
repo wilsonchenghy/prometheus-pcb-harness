@@ -267,6 +267,8 @@ def main(argv=None) -> int:
                     "pins against the datasheet's pin table (fetched once, then cached)")
     ap.add_argument("--view", action="store_true", help="serve the viewer from this run and wait for Ctrl-C at the end "
                     "(by default the viewer opens on its own in the background; 'zeus view OUT' later)")
+    ap.add_argument("--no-lcsc", action="store_true", help="do not look up LCSC numbers for parts without one "
+                    "(JLCPCB's catalogue; also off when CI is set)")
     ap.add_argument("--no-view", action="store_true", help="do not open the viewer (also off when CI is set)")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
@@ -275,6 +277,8 @@ def main(argv=None) -> int:
     import json
     import critic
     spec = critic.load_spec(a.spec) if a.spec else {}
+    if a.size and "size_mm" not in spec:                 # (a size given on the command line is the user's: kept)
+        spec["size_mm"] = [float(v) for v in a.size.lower().split("x")]
     os.makedirs(a.out, exist_ok=True)
     import pcb_view
     prog = pcb_view.Progress(a.out, a.script)
@@ -337,6 +341,15 @@ def main(argv=None) -> int:
             print(f"tidied: {n_} via{'s' if n_ > 1 else ''} that joined nothing")
     if stage in ("place", "route", "all") and timings:
         save_state(b, a.out, key)
+    lcsc_auto = {}
+    if stage in ("export", "all") and not a.no_lcsc and not os.environ.get("CI"):   # (JLCPCB assembly: a C-number each)
+        import parts
+        try:
+            lcsc_auto = parts.fill_lcsc(b, a.boards)
+        except OSError as e:
+            print(f"LCSC lookup skipped: {e}", file=sys.stderr)
+        if lcsc_auto:
+            print(f"LCSC numbers found for {len(lcsc_auto)} parts: " + ", ".join(f"{r} {n}" for r, n in lcsc_auto.items()))
     t = time.perf_counter()
     prog.stage("critic")
     notes = critic.review(b, spec)
@@ -417,7 +430,7 @@ def main(argv=None) -> int:
               "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),
                                                           ("kicad", kchk), ("schematic", schk))
                            for p in ps],
-              "critic": notes,
+              "critic": notes, "lcsc_auto": lcsc_auto,
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)
