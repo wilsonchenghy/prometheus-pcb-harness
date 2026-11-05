@@ -980,9 +980,10 @@ async function loadAll() {
   drawHeader(); drawLayers(); drawNets(); drawChecks(); drawRun(); drawFiles(); drawLayout(); fitLayout();
   if (activeView() === "schem") drawSchem(); if (activeView() === "parts") drawParts(); if (threeReady) build3d();
 }
-let wasRunning = false;
+let wasRunning = false, snap = null;
 async function poll() {
   P = await getJ("/api/progress"); drawHeader();
+  if (P && !P.done && P.snap !== snap) { snap = P.snap; if (snap) await loadAll(); }   // (each stage's board as it lands)
   if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; await loadAll(); }
   setTimeout(poll, P && !P.done ? 1000 : 4000);
 }

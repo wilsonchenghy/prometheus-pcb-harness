@@ -261,8 +261,9 @@ def main(argv=None) -> int:
     ap.add_argument("--router", choices=("auto", "freerouting", "harness"), default="auto",
                     help="auto (FreeRouting when Java and its jar are installed, else the built-in router; default), "
                          "freerouting, or harness")
-    ap.add_argument("--stage", choices=("critic", "place", "route", "check", "export", "all"), default="all",
-                    help="run one stage: critic (the design review, instant), place (place what has no position), "
+    ap.add_argument("--stage", choices=("schematic", "critic", "place", "route", "check", "export", "all"), default="all",
+                    help="run one stage: schematic (the schematic, shown in the viewer, then stop: for the engineer's "
+                         "go before any layout), critic (the design review, instant), place (place what has no position), "
                          "route (place and route, then the checks), check (the checks on the board as the script "
                          "left it), export (the order files and KiCad's DRC, no routing), all (default)")
     ap.add_argument("--spec", help="a requirements file (JSON: size_mm, layers, house, nets, pairs, near, edge, holes, "
@@ -305,7 +306,19 @@ def main(argv=None) -> int:
         print("note:", note)
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers  [stage: {a.stage}]")
     prog.d["parts"] = len(b.comps)
+    viewing = a.view or (not a.no_view and not os.environ.get("CI"))
     stage = a.stage
+    if viewing or stage == "schematic":                  # (the schematic and the parts at once: the engineer reviews
+        import kicad_sch                                 #  them while the layout is still being worked out)
+        sch = kicad_sch.write(b, os.path.join(a.out, "kicad"))
+        prog.snapshot(b, os.path.abspath(a.script))
+    if stage == "schematic":                             # (and stops there, for the engineer's go)
+        prog.finish(True)
+        print(f"schematic: {sch}")
+        if a.json:
+            sys.stdout = real_stdout
+            print(json.dumps({"stage": "schematic", "schematic": sch}, indent=1))
+        return 0
     if spec.get("near"):                                 # (the placer holds these parts within their distance)
         b.near = list(getattr(b, "near", [])) + [tuple(x) for x in spec["near"]]
     key = design_key(b)
@@ -346,6 +359,8 @@ def main(argv=None) -> int:
             print(f"tidied: {n_} via{'s' if n_ > 1 else ''} that joined nothing")
     if stage in ("place", "route", "all") and timings:
         save_state(b, a.out, key)
+        if viewing:                                      # (the placed and routed board, before the checks and export)
+            prog.snapshot(b, os.path.abspath(a.script))
     lcsc_auto = {}
     if stage in ("export", "all") and not a.no_lcsc and not os.environ.get("CI"):   # (JLCPCB assembly: a C-number each)
         import parts
