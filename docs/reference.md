@@ -199,9 +199,6 @@ Run the script to rebuild `out/`, or give it another folder. The KiCad DRC and r
 `examples/pcb_bodies.py` (3D bodies for parts KiCad has no model of) and `examples/export.py` are shared by the
 scripts. Pinouts marked ASSUMED in the scripts are from datasheets as remembered: verify before you order boards.
 
-`viewer/PCB.tsx` is a React component for showing a board's layers in a web app (kept for reference; it expects the
-host app's API).
-
 ## Contributing
 
 `CONTRIBUTING.md` (set up, the tests and benches to run, the principles); `CHANGELOG.md` for what each release
