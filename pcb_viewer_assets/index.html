@@ -304,6 +304,7 @@ $$("#seg button").forEach(b => b.onclick = () => {
   $(".app").classList.toggle("focus", b.dataset.v === "parts");
   const vi = $$("#seg button").indexOf(b) + 1; $("#vtag").innerHTML = `${b.textContent} · <b>0${vi}/04</b>`;          // (a part's figure gets the whole width)
   if (b.dataset.v === "parts") setTimeout(drawParts, 380);
+  $("#msg").textContent = "";                           // (one view's loading line never shows over another's)
   if (b.dataset.v === "v3d") init3d(); if (b.dataset.v === "schem") drawSchem(); if (b.dataset.v === "layout") fitLayout();
   if (b.dataset.v === "parts") drawParts();
 });
@@ -313,24 +314,34 @@ const activeView = () => $$(".view").find(v => v.classList.contains("on")).id;
 
 // ---------- pan / zoom ----------
 function panZoom(svg, onChange) {
-  const st = { vb: [0, 0, 100, 100] };
-  const apply = () => { svg.setAttribute("viewBox", st.vb.join(" ")); if (onChange) onChange(st.vb); };
-  st.set = (x, y, w, h, anim) => { const r = svg.getBoundingClientRect(), a = (r.width || 800) / (r.height || 600);
+  // a gesture moves the drawn picture on the GPU (a CSS transform from the drawn view to the live one) and redraws it
+  // sharp once the gesture rests: a viewBox change re-renders every path (a 3 MB sheet, 10 000 copper shapes) per event
+  const st = { vb: [0, 0, 100, 100] }; let base = null, box = null, idle = 0, raf = 0;
+  const rect = () => base ? box : (box = svg.getBoundingClientRect());
+  const draw = () => { base = null; svg.style.transform = ""; svg.style.willChange = ""; svg.setAttribute("viewBox", st.vb.join(" ")); if (onChange) onChange(st.vb); };
+  const apply = () => { svg.setAttribute("viewBox", st.vb.join(" ")); base = null; svg.style.transform = ""; if (onChange) onChange(st.vb); };
+  const live = () => { if (!base) { rect(); base = st.vb.slice(); svg.style.transformOrigin = "0 0"; svg.style.willChange = "transform"; }
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; const r = box, sn = r.width / st.vb[2], sb = r.width / base[2];
+      svg.style.transform = `translate(${(base[0] - st.vb[0]) * sn}px,${(base[1] - st.vb[1]) * sn}px) scale(${sn / sb})`;
+      if (onChange) onChange(st.vb); });
+    clearTimeout(idle); idle = setTimeout(draw, 150); };
+  st.set = (x, y, w, h, anim) => { const r = rect(), a = (r.width || 800) / (r.height || 600);
     if (w / h < a) { const nw = h * a; x -= (nw - w) / 2; w = nw; } else { const nh = w / a; y -= (nh - h) / 2; h = nh; }
     if (!anim) { st.vb = [x, y, w, h]; apply(); return; }
     const from = st.vb.slice(), to = [x, y, w, h], t0 = performance.now();
-    const step = (t) => { const k = Math.min(1, (t - t0) / 450), e = 1 - Math.pow(1 - k, 3); st.vb = from.map((v, i) => v + (to[i] - v) * e); apply(); if (k < 1) requestAnimationFrame(step); };
+    const step = (t) => { const k = Math.min(1, (t - t0) / 450), e = 1 - Math.pow(1 - k, 3); st.vb = from.map((v, i) => v + (to[i] - v) * e);
+      if (k < 1) { live(); requestAnimationFrame(step); } else { clearTimeout(idle); draw(); } };
     requestAnimationFrame(step); };
   st.zoom = (k) => { const [x, y, w, h] = st.vb; st.set(x + w * (1 - k) / 2, y + h * (1 - k) / 2, w * k, h * k, true); };
-  svg.addEventListener("wheel", e => { e.preventDefault(); const r = svg.getBoundingClientRect(), k = Math.exp(e.deltaY * 0.0015), [x, y, w, h] = st.vb;
+  svg.addEventListener("wheel", e => { e.preventDefault(); const r = rect(), k = Math.exp(e.deltaY * 0.0015), [x, y, w, h] = st.vb;
     const px = x + (e.clientX - r.left) / r.width * w, py = y + (e.clientY - r.top) / r.height * h;
-    st.vb = [px - (px - x) * k, py - (py - y) * k, w * k, h * k]; apply(); }, { passive: false });
+    st.vb = [px - (px - x) * k, py - (py - y) * k, w * k, h * k]; live(); }, { passive: false });
   let d = null;
   svg.addEventListener("pointerdown", e => { d = [e.clientX, e.clientY, ...st.vb]; svg.classList.add("drag"); svg.setPointerCapture(e.pointerId); });
-  svg.addEventListener("pointermove", e => { const r = svg.getBoundingClientRect();
+  svg.addEventListener("pointermove", e => { const r = rect();
     if (onChange) { const [x, y, w, h] = st.vb; const mx = x + (e.clientX - r.left) / r.width * w, my = y + (e.clientY - r.top) / r.height * h;
       $("#cx").textContent = (flipped ? -mx : mx).toFixed(2) + " mm"; $("#cy").textContent = (-my).toFixed(2) + " mm"; }
-    if (!d) return; st.vb = [d[2] - (e.clientX - d[0]) / r.width * d[4], d[3] - (e.clientY - d[1]) / r.height * d[5], d[4], d[5]]; apply(); });
+    if (!d) return; st.vb = [d[2] - (e.clientX - d[0]) / r.width * d[4], d[3] - (e.clientY - d[1]) / r.height * d[5], d[4], d[5]]; live(); });
   svg.addEventListener("pointerup", () => { d = null; svg.classList.remove("drag"); });
   return st;
 }
@@ -549,42 +560,17 @@ function drawFiles() {
 let SHEETS = null;
 async function drawSchem() {
   const svg = $("#ssvg"); if (!B || B.error) return;
-  if (SHEETS === null) { SHEETS = []; const r = await getJ("/api/schematic");
-    for (const url of (r && r.svgs) || []) { const t = await fetch(url, { cache: "no-store" }).then(x => x.ok ? x.text() : "").catch(() => "");
-      const d = t && new DOMParser().parseFromString(t, "image/svg+xml").documentElement; if (!d) continue;
-      const vb = (d.getAttribute("viewBox") || "").split(/[ ,]+/).map(Number);
-      SHEETS.push({ url, w: vb[2] || parseFloat(d.getAttribute("width")), h: vb[3] || parseFloat(d.getAttribute("height")) }); } }
-  svg.innerHTML = "";
-  if (SHEETS.length) { let y = 0;
-    for (const sh of SHEETS) { el("rect", { x: 0, y, width: sh.w, height: sh.h, fill: "#ffffff" }, svg);
-      el("image", { href: sh.url, x: 0, y, width: sh.w, height: sh.h }, svg); y += sh.h + 40; }
-    SZ.set(-20, -20, Math.max(...SHEETS.map(s => s.w)) + 40, y + 0); return; }
-  const rank = { ic: 0, connector: 1, inductor: 2, crystal: 2, electrolytic: 3, pot: 3, cap: 4, res: 5, diode: 5, led: 5, fuse: 5, switch: 6, pad: 7, other: 8 };
-  const comps = B.comps.filter(c => c.pads.length).slice().sort((a, b) => ((rank[a.kind] ?? 8) - (rank[b.kind] ?? 8)) || a.ref.localeCompare(b.ref, undefined, { numeric: true }));
-  const cols = Math.max(2, Math.ceil(Math.sqrt(comps.length * 0.9))), CW = 270; let x = 0, y = 0, rowH = 0, col = 0;
-  for (const c of comps) {
-    const pins = [...new Map(c.pads.map(p => [p.num, p])).values()].sort((a, b) => a.num.localeCompare(b.num, undefined, { numeric: true }));
-    const left = pins.slice(0, Math.ceil(pins.length / 2)), right = pins.slice(Math.ceil(pins.length / 2));
-    const h = Math.max(left.length, right.length) * 18 + 30, w = 96, gx = x + 86, gy = y, g = el("g", {}, svg);
-    el("rect", { x: gx, y: gy, width: w, height: h, fill: "#ffffff", stroke: "#18212b", "stroke-width": 1.2 }, g);
-    el("text", { x: gx, y: gy - 7, fill: "#18212b", "font-size": 12, "font-family": FONT, "font-weight": 600 }, g).textContent = c.ref;
-    el("text", { x: gx + w, y: gy - 7, fill: "#5a6774", "font-size": 10, "text-anchor": "end", "font-family": FONT }, g).textContent = (c.value || "").slice(0, 15);
-    const pin = (p, i, side) => {
-      const py = gy + 22 + i * 18, x0 = side < 0 ? gx : gx + w, x1 = x0 + side * 24, net = p.net || "";
-      el("line", { x1: x0, y1: py, x2: x1, y2: py, stroke: "#18212b", "stroke-width": 1.2, "data-net": net }, g);
-      el("text", { x: x0 - side * 5, y: py + 3.5, fill: "#8a95a1", "font-size": 9, "text-anchor": side < 0 ? "start" : "end", "font-family": FONT }, g).textContent = p.num;
-      if (!net) return;
-      const c_ = `hsl(${hue(net)},55%,34%)`, tw = net.length * 6.4 + 14, lx = side < 0 ? x1 - tw : x1;
-      const lb = el("rect", { x: lx, y: py - 8, width: tw, height: 16, fill: `hsla(${hue(net)},60%,50%,.1)`, stroke: `hsla(${hue(net)},55%,40%,.55)`, "data-net": net, style: "cursor:pointer" }, g);
-      el("text", { x: lx + tw / 2, y: py + 3.6, fill: c_, "font-size": 10, "text-anchor": "middle", "font-family": FONT, "font-weight": 500, "data-net": net, style: "pointer-events:none" }, g).textContent = net;
-      hover(lb, `<span class="m">${esc(net)}</span><br><span style="color:#a3a9b3">${B.nets[net].pins.map(p => p.join(".")).join("  ")}</span>`, net);
-      lb.addEventListener("click", () => selectNet(net));
-    };
-    left.forEach((p, i) => pin(p, i, -1)); right.forEach((p, i) => pin(p, i, 1));
-    rowH = Math.max(rowH, h); col++; x += CW; if (col >= cols) { col = 0; x = 0; y += rowH + 46; rowH = 0; }
-  }
-  const bb = svg.getBBox(); SZ.set(bb.x - 30, bb.y - 30, bb.width + 60, bb.height + 60);
-  if (selNet) focusNet(selNet, true);
+  if (SHEETS === null || !SHEETS.length) { const r = await getJ("/api/schematic"), got = [];   // (KiCad's own drawing only:
+    ((r && r.svgs) || []).forEach((url, i) => { const [w, h] = (r.sizes || [])[i] || [];          // no stand-in; its size
+      if (w && h) got.push({ url, w, h }); });                                                       // from the server)
+    SHEETS = got;
+    if (!got.length) { svg.innerHTML = ""; $("#msg").textContent = r && r.error ? r.error : "KiCad is drawing the schematic…";
+      if (!(r && r.error)) setTimeout(() => activeView() === "schem" && drawSchem(), 1500); return; } }
+  if (activeView() === "schem") $("#msg").textContent = "";
+  svg.innerHTML = ""; let y = 0;
+  for (const sh of SHEETS) { el("rect", { x: 0, y, width: sh.w, height: sh.h, fill: "#ffffff" }, svg);
+    el("image", { href: sh.url, x: 0, y, width: sh.w, height: sh.h }, svg); y += sh.h + 40; }
+  SZ.set(-20, -20, Math.max(...SHEETS.map(s => s.w)) + 40, y + 0);
 }
 
 // ---------- parts: every pin to its pad ----------
@@ -891,7 +877,8 @@ function tweenZ(o, from, to, dur, delay, ease) { const t0 = performance.now() + 
 const outBack = (k) => { const c = 1.4; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
 const outCubic = (k) => 1 - Math.pow(1 - k, 3);
 let MU = 0.001;                                          // (the model's units per mm: metres in KiCad's glTF)
-function dropIn(p, i) { const z0 = p.userData.z0, h = 16 * MU; p.position.y = z0 + h; tweenZ(p, z0 + h, z0, 750, 250 + i * 70, outBack); }
+function dropIn(p, i, n) { const z0 = p.userData.z0, h = 16 * MU; p.position.y = z0 + h;     // (all in by ~1 s, any part count)
+  tweenZ(p, z0 + h, z0, 450, 100 + i * Math.min(70, 500 / Math.max(n, 1)), outBack); }
 let exploded = false;
 $("#explode").onclick = () => {
   const m = root && root.children.find(o => !o.userData.simple && o.type !== "Mesh"); if (!m) return;
@@ -930,7 +917,7 @@ async function loadModel() {
     root.children.filter(o => o.userData.simple).forEach(o => root.remove(o));
     root.add(m); modelState = "kicad";
     MU = k === 1000 ? 0.001 : 1;
-    partsOf(m).forEach((p, i) => { p.userData.z0 = p.position.y; dropIn(p, i); });
+    const ps = partsOf(m); ps.forEach((p, i) => { p.userData.z0 = p.position.y; dropIn(p, i, ps.length); });
     $("#mtag").textContent = "KiCad 3D models"; $("#msg").textContent = "";
     place3d();
   }, undefined, () => bare("the model did not load"));
