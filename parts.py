@@ -360,3 +360,125 @@ def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
         out.append({"num": p["num"], "name": p["key"], "status": st, "datasheet": nums})
     page = (tables[0] + 1) if tables else None
     return {"datasheet": s["datasheet"], "page": page, "pins": out, "agree": agree, "total": len(out)}
+
+
+# ---- LCSC numbers: JLCPCB's own parts search (what its assembly order reads), for JLCPCB assembly ------------------
+JLCSEARCH = "https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/selectSmtComponentList"
+_SI = {"p": 1e-12, "n": 1e-9, "u": 1e-6, "µ": 1e-6, "m": 1e-3, "": 1.0, "R": 1.0, "k": 1e3, "K": 1e3, "M": 1e6}
+
+
+def _si(v: str) -> Optional[float]:
+    """'4u7' / '4.7u' / '53k6' / '330' / '4R7' -> the number (F or ohm)"""
+    m = re.fullmatch(r"(\d+)([pnuµmRkKM])(\d+)|(\d+(?:\.\d+)?)\s*([pnuµmRkKM]?)", v.strip())
+    if not m:
+        return None
+    if m.group(1):
+        return float(f"{m.group(1)}.{m.group(3)}") * _SI[m.group(2)]
+    return float(m.group(4)) * _SI[m.group(5)]
+
+
+def _fmt(x: float, unit: str) -> str:
+    for s, k in (("M", 1e6), ("k", 1e3), ("", 1.0), ("u", 1e-6), ("n", 1e-9), ("p", 1e-12)):
+        if x >= k * 0.999 and (unit == "F" or k >= 1):
+            return f"{x / k:.4g}{s}"
+    return f"{x:g}"
+
+
+def _jlc(q: str) -> List[dict]:
+    import json
+    import time
+    from vendor_parts import CACHE
+    f = CACHE / "lcsc" / (re.sub(r"[^\w.-]+", "_", q) + ".json")
+    if f.exists():
+        return json.loads(f.read_text())
+    body = json.dumps({"keyword": q, "currentPage": 1, "pageSize": 10}).encode()
+    for wait in (0, 2, 5):
+        time.sleep(wait)
+        try:
+            req = urllib.request.Request(JLCSEARCH, body, {"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                rows = json.loads(r.read())["data"]["componentPageInfo"]["list"] or []
+        except Exception:
+            continue
+        out = [{"lcsc": int(c["componentCode"].lstrip("C")), "mfr": c.get("componentModelEn") or "",
+                "package": c.get("componentSpecificationEn"), "description": c.get("describe") or "",
+                "stock": c.get("stockCount") or 0, "is_basic": c.get("componentLibraryType") == "base"} for c in rows]
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(out))
+        return out
+    raise OSError(f"JLCPCB search unavailable ({q})")
+
+
+def lcsc_match(comp: dict, found: List[dict], need: int = 1) -> Optional[dict]:
+    """the catalogue entry that is this part: the MPN itself; or, for a resistor / capacitor / LED with no MPN found,
+    the value (and a capacitor's voltage, at least the one asked) in the footprint's size. JLCPCB basic parts (no
+    feeder fee) first, then the most stock; never one with less stock than ``need``"""
+    fp = comp["fp"].split(":")[-1]
+    size = (re.search(r"_(\d{4})_\d{4}Metric", fp) or [None, None])[1]
+    mpn = (comp.get("mpn") or "").split()[-1].upper() if comp.get("mpn") else ""
+    ok = [c for c in found if (c.get("stock") or 0) >= need]
+    exact = [c for c in ok if mpn and c["mfr"].upper().replace("-", "") == mpn.replace("-", "")]
+    if exact:
+        return max(exact, key=lambda c: c["stock"])
+    val, kind = (comp.get("value") or "").split(), fp.split("_")[0]
+    if not val or not size:
+        return None
+    if kind in ("R", "C"):
+        x = _si(val[0].rstrip("FΩ"))
+        volts = next((float(v[:-1]) for v in val[1:] if re.fullmatch(r"\d+(\.\d+)?V", v)), 16.0 if kind == "C" else 0)
+        if x is None:
+            return None
+
+        def same(c):
+            d = c.get("description", "")
+            if c.get("package") != size:
+                return False
+            if kind == "R":
+                got = [_si(a + b) for a, b in re.findall(r"(\d+(?:\.\d+)?)([kKM]?)Ω", d)]
+                return any(g and abs(g - x) < x * 1e-3 for g in got) and "±1%" in d
+            got = [_si(a + b) for a, b in re.findall(r"(\d+(?:\.\d+)?)([pnuµm])F", d)]
+            vs = [float(v) for v in re.findall(r"(\d+(?:\.\d+)?)V\b", d)]
+            return any(g and abs(g - x) < x * 1e-3 for g in got) and vs and max(vs) >= volts and \
+                any(t in d for t in ("X7R", "X5R", "C0G", "NP0"))
+    elif kind == "LED":
+        def same(c):
+            return c.get("package") == size and val[0].lower() in c.get("description", "").lower()
+    else:
+        return None
+    hits = [c for c in ok if same(c)]
+    return max(hits, key=lambda c: (bool(c.get("is_basic")), c["stock"])) if hits else None
+
+
+def lcsc_query(comp: dict) -> List[str]:
+    """what to ask the catalogue for this part: its MPN, then its value in its size"""
+    fp = comp["fp"].split(":")[-1]
+    size = (re.search(r"_(\d{4})_\d{4}Metric", fp) or [None, None])[1]
+    qs = [comp["mpn"].split()[-1]] if comp.get("mpn") else []
+    val, kind = (comp.get("value") or "").split(), fp.split("_")[0]
+    if val and size and kind in ("R", "C"):
+        x = _si(val[0].rstrip("FΩ"))
+        if x is not None:
+            v = next((t for t in val[1:] if t.endswith("V")), "")
+            qs.append(f"{_fmt(x, 'R')}Ω {size} 1%" if kind == "R" else f"{_fmt(x, 'F')}F {v} {size}".replace("  ", " "))
+    elif val and size and kind == "LED":
+        qs.append(f"{val[0]} {size} LED")
+    return qs
+
+
+def fill_lcsc(board, boards: int = 5) -> Dict[str, str]:
+    """an LCSC number for every part without one (JLCPCB's catalogue, in stock for ``boards`` boards); the parts it
+    fills are marked ``lcsc_auto``. {ref: C-number found}; a part with no match keeps none (the critic lists it)"""
+    got: Dict[str, str] = {}
+    for ref, c in board.comps.items():
+        if c.get("lcsc"):
+            continue
+        for q in lcsc_query(c):
+            try:
+                hit = lcsc_match(c, _jlc(q), need=boards * 2)
+            except OSError:                                  # (this query unanswered: the next one, or none)
+                continue
+            if hit:
+                c["lcsc"], c["lcsc_auto"] = f"C{hit['lcsc']}", True
+                got[ref] = c["lcsc"]
+                break
+    return got

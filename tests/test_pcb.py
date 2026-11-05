@@ -1074,8 +1074,21 @@ def test_cli_stages(tmp_path):
     pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "a"), "--kicad-drc", "off", "--router", "harness"])
     r = json.load(open(tmp_path / "a" / "result.json"))
     assert r["stage"] == "all" and "gerbers" in r["files"] and r["parts"] == 8
-    size = [c for c in r["critic"] if c["kind"] == "size"]      # (8 small parts on 35 x 25 mm: too much board)
-    assert size and size[0]["severity"] == "warning"
+    assert not [c for c in r["critic"] if c["kind"] == "size"]   # (the blinker: 24 x 15 mm, no more than it needs)
+
+
+def test_critic_fails_a_board_far_larger_than_its_parts():
+    """no size_mm in the requirements: a board its parts barely cover is an error (the agent shrinks it), with the size
+    that would do; with size_mm given the enclosure decides and the check is the maximum only"""
+    import critic
+    from shapely.geometry import Polygon
+    sys.path.insert(0, str(Path(__file__).parent.parent / "bench"))
+    import blinker
+    b = blinker.build()
+    b.outline = Polygon([(0, 0), (60, 0), (60, 40), (0, 40)])
+    size = [n for n in critic.review(b) if n["kind"] == "size"]
+    assert size and size[0]["severity"] == "error" and "would do" in size[0]["text"]
+    assert not [n for n in critic.review(b, {"size_mm": [60, 40]}) if n["kind"] == "size"]
 
 
 def test_tune_pairs_lengthens_the_shorter_net():
@@ -1339,3 +1352,22 @@ def build():
     assert len(b.comps["U1"]["pads"]) == 8
     import pcb
     assert pcb.autoroute(b) == [] and b.check() == []
+
+
+def test_lcsc_match_takes_the_mpn_else_the_exact_value_in_stock():
+    """the catalogue entry is the part's MPN; else a resistor's exact value at 1 % / a capacitor's value at no less than
+    its voltage, in its footprint's size; basic parts first; never short of stock; nothing rather than a near miss"""
+    import parts
+    row = lambda n, mfr, pkg, d, stock=10000, basic=False: {"lcsc": n, "mfr": mfr, "package": pkg, "description": d,
+                                                             "stock": stock, "is_basic": basic}
+    r = {"fp": "Resistor_SMD:R_0603_1608Metric", "value": "10k2", "mpn": ""}
+    found = [row(1, "a", "0603", "100mW 2.2kΩ ±1% 0603"), row(2, "b", "0603", "100mW 10.2kΩ ±1% 0603", stock=5),
+             row(3, "c", "0603", "100mW 10.2kΩ ±1% 0603"), row(4, "d", "0402", "62mW 10.2kΩ ±1% 0402", basic=True)]
+    assert parts.lcsc_match(r, found, need=10)["lcsc"] == 3
+    c = {"fp": "Capacitor_SMD:C_1210_3225Metric", "value": "4u7 50V", "mpn": ""}
+    found = [row(5, "e", "1210", "4.7uF 25V X7R ±10% 1210", basic=True), row(6, "f", "1210", "4.7uF 50V X7R ±10% 1210")]
+    assert parts.lcsc_match(c, found)["lcsc"] == 6
+    assert parts.lcsc_match(c, found[:1]) is None
+    u = {"fp": "Package_SO:SOIC-8", "value": "TPS54360", "mpn": "TI TPS54360BDDAR"}
+    assert parts.lcsc_match(u, [row(7, "TPS54360DDAR", "SOIC-8", ""), row(8, "TPS54360BDDAR", "SOIC-8", "")])["lcsc"] == 8
+    assert parts.lcsc_query(r) == ["10.2kΩ 0603 1%"] and parts.lcsc_query(c) == ["4.7uF 50V 1210"]
