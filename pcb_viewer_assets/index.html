@@ -81,6 +81,7 @@ h4 { margin: 4px 0 10px; }
 .pane { display: none; padding: 14px 16px; overflow: auto; flex: 1; } .pane.on { display: block; }
 .issue { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 11px 12px; cursor: pointer; margin-bottom: -1px; background: #fff; border: 1px solid var(--line); transition: background .12s; }
 .issue:hover { background: var(--hover); }
+.issue .w { margin-top: 5px; font-size: 11.5px; line-height: 1.45; color: var(--text3); }
 .issue.sel { background: var(--tint); border-color: var(--blue); position: relative; z-index: 1; }
 .num { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font: 600 11px var(--mono); background: #ffecec; color: var(--red); }
 .issue.warn .num { background: #fbf1e3; color: var(--amber); } .issue.info .num { background: var(--hover); color: var(--text3); }
@@ -524,9 +525,10 @@ function drawChecks() {
       <path d="M22 33l7 7 13-15" fill="none" stroke="url(#ok)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <b>Ready to order</b>Design check, house rules${R.kicad_drc && R.kicad_drc.run ? " and KiCad's DRC" : ""} all pass.</div>`;
   list.forEach((f, i) => { const d = document.createElement("div"); d.className = "issue" + (f._sev === "warning" ? " warn" : ""); d.dataset.i = i;
-    d.innerHTML = `<div class="num">${i + 1}</div><div><div class="k"></div><div class="x"></div>${f.hint ? '<div class="h"></div>' : ""}</div>`;
+    d.innerHTML = `<div class="num">${i + 1}</div><div><div class="k"></div><div class="x"></div>${f.hint ? '<div class="h"></div>' : ""}${f.why ? '<div class="w"></div>' : ""}</div>`;
     d.querySelector(".k").textContent = (f.stage === "critic" ? "requirement" : f.stage + " check") + " · " + (f.kind || "");
     d.querySelector(".x").textContent = f.text; if (f.hint) d.querySelector(".h").textContent = f.hint;
+    if (f.why) d.querySelector(".w").textContent = "Why: " + f.why;
     d.onclick = () => openIssue(i); box.appendChild(d); });
   if (infos.length) { const h = document.createElement("h4"); h.textContent = "Notes"; h.style.marginTop = "14px"; box.appendChild(h);
     infos.forEach(n => { const d = document.createElement("div"); d.className = "issue info"; d.innerHTML = '<div class="num">i</div><div><div class="x"></div></div>'; d.querySelector(".x").textContent = n.text; box.appendChild(d); }); }

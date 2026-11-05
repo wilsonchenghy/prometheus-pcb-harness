@@ -76,8 +76,9 @@ HINTS = [
 
 
 def finding(stage: str, text: str) -> dict:
-    """a finding as data: its stage, kind, the parts / pins and the place it names, and what to change"""
+    """a finding as data: its stage, kind, the parts / pins and the place it names, what to change and why it matters"""
     import re
+    import critic
     kind, hint = "other", "read the text"
     for k, rx, h in HINTS:
         if re.search(rx, text):
@@ -85,7 +86,7 @@ def finding(stage: str, text: str) -> dict:
             break
     at = re.search(r"\((-?[\d.]+), (-?[\d.]+)\)", text)
     pins = sorted(set(re.findall(r"\b([A-Z][A-Z0-9_]*\d+[A-Z]?\.[A-Za-z0-9]+)\b", text)))
-    out = {"stage": stage, "kind": kind, "text": text, "pins": pins, "hint": hint}
+    out = {"stage": stage, "kind": kind, "text": text, "pins": pins, "hint": hint, "why": critic.WHY.get(kind, "")}
     if at:
         out["at"] = [float(at.group(1)), float(at.group(2))]
     return out

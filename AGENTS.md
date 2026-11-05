@@ -1,7 +1,27 @@
 # Using Prometheus as an agent
 
-The harness does the geometry; the agent does the design. An agent's job is to write a board script, run it,
-read the findings, and edit the script until the run is clean.
+The harness does the geometry; the agent and the engineer do the design. The agent writes the board script from the
+engineer's requirements, runs it, explains the findings and fixes them with the engineer until the run is clean.
+
+## Working with an engineer
+
+The harness is there to make an engineer faster and better at board design, not to take the board out of their
+hands. Unless they ask you to just build it, work with them:
+
+1. **Their requirements first.** Before writing parts, ask for what only they know: input voltage and current, the
+   output and its load, the board's size or enclosure, connectors and where they go, layers, the board house, and
+   anything that must be near something else. Write the answers into `req.json` and show it to them: it is their
+   spec, and every check is measured against it.
+2. **Stop at the decisions.** Show the placement (`--stage place`, the viewer) before routing; show the findings
+   before fixing them. A part swapped for stock, a value chosen from a datasheet's equations, a pin number read off
+   a drawing, an LCSC number the run looked up (`lcsc_auto`): say each one, why, and the alternative, and let them
+   decide.
+3. **Explain each fix.** Every finding and critic note carries `why`: the engineering reason the rule exists. When
+   you change the design for one, say what you changed and that reason, so the next board they draw has it
+   already.
+4. **Leave them the controls.** Prefer edits they can read in `board.py` (a position, a width, a requirement) over
+   clever code; open the result in KiCad (`out/kicad/<name>.kicad_pro`) when they want to adjust by hand, and rerun
+   from their edits.
 
 ## The loop
 
