@@ -72,6 +72,13 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
         if sorted((w, h))[0] > a + 1e-6 or sorted((w, h))[1] > b + 1e-6:
             notes.append(_note("error", "size", f"the board is {w:.1f} x {h:.1f} mm; the requirement is at most "
                                f"{spec['size_mm'][0]} x {spec['size_mm'][1]} mm", hint="shrink the outline"))
+    elif placed and board.comps:                      # no size given: no more board than the parts need
+        used = sum(g.area for g in map(board.courtyard, board.comps) if g is not None) / board.outline.area
+        if used < 0.15:                                # (the bench boards run 26-57 %)
+            k = (used / 0.35) ** 0.5
+            notes.append(_note("warning", "size", f"the parts cover {used:.0%} of the {w:.0f} x {h:.0f} mm board; "
+                               f"about {w * k:.0f} x {h * k:.0f} mm would do", hint="shrink the outline, or give size_mm "
+                               "in the requirements when the enclosure sets it"))
     if "layers" in spec and len(board.layers) != int(spec["layers"]):
         notes.append(_note("error", "layers", f"{len(board.layers)} copper layers; the requirement is {spec['layers']}",
                            hint="Board(..., layers=N)"))

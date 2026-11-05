@@ -3404,28 +3404,28 @@ def _text_poly(txt: str, x: float, y: float, size: float, angle: float = 0.0):
     return affinity.rotate(shape, angle, origin=(x, y)) if angle else shape
 
 
+def _fp_silk(board: Board, ref: str):
+    """one part's footprint silk strokes (as KiCad draws them), board mm"""
+    import math
+    from shapely.geometry import LineString
+    from shapely.ops import unary_union
+    c = board.comps[ref]
+    ax, ay = c["at"]
+    a = math.radians(c["rot"])
+    ca, sa = math.cos(a), math.sin(a)
+    mx = -1.0 if c.get("side", "F") == "B" else 1.0
+    tf = lambda px, py: (ax + px * mx * ca - py * sa, ay + px * mx * sa + py * ca)
+    return unary_union([LineString([tf(x1, y1), tf(x2, y2)]).buffer(max(w, 0.1) / 2, 4)
+                        for x1, y1, x2, y2, w in footprint(c["fp"]).get("silk", [])])
+
+
 def silkscreen(board: Board, layer: str = "F"):
     """the silkscreen of one side as shapely geometry: each part's footprint silk lines (as KiCad draws them) and its
     reference designator where ``place_refs`` finds room, the board's own ``silk_text``; clipped clear of the pads
     and the drills (a fab clips silk off exposed copper)"""
-    import math
-    from shapely.geometry import LineString, Point
+    from shapely.geometry import Point
     from shapely.ops import unary_union
-    geoms = []
-    for ref, c in board.comps.items():
-        side = c.get("side", "F")
-        if side != layer:
-            continue
-        ax, ay = c["at"]
-        a = math.radians(c["rot"])
-        ca, sa = math.cos(a), math.sin(a)
-        mx = -1.0 if side == "B" else 1.0
-
-        def tf(px, py):
-            px *= mx
-            return (ax + px * ca - py * sa, ay + px * sa + py * ca)
-        for x1, y1, x2, y2, w in footprint(c["fp"]).get("silk", []):
-            geoms.append(LineString([tf(x1, y1), tf(x2, y2)]).buffer(max(w, 0.1) / 2, 4))
+    geoms = [_fp_silk(board, ref) for ref, c in board.comps.items() if c.get("side", "F") == layer]
     for ref, at in place_refs(board).items():
         if at and board.comps[ref].get("side", "F") == layer:
             x, y, ang, size = at
@@ -3693,6 +3693,7 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
                         [g.centroid.buffer(d / 2 + gap, 16) for _, _, _, g, d in board.pad_shapes() if d] or [Point(0, 0).buffer(0)])
     inside = board.outline.buffer(-0.5)
     crt = {r: board.courtyard(r) for r in board.comps}
+    silk = {r: _fp_silk(board, r) for r in board.comps}
     taken = {"F": [], "B": []}
     for txt, (x, y), size, ang in getattr(board, "silk_text", []):     # (the board's own text: a title)
         w, h = len(txt) * size * 0.78 + 0.2, size + 0.25
@@ -3705,6 +3706,7 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
         body = crt[r] if crt[r] is not None else Point(*board.comps[r]["at"]).buffer(1.0)
         bodies = unary_union([crt[o] for o in board.comps if o != r and crt[o] is not None and side(o) == L] or
                              [Point(0, 0).buffer(0)])
+        strokes = unary_union([silk[o] for o in board.comps if o != r and side(o) == L] or [Point(0, 0).buffer(0)])
         x0, y0, x1, y1 = body.bounds
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         found = None
@@ -3721,7 +3723,8 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
                 tw, th = (w, h) if a == 0.0 else (h, w)
                 bb = box(x - tw / 2, y - th / 2, x + tw / 2, y + th / 2)
                 if (inside.contains(bb) and not bb.intersects(pads[L]) and not bb.intersects(holes)
-                        and not bb.intersects(bodies) and not bb.intersects(body)
+                        and not bb.intersects(bodies) and not bb.intersects(body) and not bb.intersects(strokes)
+                        and bb.distance(bodies) > bb.distance(body) + 0.3      # (read as its own part's, not a neighbour's)
                         and not any(bb.intersects(t) for t in taken[L])):
                     found = (round(x, 3), round(y, 3), a, size)
                     taken[L].append(bb.buffer(gap))
