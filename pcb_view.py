@@ -196,9 +196,16 @@ class _Cache:
         script = self.script()
         if not script:
             return {"error": "no run in this folder yet (result.json names the board script)"}
-        key = (script, st.stat().st_mtime if st.exists() else 0, Path(script).stat().st_mtime)
+        key = _board_key(self.out, script)
         with self.lock:
-            if key != self.key:
+            if key != self.key:                          # (the run's own board.json when it is this board: no rebuild)
+                try:
+                    saved = json.loads((self.out / "board.json").read_text())
+                    if saved.get("key") == list(key):
+                        self.data, self.key = saved["data"], key
+                        return self.data
+                except (OSError, ValueError):
+                    pass
                 if script.endswith(".net"):              # (a netlist: as the command line read it, by default)
                     from types import SimpleNamespace
                     b, _ = pcb_cli.load_netlist(script, SimpleNamespace(size=None, layers=2, at=None, amps=None))
@@ -207,6 +214,87 @@ class _Cache:
                 pcb_cli.load_state(b, str(self.out), pcb_cli.design_key(b))
                 self.data, self.key = board_data(b), key
             return self.data
+
+
+def compact_glb(path: Path) -> None:
+    """KiCad's glTF holds one primitive per copper shape (~40 000 on a flight controller: 15 s for a browser to
+    parse); each mesh's primitives of one material merged into one (a few hundred), the same triangles"""
+    import struct
+    import numpy as np
+    raw = path.read_bytes()
+    jl = struct.unpack_from("<I", raw, 12)[0]
+    j = json.loads(raw[20:20 + jl])
+    if j.get("asset", {}).get("extras", {}).get("zeus_compact"):
+        return
+    bl = struct.unpack_from("<I", raw, 20 + jl)[0]
+    blob = memoryview(raw)[28 + jl:28 + jl + bl]
+    size = {5126: 4, 5125: 4, 5123: 2, 5121: 1}
+    kind = {5126: np.float32, 5125: np.uint32, 5123: np.uint16, 5121: np.uint8}
+    comps = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4}
+
+    def read(i):
+        a = j["accessors"][i]
+        v = j["bufferViews"][a["bufferView"]]
+        n, c, t = a["count"], comps[a["type"]], a["componentType"]
+        st = v.get("byteStride") or size[t] * c
+        start = v.get("byteOffset", 0) + a.get("byteOffset", 0)
+        rows = np.frombuffer(blob, np.uint8, count=(n - 1) * st + size[t] * c, offset=start)
+        rows = np.lib.stride_tricks.as_strided(rows, (n, size[t] * c), (st, 1))
+        return np.ascontiguousarray(rows).view(kind[t]).reshape(n, c) if c > 1 else \
+            np.ascontiguousarray(rows).view(kind[t]).reshape(n)
+    out, views, accs = bytearray(), [], []
+
+    def put(arr, target, minmax=False):
+        while len(out) % 4:
+            out.append(0)
+        views.append({"buffer": 0, "byteOffset": len(out), "byteLength": arr.nbytes, "target": target})
+        out.extend(arr.tobytes())
+        a = {"bufferView": len(views) - 1, "componentType": {np.float32: 5126, np.uint32: 5125}[arr.dtype.type],
+             "count": arr.shape[0], "type": "VEC3" if arr.ndim == 2 else "SCALAR"}
+        if minmax:
+            a["min"], a["max"] = arr.min(0).tolist(), arr.max(0).tolist()
+        accs.append(a)
+        return len(accs) - 1
+    for m in j["meshes"]:
+        groups = {}
+        for pr in m["primitives"]:
+            groups.setdefault((pr.get("material"), pr.get("mode", 4)), []).append(pr)
+        prims = []
+        for (mat, mode), prs in groups.items():
+            pos, nor, idx, base = [], [], [], 0
+            for pr in prs:
+                p_ = read(pr["attributes"]["POSITION"])
+                pos.append(p_)
+                nor.append(read(pr["attributes"]["NORMAL"]) if "NORMAL" in pr["attributes"] else np.zeros_like(p_))
+                idx.append((read(pr["indices"]).astype(np.uint32) if "indices" in pr else
+                            np.arange(len(p_), dtype=np.uint32)) + base)
+                base += len(p_)
+            np_ = {"attributes": {"POSITION": put(np.concatenate(pos).astype(np.float32), 34962, True),
+                                  "NORMAL": put(np.concatenate(nor).astype(np.float32), 34962)},
+                   "indices": put(np.concatenate(idx), 34963), "mode": mode}
+            if mat is not None:
+                np_["material"] = mat
+            prims.append(np_)
+        m["primitives"] = prims
+    j["accessors"], j["bufferViews"], j["buffers"] = accs, views, [{"byteLength": len(out)}]
+    j.setdefault("asset", {}).setdefault("extras", {})["zeus_compact"] = 1
+    js = json.dumps(j).encode()
+    js += b" " * (-len(js) % 4)
+    out += b"\0" * (-len(out) % 4)
+    body = struct.pack("<I4s", len(js), b"JSON") + js + struct.pack("<I4s", len(out), b"BIN\0") + bytes(out)
+    path.write_bytes(struct.pack("<4sII", b"glTF", 2, 12 + len(body)) + body)
+
+
+def _board_key(out: Path, script: str) -> tuple:
+    """what the page's board depends on: the script, the run's saved state, the script's edits"""
+    import pcb_cli
+    st = Path(out) / pcb_cli.STATE
+    return (script, st.stat().st_mtime if st.exists() else 0, Path(script).stat().st_mtime)
+
+
+def write_board(b, out: str, script: str) -> None:
+    """the page's board, as the run leaves it: out/board.json (so the page opens without rebuilding the board)"""
+    (Path(out) / "board.json").write_text(json.dumps({"key": list(_board_key(Path(out), script)), "data": board_data(b)}))
 
 
 def _render3d(out: Path, script: str) -> dict:
@@ -259,6 +347,7 @@ def _model(out: Path, script: str) -> dict:
                             "-o", str(glb), str(kpcbs[0])], env=env, capture_output=True, text=True, timeout=600)
         if r.returncode != 0 or not glb.exists():
             return {"error": "KiCad's 3D export failed: " + (r.stderr or r.stdout)[-300:]}
+    compact_glb(glb)                                     # (a no-op once done)
     return {"glb": "/files/board.glb?t=%d" % int(glb.stat().st_mtime)}
 
 
@@ -278,7 +367,11 @@ def _schematic(out: Path, script: str = "") -> dict:
                            capture_output=True, text=True, timeout=300)
         if r.returncode != 0 or not svg.exists():
             return {"error": "KiCad's schematic export failed: " + (r.stderr or r.stdout)[-300:]}
-    return {"svgs": ["/files/kicad/%s?t=%d" % (svg.name, int(svg.stat().st_mtime))]}
+    import re
+    with open(svg, "rb") as f:                           # (the sheet's size from its head: the page need not parse it)
+        vb = re.search(rb'viewBox="([\d.\s-]+)"', f.read(4096))
+    w, h = (float(v) for v in vb.group(1).split()[2:4]) if vb else (0.0, 0.0)
+    return {"svgs": ["/files/kicad/%s?t=%d" % (svg.name, int(svg.stat().st_mtime))], "sizes": [[w, h]]}
 
 
 def make_handler(out_dir: str):
