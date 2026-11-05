@@ -47,7 +47,7 @@
 </head><body>
 <canvas id="c" width="1920" height="1080"></canvas>
 <script>
-const W = 1920, H = 1080, FPS = 30, T_END = 74, SHIFT = 19, VIEW = 7, CV = 14.9;   // CV: the conveyor's end, the panel's start
+const W = 1920, H = 1080, FPS = 60, T_END = 33, SHIFT = 21.7, VIEW = 7, CV = 14.9;   // CV: the conveyor's end, the panel's start
 const C = { bg: "#0a110e", bg2: "#0f1a16", grid: "rgba(120,170,140,0.06)", ink: "#eef3ee", dim: "#8fa39a",
   copper: "#d98b4e", copperHi: "#f3b27a", back: "#3f7f78", pad: "#e6c27a", mask: "#123a2a", ok: "#7fd6a2",
   line: "rgba(200,220,210,0.16)" };
@@ -90,8 +90,65 @@ function poly(pts, fill, stroke, lw = 1) {
   if (stroke) { g.strokeStyle = stroke; g.lineWidth = lw; g.stroke(); }
 }
 
+let LIGHT = 0;
+const inkNow = () => LIGHT > 0.5 ? "#121a16" : C.ink, dimNow = () => LIGHT > 0.5 ? "#5b6660" : C.dim;
 function background(t) {
   g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+  const wAsk = fadeWindow(t, 3.3, 8.5, 0.4, 0.8), wPlace = fadeWindow(t, 7.7, 11.9, 0.8, 0.8),
+        wRoute = fadeWindow(t, 11.1, 17.8, 0.8, 0.8), wCheck = fadeWindow(t, 17.0, 22.2, 0.8, 0.8),
+        wPanel = fadeWindow(t, 21.4, 29.0, 0.8, 0.6);
+  const plain = 1 - Math.max(wAsk, wPlace, wRoute, wCheck, wPanel);
+  LIGHT = 0;
+  [[wAsk, "13,13,12"], [wPlace, "8,16,30"], [wRoute, "20,12,10"], [wCheck, "6,20,14"], [wPanel, "6,8,7"]].forEach(([w, c]) => {
+    if (w > 0) { g.fillStyle = `rgba(${c},${w})`; g.fillRect(0, 0, W, H); }
+  });
+  const blob = (x, y, rx, ry, col, a) => {                 // a soft, wide colour field
+    g.save(); g.translate(x, y); g.scale(rx / ry, 1);
+    const r = g.createRadialGradient(0, 0, 0, 0, 0, ry);
+    r.addColorStop(0, `rgba(${col},${a})`); r.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = r; g.fillRect(-ry, -ry, 2 * ry, 2 * ry); g.restore();
+  };
+  const d = t * 0.6;
+  if (wAsk > 0) { blob(W * (0.25 + 0.06 * Math.sin(d)), H * 0.95, 1100, 500, "200,120,60", 0.22 * wAsk); blob(W * 0.8, H * 0.3, 800, 500, "40,110,80", 0.18 * wAsk); }
+  if (wPanel > 0) { blob(W / 2, H * 0.05, 1200, 500, "220,160,100", 0.16 * wPanel); blob(W * (0.5 + 0.08 * Math.cos(d)), H * 1.0, 1300, 400, "40,140,90", 0.22 * wPanel); }
+  if (wPlace > 0) { blob(W * (0.75 + 0.08 * Math.sin(d)), H * 0.45, 900, 600, "40,90,220", 0.45 * wPlace); blob(W * 0.2, H * 0.9, 700, 400, "90,40,200", 0.3 * wPlace); }
+  if (wRoute > 0) { blob(W * (0.4 + 0.25 * span(t, 11.4, 17.4)), H * 0.6, 1000, 600, "230,120,50", 0.4 * wRoute); blob(W * 0.9, H * 0.1, 700, 400, "200,40,120", 0.25 * wRoute); }
+  if (wCheck > 0) { blob(W * 0.3, H * (0.55 + 0.05 * Math.sin(d * 2)), 1000, 600, "60,200,130", 0.32 * wCheck); blob(W * 0.85, H * 0.2, 600, 400, "40,140,200", 0.2 * wCheck); }
+  if (wAsk > 0) {                                          // the ask: a blank page, dot grid
+    g.fillStyle = `rgba(200,180,150,${0.08 * wAsk})`;
+    for (let y = 24; y < H; y += 36) for (let x = 24; x < W; x += 36) g.fillRect(x - 1, y - 1, 2, 2);
+  }
+  if (wPlace > 0) {                                        // placement: a blueprint, mm grid and rulers
+    
+    g.lineWidth = 1;
+    for (let x = 0; x < W; x += 24) { g.strokeStyle = `rgba(120,190,230,${(x % 120 ? 0.03 : 0.08) * wPlace})`; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+    for (let y = 0; y < H; y += 24) { g.strokeStyle = `rgba(120,190,230,${(y % 120 ? 0.03 : 0.08) * wPlace})`; g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+    g.fillStyle = `rgba(150,210,240,${0.4 * wPlace})`;
+    for (let x = 0; x < W; x += 24) g.fillRect(x, H - (x % 120 ? 8 : 18), 1, 18);
+    for (let y = 0; y < H; y += 24) g.fillRect(W - (y % 120 ? 8 : 18), y, 18, 1);
+  }
+  if (wRoute > 0) {                                        // routing: 45-degree traces, a copper glow drifting
+    const gx = W * (0.3 + 0.4 * span(t, 11.4, 17.4)), r = g.createRadialGradient(gx, H * 0.55, 40, gx, H * 0.55, 900);
+    r.addColorStop(0, `rgba(217,139,78,${0.22 * wRoute})`); r.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = r; g.fillRect(0, 0, W, H);
+    g.strokeStyle = `rgba(217,139,78,${0.05 * wRoute})`; g.lineWidth = 2;
+    const off = (t * 40) % 90;
+    for (let x = -H + off; x < W; x += 90) { g.beginPath(); g.moveTo(x, H); g.lineTo(x + 300, H - 300); g.lineTo(x + 300, 0); g.stroke(); }
+  }
+  if (wCheck > 0) {                                        // checks: a calm green, pulsing as each passes
+    const pul = 0.5 + 0.5 * Math.cos((t - 17.4) * Math.PI * 2 / 0.6);
+    const r = g.createRadialGradient(W * 0.25, H * 0.55, 60, W * 0.25, H * 0.55, 1000);
+    r.addColorStop(0, `rgba(127,214,162,${(0.14 + 0.06 * pul) * wCheck})`); r.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = r; g.fillRect(0, 0, W, H);
+  }
+  if (wPanel > 0) {                                        // the boards: a dark stage under a spotlight
+    g.fillStyle = `rgba(2,5,4,${0.6 * wPanel})`; g.fillRect(0, 0, W, H);
+    const r = g.createRadialGradient(W / 2, 200, 80, W / 2, 500, 1100);
+    r.addColorStop(0, `rgba(230,220,190,${0.12 * wPanel})`); r.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = r; g.fillRect(0, 0, W, H);
+  }
+  if (plain <= 0.01) return;
+  g.save(); g.globalAlpha = plain;
   const r = g.createRadialGradient(W * 0.62, H * 0.45, 50, W * 0.62, H * 0.45, 1100);
   r.addColorStop(0, "rgba(40,80,62,0.35)"); r.addColorStop(1, "rgba(0,0,0,0)");
   g.fillStyle = r; g.fillRect(0, 0, W, H);
@@ -99,6 +156,177 @@ function background(t) {
   const off = (t * 6) % 48;
   for (let x = -48 + off; x < W; x += 48) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
   for (let y = 0; y < H; y += 48) { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); }
+  g.restore();
+}
+
+// you, in the loop: at the end of each step Prometheus asks, and your cursor decides
+const REVIEWS = [[10.6, "PLACEMENT READY", "Adjust", "Approve", "Approved by you"],
+                 [16.6, "ROUTING READY", "Open in KiCad", "Approve", "Approved by you"],
+                 [20.3, "READY TO ORDER", "Review BOM", "Order", "Your call: ordered"]];
+function cursorAt(x, y, k, press) {
+  g.save(); g.globalAlpha = k; g.translate(x, y); g.scale(1.5 * (1 - 0.15 * press), 1.5 * (1 - 0.15 * press));
+  g.fillStyle = "#f4f7f2"; g.strokeStyle = "#0a120e"; g.lineWidth = 2;
+  g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 34); g.lineTo(9, 26); g.lineTo(16, 41); g.lineTo(22, 38); g.lineTo(15, 23); g.lineTo(27, 23); g.closePath();
+  g.fill(); g.stroke(); g.restore();
+  g.save(); g.globalAlpha = k; g.fillStyle = C.copper; g.beginPath(); g.roundRect(x + 40, y + 56, 64, 32, 8); g.fill(); g.restore();
+  text("you", x + 72, y + 79, 20, { mono: true, weight: 500, color: "#0a120e", align: "center", alpha: k });
+}
+const FOLLOW = "Make the USB power traces wider.";
+function chatBeat(tx) {
+  const u = tx - HOLD;
+  const k = fadeWindow(u, 0, HOLD_LEN - 0.4, 0.2, 0.3);
+  if (k <= 0) return;
+  caption(u, 0.05, HOLD_LEN - 0.3, "YOU STEER", "Ask for a change.", "It reroutes and re-checks. You decide what stays.");
+  const x = 140, y = 330 + 30 * (1 - easeOut(span(u, 0, 0.35))), w = 800, h = 360;
+  g.save(); g.globalAlpha = k; g.shadowColor = "rgba(0,0,0,0.6)"; g.shadowBlur = 40;
+  g.fillStyle = "rgba(12,22,18,0.97)"; g.beginPath(); g.roundRect(x, y, w, h, 20); g.fill();
+  g.shadowColor = "rgba(240,150,70,0.9)"; g.shadowBlur = 28; g.strokeStyle = C.copper; g.lineWidth = 2; g.stroke(); g.restore();
+  text("YOU  →  PROMETHEUS", x + 36, y + 50, 18, { mono: true, color: C.copper, alpha: k, track: 3 });
+  const n = Math.floor(clamp(span(u, 0.2, 1.0)) * FOLLOW.length);
+  text(FOLLOW.slice(0, n), x + 36, y + 112, 40, { alpha: k });
+  if (n < FOLLOW.length && Math.floor(tx * 6) % 2 === 0) {
+    g.font = `400 40px ${SANS}`; g.save(); g.globalAlpha = k; g.fillStyle = C.copper;
+    g.fillRect(x + 40 + g.measureText(FOLLOW.slice(0, n)).width, y + 78, 4, 44); g.restore();
+  }
+  const rk = easeOut(span(u, 1.1, 1.35));
+  if (rk > 0) {
+    g.save(); g.globalAlpha = k * rk; g.fillStyle = C.ok; g.beginPath(); g.arc(x + 46, y + 189, 8, 0, 7); g.fill(); g.restore();
+    text("Rerouted VBUS: 0.2 → 0.4 mm.", x + 68, y + 200, 34, { weight: 500, color: C.ok, alpha: k * rk });
+    text("Re-running checks on the change…", x + 68, y + 244, 22, { color: C.dim, alpha: k * rk });
+  }
+  let cxRun = x + 68;
+  [["✗ 1 clearance clash", 1.6, "#ff5a4e"], ["1 track nudged", 1.95, C.copper], ["✓ DRC", 2.2, C.ok], ["✓ JLCPCB", 2.35, C.ok]].forEach(([lbl, at, col], i) => {
+    g.font = `500 18px ${MONO}`;
+    const cx = cxRun, cw = g.measureText(lbl).width + 28; cxRun += cw + 10;
+    const ck = easeOut(span(u, at, at + 0.15));
+    if (ck <= 0) return;
+    g.save(); g.globalAlpha = k * ck; g.strokeStyle = col; g.lineWidth = 1.5;
+    g.beginPath(); g.roundRect(cx, y + 280, cw, 40, 20); g.stroke(); g.restore();
+    text(lbl, cx + 14, y + 306, 18, { mono: true, weight: 500, color: col, alpha: k * ck });
+  });
+}
+// the RP2040 board itself shrinks into its tile on the panel: one object carried across the cut
+const FLY_A = 21.5, FLY_B = 22.6;
+function boardToPanel(t) {
+  if (t < FLY_A || t > FLY_B + 0.05 || !IMG.rp2040) return;
+  const e = ease(span(t, FLY_A, FLY_B));
+  const k0 = 15 / 15.5, w0 = 900 * k0, h0 = 520 * k0, x0 = 1380, y0 = 600;     // where it sits in the check scene
+  const PX = 220, PY = 272, PW = 1480, PH = 690, cw = (PW - 120) / 4, ch = (PH - 120) / 2;
+  const [w1, h1] = fitImg(IMG.rp2040, cw - 40, ch - 40), x1 = PX + 60 + 3 * cw + cw / 2, y1 = PY + 60 + ch / 2;
+  const w = lerp(w0, w1, e), h = lerp(h0, h1, e), x = lerp(x0, x1, e), y = lerp(y0, y1, e) - Math.sin(e * Math.PI) * 60;
+  g.save(); g.shadowColor = "rgba(0,0,0,0.6)"; g.shadowBlur = 40 * Math.sin(e * Math.PI);
+  g.drawImage(IMG.rp2040, x - w / 2, y - h / 2, w, h); g.restore();
+}
+// what else it does: five cards slide past, each a feature, real strings from the repo
+const REQ = ['{', '  "size_mm": [56, 30],', '  "layers": 2,', '  "house": "jlcpcb",', '  "nets": {"VBUS": {"amps": 0.5}},', '  "edge": ["J1"],', '  "near": [["C7", "U1", 3.0]]', '}'];
+const WHY_DEC = "A supply pin draws current in fast edges that its capacitor supplies; the farther the capacitor, the larger the loop those edges flow round, and that loop's inductance becomes supply noise and EMI.";
+function wrapText(str, x, y, size, maxW, lh, opts) {
+  g.font = `${opts.weight || 400} ${size}px ${opts.mono ? MONO : SANS}`;
+  let line = "", yy = y;
+  for (const w of str.split(" ")) { const t = line ? line + " " + w : w;
+    if (g.measureText(t).width > maxW && line) { text(line, x, yy, size, opts); line = w; yy += lh; } else line = t; }
+  if (line) text(line, x, yy, size, opts);
+}
+const MORE = [
+  ["IMPORT A BOARD, DO A REV", "Bring your KiCad board. Ask for rev 2.", "prometheus import design.kicad_pcb: only the nets of what moved are re-routed; the rest keeps its copper.", (lt, a) => {
+    g.save(); g.globalAlpha = a; g.strokeStyle = C.copper; g.lineWidth = 1.5; g.beginPath(); g.roundRect(60, 330, 270, 64, 32); g.stroke(); g.restore();
+    text("design.kicad_pcb", 195, 371, 22, { mono: true, align: "center", alpha: a });
+    text("→", 380, 378, 48, { align: "center", color: C.copper, alpha: a * easeOut(span(lt, 0.05, 0.25)) });
+    const im = IMG.rp2040, bk = easeOut(span(lt, 0.1, 0.35)) * a;
+    if (im) { const [w, h] = fitImg(im, 380, 240); g.save(); g.globalAlpha = bk; g.drawImage(im, 640 - w / 2, 360 - h / 2, w, h); g.restore(); }
+    text("board.py, its own footprints, copper kept", 640, 505, 18, { mono: true, align: "center", color: C.dim, alpha: bk });
+    const ck = easeOut(span(lt, 0.35, 0.55)) * a;
+    g.save(); g.globalAlpha = ck; g.fillStyle = "rgba(5,10,8,0.9)"; g.beginPath(); g.roundRect(870, 220, 290, 92, 14); g.fill();
+    g.strokeStyle = C.copper; g.lineWidth = 1.2; g.stroke(); g.restore();
+    text("Rev 2: move J1 to", 892, 258, 22, { alpha: ck }); text("the left edge.", 892, 290, 22, { alpha: ck });
+    [["J1's nets re-routed", C.copper, 0.6], ["the rest kept ✓", C.ok, 0.72], ["KiCad DRC clean ✓", C.ok, 0.84]].forEach(([l, col, at], i) => {
+      const k = easeOut(span(lt, at, at + 0.12)) * a;
+      g.save(); g.globalAlpha = k; g.strokeStyle = col; g.lineWidth = 1.5; g.beginPath(); g.roundRect(870, 336 + i * 58, 290, 44, 22); g.stroke(); g.restore();
+      text(l, 1015, 365 + i * 58, 18, { mono: true, weight: 500, align: "center", color: col, alpha: k });
+    });
+  }],
+  ["FROM THE DATASHEET", "Package drawing in, KiCad footprint out.", "IPC-7351B lands, checked, and reviewed beside the drawing before the board uses it.", (lt, a) => {
+    const cx = 290, cy = 380, b = 230;                       // the drawing: outline and dimensions
+    g.save(); g.globalAlpha = a; g.strokeStyle = "rgba(230,240,235,0.8)"; g.lineWidth = 2;
+    g.strokeRect(cx - b / 2, cy - b / 2, b, b); g.setLineDash([6, 6]); g.strokeRect(cx - 55, cy - 55, 110, 110); g.setLineDash([]);
+    g.beginPath(); g.moveTo(cx - b / 2, cy - b / 2 - 30); g.lineTo(cx + b / 2, cy - b / 2 - 30); g.stroke();
+    g.beginPath(); g.moveTo(cx + b / 2 + 30, cy - b / 2); g.lineTo(cx + b / 2 + 30, cy + b / 2); g.stroke(); g.restore();
+    text("7.00 BSC", cx, cy - b / 2 - 42, 20, { mono: true, align: "center", color: C.dim, alpha: a });
+    text("e 0.40", cx + b / 2 + 44, cy, 20, { mono: true, color: C.dim, alpha: a });
+    text("D2 3.20", cx, cy + 8, 18, { mono: true, align: "center", color: C.dim, alpha: a });
+    text("→", 600, 395, 60, { align: "center", color: C.copper, alpha: a * easeOut(span(lt, 0.15, 0.35)) });
+    const fx = 900, pk = clamp((lt - 0.25) / 0.6);           // the footprint: lands appear
+    g.save(); g.globalAlpha = a; g.fillStyle = C.pad;
+    for (let i = 0; i < 14; i++) {
+      const o = -b / 2 + 22 + i * ((b - 44) / 13), k = clamp(pk * 56 - i * 4);
+      if (k <= 0) continue;
+      g.globalAlpha = a * k;
+      g.fillRect(fx + o - 4, cy - b / 2 - 16, 8, 26); g.fillRect(fx + o - 4, cy + b / 2 - 10, 8, 26);
+      g.fillRect(fx - b / 2 - 16, cy + o - 4, 26, 8); g.fillRect(fx + b / 2 - 10, cy + o - 4, 26, 8);
+    }
+    g.globalAlpha = a * clamp(pk * 2 - 1); g.fillRect(fx - 55, cy - 55, 110, 110); g.restore();
+    text("QFN-56 · KiCad footprint", fx, cy + b / 2 + 60, 20, { mono: true, align: "center", color: C.copper, alpha: a * clamp(pk * 2 - 1) });
+  }],
+  ["A REAL SCHEMATIC", "Drawn in KiCad, read back by KiCad.", "On KiCad's own symbols, split into A3 pages, its netlist checked against the board.", (lt, a) => {
+    const im = IMG.schem; if (!im) return;
+    const [w, h] = fitImg(im, 1080, 380), x = 600 - w / 2, y = 380 - h / 2;
+    g.save(); g.globalAlpha = a; g.beginPath(); g.roundRect(x, y, w, h, 10); g.clip();
+    const z = 1 + 0.06 * lt; g.translate(600, 380); g.scale(z, z); g.translate(-600, -380);
+    g.drawImage(im, x, y, w, h); g.restore();
+  }],
+];
+function montage(tx) {
+  const u = tx - MONT_X;
+  if (u < 0 || u > MONT_LEN) return;
+  const wk = fadeWindow(u, 0, MONT_LEN, 0.3, 0.35);
+  g.fillStyle = `rgba(4,8,6,${0.88 * wk})`; g.fillRect(0, 0, W, H);
+  text("AND MORE", W / 2, 110, 20, { mono: true, align: "center", color: C.copper, alpha: wk, track: 6 });
+  const S0 = 0.15, GAP = 1.2;
+  let p = -1; for (let j = 0; j < MORE.length + 1; j++) p += ease(span(u, S0 + j * GAP, S0 + j * GAP + 0.32));
+  MORE.forEach(([kick, title, sub, draw], j) => {
+    const d = j - p, ad = Math.abs(d);
+    if (ad > 1.3) return;
+    const a = wk * clamp(1.3 - ad), cw = 1200, ch = 640, x = W / 2 + d * 1320 - cw / 2, y = 590 - ch / 2;
+    g.save(); g.filter = `blur(${Math.min(14, ad * 18).toFixed(1)}px)`;
+    g.translate(x + cw / 2, y + ch / 2); g.scale(1 - 0.08 * ad, 1 - 0.08 * ad); g.translate(-cw / 2, -ch / 2);
+    g.save(); g.globalAlpha = a; g.shadowColor = "rgba(0,0,0,0.6)"; g.shadowBlur = 40; g.fillStyle = "rgba(14,24,20,0.98)";
+    g.beginPath(); g.roundRect(0, 0, cw, ch, 24); g.fill(); g.shadowColor = "rgba(240,150,70,0.6)"; g.shadowBlur = 18;
+    g.strokeStyle = "rgba(217,139,78,0.7)"; g.lineWidth = 1.5; g.stroke(); g.restore();
+    text(kick, 60, 70, 18, { mono: true, color: C.copper, alpha: a, track: 4 });
+    text(title, 58, 138, 50, { weight: 600, alpha: a, track: -1 });
+    const lt = u - (S0 + j * GAP);
+    draw(Math.max(0, lt), a);
+    text(sub, 60, 600, 22, { color: C.dim, alpha: a });
+    g.restore();
+  });
+}
+function reviews(t) {
+  REVIEWS.forEach(([T0, head, b1, b2, done]) => {
+    const k = fadeWindow(t, T0, T0 + 1.05, 0.15, 0.2);
+    if (k <= 0) return;
+    const w = 700, x = W - 120 - w, y = 800 + 30 * (1 - easeOut(span(t, T0, T0 + 0.25)));
+    g.save(); g.globalAlpha = k;
+    g.shadowColor = "rgba(0,0,0,0.7)"; g.shadowBlur = 40;
+    g.fillStyle = "rgba(12,22,18,0.97)"; g.beginPath(); g.roundRect(x, y, w, 180, 18); g.fill();
+    g.shadowColor = "rgba(240,150,70,0.8)"; g.shadowBlur = 22; g.strokeStyle = C.copper; g.lineWidth = 1.5; g.stroke(); g.restore();
+    text("PROMETHEUS  ·  " + head, x + 36, y + 48, 18, { mono: true, color: C.copper, alpha: k, track: 2 });
+    text("Your call.", x + 36, y + 92, 30, { weight: 600, alpha: k });
+    const clicked = span(t, T0 + 0.55, T0 + 0.62);
+    g.save(); g.globalAlpha = k; g.strokeStyle = "rgba(200,220,210,0.35)"; g.lineWidth = 1.5;
+    g.beginPath(); g.roundRect(x + 36, y + 112, 300, 50, 10); g.stroke();
+    const bx = x + 356, bw = 308;
+    g.fillStyle = clicked > 0 ? C.ok : C.copper; g.beginPath(); g.roundRect(bx, y + 112, bw, 50, 10); g.fill(); g.restore();
+    text(b1, x + 186, y + 145, 22, { align: "center", color: C.dim, alpha: k });
+    text(clicked > 0 ? done : b2, bx + bw / 2, y + 145, 22, { align: "center", weight: 600, color: "#0a120e", alpha: k });
+    if (clicked > 0) {
+      const rk = span(t, T0 + 0.55, T0 + 0.95);
+      g.save(); g.globalAlpha = k * (1 - rk); g.strokeStyle = C.ok; g.lineWidth = 2;
+      g.beginPath(); g.roundRect(bx - 16 * rk, y + 112 - 16 * rk, bw + 32 * rk, 50 + 32 * rk, 10 + 16 * rk); g.stroke(); g.restore();
+    }
+    const m = ease(span(t, T0 + 0.1, T0 + 0.5)), tx = bx + bw * 0.6, ty = y + 134;
+    const press = Math.max(0, 1 - Math.abs(t - (T0 + 0.56)) / 0.06);
+    cursorAt(lerp(W - 260, tx, m), lerp(H + 80, ty, m), k, press);
+  });
 }
 
 // part positions: a tray (grid) before placement, the board after
@@ -119,19 +347,21 @@ function setupTray() {
     x += it.w + gap; rowH = Math.max(rowH, it.h);
   });
 }
+const YOU_PART = "J1", HAND_NETS = new Set(["DP", "DM", "USB_DP", "USB_DM"]);
+let HAND_HEAD = null, CONF_SCR = null;
 function partOffset(ref, t) {
   // screen offset of a part from its board position, by scene time
   const c = D.compMap[ref];
   const bx = sx(c.at[0]), by = sy(c.at[1]);
   const [tx, ty] = trayPos[ref];
   const i = D.comps.findIndex(q => q.ref === ref);
-  const k = ease(span(t, 10.2 + i * 0.07, 12.6 + i * 0.07));
+  const k = ref === YOU_PART ? ease(span(t, 10.25, 11.05)) : ease(span(t, 11.1 + i * 0.05, 12.9 + i * 0.05));
   return [lerp(tx - bx, 0, k), lerp(ty - by, 0, k), k];
 }
 
 function drawBoard(t, opt) {
   // outline
-  const ko = ease(span(t, 11.0, 12.6));
+  const ko = ease(span(t, 9.9, 10.5));
   if (ko > 0) {
     g.save(); g.globalAlpha = ko;
     poly(D.outline, "rgba(18,58,42,0.55)", "rgba(150,210,180,0.55)", 2);
@@ -150,24 +380,31 @@ function drawBoard(t, opt) {
   // tracks, back layer first
   const rk = opt.route;
   if (rk > 0) {
-    const n = D.tracks.length, upto = rk * n;
+  }
+  if (rk > 0 || (opt.hand || 0) > 0) {
+    const upto = rk * D.nAuto, hupto = (opt.hand || 0) * D.nHand;
+    HAND_HEAD = null;
     ["B", "F"].forEach(L => {
       D.tracks.forEach((tr, i) => {
-        if (tr.L !== L || i > upto) return;
-        const f = clamp(upto - i);
+        const hand = HAND_NETS.has(tr.net), r = D.rank[i], f = clamp((hand ? hupto : upto) - r);
+        if (tr.L !== L || f <= 0) return;
         const [a, b] = [tr.pts[0], tr.pts[tr.pts.length - 1]];
         g.strokeStyle = L === "F" ? C.copper : C.back;
         g.globalAlpha = L === "F" ? 1 : 0.85;
-        g.lineCap = "round"; g.lineWidth = Math.max(1.4, tr.w * BX.s);
+        const wide = tr.net === "VBUS" ? (opt.widen || 0) : 0;
+        g.lineCap = "round"; g.lineWidth = Math.max(1.4, tr.w * BX.s * (1 + wide));
+        if (wide > 0 && (opt.glow || 0) > 0.02) { g.shadowColor = `rgba(244,190,120,${0.5 * opt.glow})`; g.shadowBlur = 6 * opt.glow; }
+        else g.shadowBlur = 0;
         g.beginPath(); g.moveTo(sx(a[0]), sy(a[1]));
         g.lineTo(sx(lerp(a[0], b[0], f)), sy(lerp(a[1], b[1], f))); g.stroke();
+        if (hand && f < 1) HAND_HEAD = g.getTransform().transformPoint(new DOMPoint(sx(lerp(a[0], b[0], f)), sy(lerp(a[1], b[1], f))));
         if (f < 1 && L === "F") {                         // the drawing head glows
           g.save(); g.globalAlpha = 0.8; g.fillStyle = C.copperHi;
           g.beginPath(); g.arc(sx(lerp(a[0], b[0], f)), sy(lerp(a[1], b[1], f)), 3.2, 0, 7); g.fill(); g.restore();
         }
       });
     });
-    g.globalAlpha = 1;
+    g.globalAlpha = 1; g.shadowBlur = 0;
     D.vias.forEach((v, i) => {
       const k = clamp((rk * D.vias.length - i) * 1.5);
       if (k <= 0) return;
@@ -190,6 +427,12 @@ function drawBoard(t, opt) {
     D.padsBy[c.ref].forEach(p => poly(p.pts, p.L === "F" ? C.pad : "rgba(230,194,122,0.45)"));
     g.restore();
   });
+  if ((opt.conflict || 0) > 0 && D.conf) {                  // the re-run check's clash, then resolved
+    const [cx, cy] = D.conf, ok = opt.resolved || 0, r = 22 + 5 * Math.sin(t * 12);
+    g.save(); g.globalAlpha = opt.conflict; g.lineWidth = 3;
+    g.strokeStyle = ok > 0.5 ? C.ok : "#ff5a4e"; g.beginPath(); g.arc(sx(cx), sy(cy), ok > 0.5 ? 22 : r, 0, 7); g.stroke(); g.restore();
+    CONF_SCR = g.getTransform().transformPoint(new DOMPoint(sx(cx), sy(cy)));
+  } else CONF_SCR = null;
   // peg holes
   g.globalAlpha = ko;
   D.npth.forEach(([x, y, d]) => { g.fillStyle = "#050807"; g.beginPath(); g.arc(sx(x), sy(y), d / 2 * BX.s, 0, 7); g.fill(); });
@@ -197,47 +440,20 @@ function drawBoard(t, opt) {
 }
 
 function caption(t, a, b, kicker, title, sub) {
-  const k = fadeWindow(t, a, b, 0.6, 0.5), y = 150 - 12 * (1 - easeOut(span(t, a, a + 0.8)));
-  text(kicker, 140, y - 46, 20, { mono: true, color: C.copper, alpha: k, track: 3 });
-  text(title, 140, y + 10, 58, { weight: 500, alpha: k });
-  if (sub) text(sub, 140, y + 58, 24, { color: C.dim, alpha: k, weight: 300 });
-}
-
-function codeCard(t) {
-  const k = fadeWindow(t, 4.6, 12.8, 0.6, 0.8);
-  if (k <= 0) return;
-  const x = 140, y = 300, w = 780, h = 520;
-  g.save(); g.globalAlpha = k;
-  g.fillStyle = "rgba(10,20,16,0.92)"; g.strokeStyle = C.line; g.lineWidth = 1;
-  g.beginPath(); g.roundRect(x, y, w, h, 10); g.fill(); g.stroke();
-  [C.copper, "#c9b061", C.back].forEach((col, i) => { g.fillStyle = col; g.beginPath(); g.arc(x + 26 + i * 20, y + 24, 6, 0, 7); g.fill(); });
-  text("board.py", x + w - 24, y + 30, 16, { mono: true, color: C.dim, align: "right" });
-  const lines = [
-    ["b = Board(", "\"rp2040\", (56, 30), rules=\"jlcpcb-2\")"],
-    ["b.place(", "\"J1\", \"USB_C_Receptacle\", (3.5, 15))"],
-    ["b.place(", "\"U1\", \"QFN-56 0.4mm\", None, \"RP2040\")"],
-    ["b.place(", "\"U2\", \"SOIC-8\", None, \"W25Q128JV\")"],
-    ["b.place(", "\"Y1\", \"Crystal_3225\", None, \"12 MHz\")"],
-    ["", "...  30 more parts, no positions"],
-    ["b.net(", "\"QSPI_SCLK\", [(\"U1\",\"52\"), (\"U2\",\"6\")])"],
-    ["b.net(", "\"3V3\", [...], amps=0.3)"],
-    ["b.pour(", "\"GND\", \"B\", outline)"],
-    ["", ""],
-    ["$ ", "prometheus board.py out/ --json --view"],
-  ];
-  const shown = (t - 4.9) * 115;                           // characters typed
-  let acc = 0;
-  lines.forEach(([kw, rest], i) => {
-    const full = kw + rest, n = clamp(shown - acc, 0, full.length);
-    acc += full.length + 6;
-    const ly = y + 82 + i * 38;
-    const kws = full.slice(0, Math.min(n, kw.length)), rs = full.slice(kw.length, n);
-    const isCmd = kw === "$ ";
-    text(kws, x + 30, ly, 21, { mono: true, color: isCmd ? C.ok : C.copper });
-    g.font = `400 21px ${MONO}`;
-    text(rs, x + 30 + g.measureText(kws).width, ly, 21, { mono: true, color: rest.startsWith("...") ? C.dim : C.ink });
+  const k = fadeWindow(t, a, b, 0.25, 0.4), u = span(t, a, a + 0.5), dx = 60 * (1 - easeOut(u));
+  text(kicker, 140 + dx * 0.5, 96, 20, { mono: true, color: C.copper, alpha: k, track: 4 });
+  g.font = `600 80px ${SANS}`; g.letterSpacing = "-2px";
+  let wx = 134 + dx * 0.4;
+  title.split(" ").forEach((wd, i) => {
+    const wk = easeOut(span(t, a + 0.04 + i * 0.06, a + 0.34 + i * 0.06));
+    g.save(); g.filter = `blur(${(1 - wk) * 14}px)`;
+    text(wd, wx, 166 + 14 * (1 - wk), 80, { weight: 600, alpha: k * wk, track: -2, color: inkNow() });
+    g.restore();
+    g.font = `600 80px ${SANS}`; g.letterSpacing = "-2px"; wx += g.measureText(wd + " ").width;
   });
-  g.restore();
+  g.letterSpacing = "0px";
+  g.save(); g.globalAlpha = k; g.fillStyle = C.copper; g.fillRect(140, 188, 360 * easeOut(span(t, a + 0.1, a + 0.7)), 3); g.restore();
+  if (sub) text(sub, 140, 228, 24, { color: dimNow(), alpha: k * easeOut(span(t, a + 0.2, a + 0.7)), weight: 300 });
 }
 
 function counters(t) {
@@ -259,16 +475,18 @@ function checks(t) {
   if (k <= 0) return;
   const rows = [["Design check", "connections · clearance · current · drills"],
                 ["JLCPCB rules", "track · space · drill · edge"],
-                ["KiCad 9 DRC", "KiCad's own design-rule check"]];
+                ["KiCad 9 DRC", "KiCad's own design-rule check"],
+                ["ERC", "every pin's type, from KiCad's symbols"],
+                ["KiCad schematic", "written, read back, matches the board"]];
   rows.forEach(([a, b], i) => {
-    const kk = easeOut(span(t, 27.4 + i * 0.9, 28.2 + i * 0.9));
-    const x = 140, y = 360 + i * 130;
+    const kk = easeOut(span(t, 27.2 + i * 0.6, 28.0 + i * 0.6));
+    const x = 140, y = 300 + i * 116;
     g.save(); g.globalAlpha = k * kk;
     g.fillStyle = "rgba(10,20,16,0.9)"; g.strokeStyle = C.line;
     g.beginPath(); g.roundRect(x, y, 560, 100, 12); g.fill(); g.stroke();
     g.strokeStyle = C.ok; g.lineWidth = 4; g.lineCap = "round";
     g.beginPath(); g.arc(x + 50, y + 50, 22, 0, 7); g.stroke();
-    const tk = span(t, 27.8 + i * 0.9, 28.3 + i * 0.9);
+    const tk = span(t, 27.6 + i * 0.6, 28.1 + i * 0.6);
     g.beginPath(); g.moveTo(x + 40, y + 51);
     if (tk > 0) g.lineTo(x + 40 + 7 * clamp(tk * 2), y + 51 + 7 * clamp(tk * 2));
     if (tk > 0.5) g.lineTo(x + 47 + 14 * clamp((tk - 0.5) * 2), y + 58 - 16 * clamp((tk - 0.5) * 2));
@@ -279,73 +497,9 @@ function checks(t) {
   });
 }
 
-function outputs(t) {
-  const k = fadeWindow(t, 32.6, 38.6, 0.5, 0.6);
-  if (k <= 0) return;
-  const files = [["gerbers.zip", "copper, mask, paste, silk, drill"], ["bom_jlc.csv", "assembly BOM, LCSC part numbers"],
-                 ["cpl.csv", "pick and place"], ["cart/", "DigiKey · Mouser · LCSC carts"],
-                 ["kicad/rp2040.kicad_pcb", "open and keep editing in KiCad"], ["report.html", "the board and every check"]];
-  files.forEach(([f, d], i) => {
-    const kk = easeOut(span(t, 33.0 + i * 0.35, 33.7 + i * 0.35));
-    const x = 140 + 40 * (1 - kk), y = 330 + i * 92;
-    g.save(); g.globalAlpha = k * kk;
-    g.fillStyle = "rgba(10,20,16,0.9)"; g.strokeStyle = C.line;
-    g.beginPath(); g.roundRect(x, y, 620, 72, 10); g.fill(); g.stroke();
-    g.fillStyle = C.copper; g.fillRect(x, y + 14, 3, 44);
-    g.restore();
-    text(f, x + 28, y + 32, 24, { mono: true, alpha: k * kk });
-    text(d, x + 28, y + 58, 17, { color: C.dim, alpha: k * kk });
-  });
-}
-
-function agentLoop(t) {
-  const k = fadeWindow(t, 38.6, 44.4, 0.6, 0.6);
-  if (k <= 0) return;
-  caption(t, 38.6, 44.4, "BUILT FOR AI AGENTS", "Run. Read the findings. Fix. Repeat.", "Every finding comes back as data: kind, pins, location, a hint.");
-  const cx = 560, cy = 640, R = 190;
-  const steps = ["write board.py", "prometheus --json", "read findings", "change the design"];
-  const spin = ease(span(t, 39.2, 43.6)) * Math.PI * 2;
-  g.save(); g.globalAlpha = k;
-  g.strokeStyle = C.line; g.lineWidth = 2; g.beginPath(); g.arc(cx, cy, R, 0, 7); g.stroke();
-  g.strokeStyle = C.copper; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, R, -Math.PI / 2, -Math.PI / 2 + spin); g.stroke();
-  steps.forEach((s, i) => {
-    const a = -Math.PI / 2 + i * Math.PI / 2, x = cx + R * Math.cos(a), y = cy + R * Math.sin(a);
-    const on = spin >= i * Math.PI / 2 - 0.01;
-    g.fillStyle = on ? C.copper : C.bg2; g.beginPath(); g.arc(x, y, 12, 0, 7); g.fill();
-    g.strokeStyle = C.copper; g.lineWidth = 2; g.stroke();
-    const tx = x + (i === 1 ? 30 : i === 3 ? -30 : 0), ty = y + (i === 0 ? -30 : i === 2 ? 46 : 8);
-    text(s, tx, ty, 22, { mono: true, align: i === 1 ? "left" : i === 3 ? "right" : "center", color: on ? C.ink : C.dim });
-  });
-  g.restore();
-  // the result
-  const jk = easeOut(span(t, 41.0, 41.8)) * k;
-  const x = 1080, y = 470;
-  g.save(); g.globalAlpha = jk;
-  g.fillStyle = "rgba(10,20,16,0.92)"; g.strokeStyle = C.line;
-  g.beginPath(); g.roundRect(x, y, 680, 300, 12); g.fill(); g.stroke(); g.restore();
-  const js = [["{", C.dim], ["  \"clean\": true,", C.ok], ["  \"router\": \"freerouting (through KiCad)\",", C.ink],
-              ["  \"kicad_drc\": {\"run\": true},", C.ink], ["  \"findings\": []", C.ink], ["}", C.dim]];
-  js.forEach(([l, col], i) => text(l, x + 32, y + 60 + i * 40, 22, { mono: true, color: col, alpha: jk }));
-  text("out/result.json", x + 680, y - 16, 16, { mono: true, color: C.dim, align: "right", alpha: jk });
-}
-
-
-// 06: the boards it has built, on a production line: a conveyor through an optical inspection gantry, then a panel
-const SHOW = [
-  ["twilight", "Twilight flight controller", "199 parts · 4 layers", "Teensy 4.1, pyro channels, servo power"],
-  ["arm", "Robot arm power board", "56 parts · 2 oz copper", "60 A hot-swap, every track sized by IPC-2221"],
-  ["qdd", "Quadruped power and CAN", "70 parts · 2 layers", "twelve motors on one bus"],
-  ["motor", "Dual motor driver", "15 parts · 2 oz copper", "DRV8833, thermal pad, 3 A in, placed by the harness"],
-  ["ripple", "Wheelbot power and CAN", "67 parts · 2 layers", "six motor drives"],
-  ["can", "CAN sensor node", "24 parts · STM32F103", "CAN pair length-matched to 2 mm"],
-  ["fpvfc", "FPV flight controller", "42 parts · STM32F405", "0.5 mm LQFP, both sides poured"],
-  ["ring", "Addressable LED ring", "31 parts · round board", "twelve WS2812B, one data chain"],
-  ["cube", "Balancing cube main board", "25 parts · 2 layers", "three motor channels, encoders"],
-  ["power", "LiPo power bank", "25 parts · 2 A paths", "charger, protection, 5 V boost, placed to its spec"],
-  ["ctl", "Game controller", "47 parts · 2 layers", "routed inside its shell's outline"],
-];
-const PANEL_KEYS = ["twilight", "arm", "qdd", "ripple", "fpvfc", "cube", "ctl", "rp2040", "motor", "can", "ring", "power"];
-const PANEL_PARTS = [199, 56, 70, 67, 42, 25, 47, 34, 15, 24, 31, 25];
+// 06: the boards it helped build, tiled on one fab panel
+const PANEL_KEYS = ["twilight", "arm", "fpvfc", "rp2040", "motor", "can", "ring", "power"];   // (the dense ones)
+const PANEL_PARTS = [199, 56, 42, 34, 15, 24, 31, 25];
 const IMG = {};
 function fitImg(im, w, h) { const k = Math.min(w / im.width, h / im.height); return [im.width * k, im.height * k]; }
 
@@ -353,65 +507,13 @@ function showcase(t) {                                    // t: 0 .. SHIFT
   const k = Math.min(easeOut(span(t, 0, 0.6)), 1 - span(t, SHIFT - 0.6, SHIFT));
   if (k <= 0) return;
   g.save();
-  const beltY = 640, beam = W * 0.5;
-  layer(k * (1 - ease(span(t, CV, CV + 0.6))), () => {
-    caption(t, 0, CV + 0.3, "06  BUILT WITH IT", "Real boards, through the line.", "Each one routed, checked and exported by the harness.");
-    // rails, with chevrons moving with the belt
-    const v = 680, off = (t * v) % 60;
-    g.fillStyle = "rgba(200,220,210,0.07)"; g.fillRect(0, beltY - 230, W, 460);
-    g.strokeStyle = "rgba(200,220,210,0.25)"; g.lineWidth = 2;
-    [beltY - 232, beltY + 232].forEach(y => { g.beginPath(); g.moveTo(0, y); g.lineTo(W, y); g.stroke(); });
-    g.strokeStyle = "rgba(200,220,210,0.10)"; g.lineWidth = 2;
-    for (let x = W + 60 - off; x > -60; x -= 60) {
-      [beltY - 246, beltY + 246].forEach(y => { g.beginPath(); g.moveTo(x, y - 6); g.lineTo(x - 8, y); g.lineTo(x, y + 6); g.stroke(); });
-    }
-    // boards ride in from the right; each passes the beam in turn
-    const sp = 780, start = 0.3;
-    let under = -1, under_k = 0;
-    SHOW.forEach(([key], i) => {
-      const im = IMG[key]; if (!im) return;
-      const [w, h] = fitImg(im, 640, 380);
-      const cx = W + 330 + i * sp - v * Math.max(0, t - start);
-      if (cx < -w || cx > W + w) return;
-      g.drawImage(im, cx - w / 2, beltY - h / 2, w, h);
-      // scanned part: a green tint where the beam has passed
-      const left = cx - w / 2, right = cx + w / 2;
-      if (beam > left && beam < right + 200) {
-        under = i; under_k = clamp((beam - left) / w);
-      }
-      if (right < beam) {                                 // inspected: the stamp
-        const sk = easeOut(clamp((beam - right) / 120));
-        g.save(); g.translate(cx + w / 2 - 120, beltY - h / 2 + 40); g.rotate(-0.12);
-        g.globalAlpha = sk; g.strokeStyle = C.ok; g.lineWidth = 3;
-        g.strokeRect(-110, -26, 220, 52);
-        text("INSPECTED", 0, 10, 26, { align: "center", mono: true, color: C.ok, weight: 500, track: 3 });
-        g.restore();
-      }
-    });
-    // the gantry: a beam with a glow and a scan band
-    const gl = g.createLinearGradient(beam - 70, 0, beam + 70, 0);
-    gl.addColorStop(0, "rgba(127,214,162,0)"); gl.addColorStop(0.5, "rgba(127,214,162,0.22)"); gl.addColorStop(1, "rgba(127,214,162,0)");
-    g.fillStyle = gl; g.fillRect(beam - 70, beltY - 232, 140, 464);
-    g.fillStyle = C.ok; g.fillRect(beam - 1.5, beltY - 250, 3, 500);
-    g.fillStyle = "rgba(20,32,27,0.95)"; g.strokeStyle = C.line;
-    g.beginPath(); g.roundRect(beam - 120, beltY - 300, 240, 50, 8); g.fill(); g.stroke();
-    text("AOI  ·  SCANNING", beam, beltY - 268, 18, { align: "center", mono: true, color: C.ok, track: 2 });
-    // the board under the beam: its card
-    if (under >= 0) {
-      const [, name, stat, hard] = SHOW[under];
-      const ck = clamp(under_k * 3) * (1 - clamp((under_k - 0.9) * 10));
-      const x = 140, y = 900;
-      text(name, x, y, 40, { weight: 500, alpha: ck });
-      text(stat, x, y + 44, 24, { mono: true, color: C.copper, alpha: ck });
-      text(hard, W - 140, y + 44, 24, { color: C.dim, align: "right", alpha: ck });
-      text(String(under + 1).padStart(2, "0") + " / " + String(SHOW.length).padStart(2, "0"), W - 140, y, 22, { mono: true, color: C.dim, align: "right", alpha: ck });
-    }
-  });
-  layer(k * ease(span(t, CV - 0.1, CV + 0.4)), () => {
+  layer(k * ease(span(t, CV - 0.5, CV + 0.1)), () => {
     // the panel: every board tiled on one fab panel with rails, tooling holes, fiducials and mouse bites
-    const pk = ease(span(t, CV - 0.1, CV + 0.7));
-    caption(t, CV + 0.3, SHIFT, "06  BUILT WITH IT", "One harness. Every board.", "");
-    const PX = 220, PY = 230, PW = 1480, PH = 720;
+    const pk = ease(span(t, CV - 0.5, CV + 0.1));
+    caption(t, CV + 0.1, SHIFT, "BUILT WITH IT", "Boards it helped build.", "Each one placed, routed and checked with Prometheus.");
+    const zk = 1 + 0.02 * ease(span(t, CV, SHIFT));      // a slow push-in
+    g.save(); g.translate(W / 2, 640); g.scale(zk, zk); g.translate(-W / 2, -640);
+    const PX = 220, PY = 272, PW = 1480, PH = 690;
     g.save(); g.globalAlpha = pk;
     g.fillStyle = "#10281e"; g.strokeStyle = "rgba(150,210,180,0.5)"; g.lineWidth = 2;
     g.beginPath(); g.roundRect(PX, PY, PW, PH, 6); g.fill(); g.stroke();
@@ -423,10 +525,10 @@ function showcase(t) {                                    // t: 0 .. SHIFT
       g.strokeStyle = "rgba(230,194,122,0.5)"; g.lineWidth = 1; g.beginPath(); g.arc(x, y, 14, 0, 7); g.stroke();
     });
     const keys = PANEL_KEYS;
-    const cols = 4, cw = (PW - 120) / cols, ch = (PH - 120) / 3;
+    const cols = 4, rows = Math.ceil(keys.length / cols), cw = (PW - 120) / cols, ch = (PH - 120) / rows;
     keys.forEach((key, i) => {
       const c_ = i % cols, r_ = Math.floor(i / cols);
-      const tk = easeOut(span(t, CV + i * 0.08, CV + 0.7 + i * 0.08));
+      const tk = key === "rp2040" ? (t >= CV - 0.4 + (FLY_B - SHOW_AT) ? 1 : 0) : easeOut(span(t, CV + i * 0.08, CV + 0.7 + i * 0.08));
       const x = PX + 60 + c_ * cw, y = PY + 60 + r_ * ch;
       g.globalAlpha = pk * tk;
       g.fillStyle = "rgba(5,10,8,0.6)"; g.fillRect(x + 8, y + 8, cw - 16, ch - 16);
@@ -435,15 +537,15 @@ function showcase(t) {                                    // t: 0 .. SHIFT
       // mouse bites between tiles
       g.fillStyle = "#050807";
       if (c_ < cols - 1) for (let q = 0; q < 5; q++) { g.beginPath(); g.arc(x + cw, y + ch / 2 - 20 + q * 10, 2.2, 0, 7); g.fill(); }
-      if (r_ < 2) for (let q = 0; q < 5; q++) { g.beginPath(); g.arc(x + cw / 2 - 20 + q * 10, y + ch, 2.2, 0, 7); g.fill(); }
+      if (r_ < rows - 1) for (let q = 0; q < 5; q++) { g.beginPath(); g.arc(x + cw / 2 - 20 + q * 10, y + ch, 2.2, 0, 7); g.fill(); }
     });
-    g.restore();
+    g.restore(); g.restore();
     const total = PANEL_PARTS.reduce((a, b) => a + b, 0);
     const nk = ease(span(t, CV + 0.3, CV + 2.3));
-    text(String(Math.round(total * nk)), 140, 1010, 54, { weight: 500, mono: true, alpha: pk });
-    text("parts placed and routed", 140, 1044, 18, { mono: true, color: C.dim, alpha: pk, track: 2 });
-    text(PANEL_KEYS.length + " boards", 520, 1010, 54, { weight: 500, mono: true, alpha: pk });
-    text("2 and 4 layers", 520, 1044, 18, { mono: true, color: C.dim, alpha: pk, track: 2 });
+    text(String(Math.round(total * nk)), 140, 1010, 54, { weight: 500, mono: true, alpha: pk, color: inkNow() });
+    text("parts placed and routed", 140, 1044, 18, { mono: true, color: dimNow(), alpha: pk, track: 2 });
+    text(PANEL_KEYS.length + " boards", 520, 1010, 54, { weight: 500, mono: true, alpha: pk, color: inkNow() });
+    text("2 and 4 layers", 520, 1044, 18, { mono: true, color: dimNow(), alpha: pk, track: 2 });
   });
   g.restore();
 }
@@ -533,6 +635,35 @@ function silk(str, x, y, size, k, opt = {}) {
   text(str, x, y, size, { mono: true, weight: 500, color: SILK, alpha: k, align: opt.align || "center", track: opt.track ?? 3 });
 }
 
+// the hook: four hard cuts on the beat (112 BPM), the board in each state, then the name slams in
+const BEAT = 60 / 128, HOOK = [
+  ["01", "Describe it.", { placed: true, ghost: 0.0, padAlpha: 0.35, route: 0, pour: 0, maskFill: 0 }, [0.50, 0.45, 34, 40, -6]],
+  ["02", "Placed.",      { placed: true, ghost: 1.0, padAlpha: 1, route: 0, pour: 0, maskFill: 0 }, [0.42, 0.55, 46, 54, 8]],
+  ["03", "Routed.",      { placed: true, ghost: 0.0, padAlpha: 1, route: 1, pour: 0, maskFill: 0 }, [0.58, 0.40, 40, 32, -10]],
+  ["04", "Checked.",     { placed: true, ghost: 0.0, padAlpha: 1, route: 1, pour: 1, maskFill: 1 }, [0.50, 0.50, 26, 22, 0]],
+];
+function hook(t) {
+  const i = Math.floor(t / BEAT); if (i < 0 || i >= HOOK.length) return;
+  const [num, word, opt, [fx, fy, s0, s1, rot]] = HOOK[i], u = (t - i * BEAT) / BEAT;
+  const keep = BX, [x0, y0, x1, y1] = D.bounds;
+  const s = lerp(s0, s1, easeOut(u));                     // each shot pushes or pulls through its beat
+  g.save();
+  g.translate(W * 0.62, H / 2); g.rotate((rot + u * rot * -0.4) * Math.PI / 180); g.translate(-W * 0.62, -H / 2);
+  boardFrame(W * 0.62 - (lerp(x0, x1, fx) - (x0 + x1) / 2) * s, H / 2 + (lerp(y0, y1, fy) - (y0 + y1) / 2) * s, s);
+  drawBoard(20, opt);
+  g.restore(); BX = keep;
+  // a dark wash on the left for the word, a flash on each cut
+  const lg = g.createLinearGradient(0, 0, W * 0.75, 0);
+  lg.addColorStop(0, "rgba(4,9,7,0.96)"); lg.addColorStop(0.55, "rgba(4,9,7,0.7)"); lg.addColorStop(1, "rgba(4,9,7,0)");
+  g.fillStyle = lg; g.fillRect(0, 0, W, H);
+  const fl = 1 - easeOut(clamp(u * 6));
+  if (fl > 0) { g.fillStyle = `rgba(244,207,142,${0.22 * fl})`; g.fillRect(0, 0, W, H); }
+  const wk = easeOut(clamp(u * 5)), dx = 40 * (1 - wk);
+  text(num + "  /  04", 140 + dx, 430, 22, { mono: true, color: C.copper, alpha: wk, track: 4 });
+  text(word, 132 + dx, 600, 168, { weight: 600, alpha: wk, track: -3 });
+  g.fillStyle = C.copper; g.globalAlpha = wk; g.fillRect(140, 640, 520 * easeOut(clamp(u * 2.5)), 4); g.globalAlpha = 1;
+}
+
 function title(t) {
   if (t > 5.2) return;
   // the camera starts a few millimetres above the RP2040 and pulls back over the board
@@ -549,7 +680,7 @@ function title(t) {
   if (ck > 0) {
     copperText("Prometheus", W / 2, 590, 230, ck, { glint: span(t, 3.3, 4.6), track: -4 });
     const sk = easeOut(span(t, 3.2, 3.9));
-    silk("AI PCB HARNESS  ·  FROM A PARTS LIST TO A BOARD YOU CAN ORDER", W / 2, 690, 26, sk, { track: 6 });
+    silk("AI PCB HARNESS  ·  YOUR PCB WORKFLOW, ASSISTED", W / 2, 690, 26, sk, { track: 6 });
     silk("REV 1.0", 140, 1010, 20, sk * 0.8, { align: "left" });
     silk("U1  RP2040", W - 140, 1010, 20, sk * 0.8, { align: "right" });
   }
@@ -577,17 +708,24 @@ function endCard(t) {
   const ck = ease(span(t, 44.6, 45.6));
   copperText("Prometheus", W / 2, 470, 190, ck, { glint: span(t, 45.4, 46.6), track: -3 });
   const sk = easeOut(span(t, 45.4, 46.1));
-  silk("PARTS IN.  GERBERS, BOM AND A PARTS CART OUT.  CHECKED BY KICAD.", W / 2, 548, 22, sk, { track: 5 });
+  silk("YOU DESIGN.  IT PLACES, ROUTES AND CHECKS.  YOU ORDER.", W / 2, 548, 22, sk, { track: 5 });
   const bk = easeOut(span(t, 45.9, 46.6));
   g.save(); g.globalAlpha = bk; g.strokeStyle = SILK; g.lineWidth = 3;
   g.strokeRect(W / 2 - 700, 620, 1400, 110);
   g.fillStyle = SILK; g.beginPath(); g.arc(W / 2 - 676, 644, 6, 0, 7); g.fill();
   g.restore();
-  text("pip install \"prometheus-pcb @ git+https://github.com/wilsonchenghy/prometheus-pcb-harness\"", W / 2, 687, 27,
-       { align: "center", mono: true, weight: 500, color: SILK, alpha: bk });
-  silk("J1  INSTALL", W / 2 - 700, 606, 18, bk, { align: "left" });
+  const CMD = "install github.com/wilsonchenghy/pcb-harness";
+  g.font = `500 34px ${MONO}`;
+  const cw = g.measureText(CMD).width, nC = Math.floor(clamp(span(t, 46.0, 46.9)) * CMD.length), sent = span(t, 47.0, 47.3);
+  text(CMD.slice(0, nC), W / 2 - cw / 2, 690, 34, { mono: true, weight: 500, color: SILK, alpha: bk });
+  if (bk > 0 && sent <= 0 && Math.floor(t * 4) % 2 === 0) {
+    g.save(); g.globalAlpha = bk; g.fillStyle = C.copper; g.font = `500 34px ${MONO}`;
+    g.fillRect(W / 2 - cw / 2 + g.measureText(CMD.slice(0, nC)).width + 4, 662, 16, 36); g.restore();
+  }
+  if (sent > 0) text("↵ sent", W / 2 + 676, 700, 22, { mono: true, color: C.ok, align: "right", alpha: bk * easeOut(sent) });
+  silk("TELL YOUR AI AGENT", W / 2 - 700, 606, 18, bk, { align: "left" });
   const fk = easeOut(span(t, 46.5, 47.2));
-  silk("PYTHON  ·  KICAD 9  ·  FREEROUTING  ·  APACHE-2.0", W / 2, 820, 22, fk, { track: 6 });
+  silk("THEN DESIGN WITH IT  ·  OPENS IN KICAD  ·  OPEN SOURCE", W / 2, 820, 22, fk, { track: 6 });
 }
 
 let LAYER = null;
@@ -622,6 +760,75 @@ function viewer(t) {                                      // t: 0 .. VIEW
   });
 }
 
+// the ask: what a person types to their agent - the only input there is
+const ASK = "Design an RP2040 board: USB-C, 16 MB flash, two GPIO headers, 56 × 30 mm. Make it orderable.";
+const ASK_PARTS = [["RP2040", ["U1"]], ["USB-C", ["J1"]], ["16 MB", ["U2"]], ["two GPIO headers", ["J2", "J3"]]];
+function askLayout(x, y, w) {                              // the full sentence's lines, with each phrase's place
+  g.font = `400 34px ${SANS}`;
+  const lines = [{ s: "", at: 0 }]; let pos = 0;
+  for (const wd of ASK.split(" ")) {
+    const cur = lines[lines.length - 1], tryL = cur.s ? cur.s + " " + wd : wd;
+    if (g.measureText(tryL).width > w - 70) lines.push({ s: wd, at: pos }); else cur.s = tryL;
+    pos += wd.length + 1;
+  }
+  return ASK_PARTS.map(([ph, refs]) => {
+    const i0 = ASK.indexOf(ph);
+    let li = 0; lines.forEach((l, i) => { if (l.at <= i0) li = i; });
+    const pre = ASK.slice(lines[li].at, i0);
+    return { ph, refs, done: 3.9 + 2.4 * (i0 + ph.length) / ASK.length,
+             x: x + 36 + g.measureText(pre).width, y: y + 68 + li * 48, w: g.measureText(ph).width };
+  });
+}
+function trayCentre(ref) {
+  const c = D.compMap[ref], b = c.box || [c.at[0] - 1, c.at[1] - 1, c.at[0] + 1, c.at[1] + 1];
+  const [tx, ty] = trayPos[ref];
+  return [tx + sx((b[0] + b[2]) / 2) - sx(c.at[0]), ty + sy((b[1] + b[3]) / 2) - sy(c.at[1]), (b[2] - b[0]) * BX.s, (b[3] - b[1]) * BX.s];
+}
+function askFly(t) {
+  const k = fadeWindow(t, 3.4, 8.2, 0.5, 0.6);
+  if (k <= 0) return;
+  const x = 140, y = 380 + 16 * (1 - easeOut(span(t, 3.4, 4.2)));
+  askLayout(x, y, 760).forEach(p => {
+    if (t < p.done) return;
+    text(p.ph, p.x, p.y, 34, { color: C.copperHi || C.copper, alpha: k * easeOut(span(t, p.done, p.done + 0.15)) });
+    p.refs.forEach((ref, j) => {
+      const [cx, cy, bw, bh] = trayCentre(ref), u = span(t, p.done + 0.05 + j * 0.08, p.done + 0.6 + j * 0.08);
+      if (u > 0 && u < 1) {                                // the phrase in flight, an arc to its part
+        const e = ease(u), fx = lerp(p.x + p.w / 2, cx, e), fy = lerp(p.y - 12, cy, e) - Math.sin(e * Math.PI) * 120;
+        g.save(); g.globalAlpha = k * (1 - span(u, 0.8, 1)); g.font = `500 ${lerp(34, 18, e)}px ${MONO}`;
+        g.fillStyle = C.copper; g.textAlign = "center"; g.shadowColor = "rgba(244,207,142,0.8)"; g.shadowBlur = 18;
+        g.fillText(p.ph, fx, fy); g.restore();
+      }
+      const lk = span(t, p.done + 0.6 + j * 0.08, p.done + 1.3 + j * 0.08);
+      if (lk > 0 && lk < 1) {                              // it lands: a ring round the part, its ref
+        g.save(); g.globalAlpha = k * (1 - lk); g.strokeStyle = C.copper; g.lineWidth = 3;
+        const r = 10 + 30 * easeOut(lk);
+        g.strokeRect(cx - bw / 2 - r, cy - bh / 2 - r, bw + 2 * r, bh + 2 * r); g.restore();
+      }
+    });
+  });
+}
+function askCard(t) {                                     // t: film time
+  const k = fadeWindow(t, 3.4, 8.2, 0.5, 0.6);
+  if (k <= 0) return;
+  const x = 140, y = 380 + 16 * (1 - easeOut(span(t, 3.4, 4.2))), w = 760;
+  g.save(); g.globalAlpha = k;
+  g.fillStyle = "rgba(10,20,16,0.92)"; g.strokeStyle = C.copper; g.lineWidth = 1.5;
+  g.beginPath(); g.roundRect(x, y, w, 230, [18, 18, 18, 4]); g.fill(); g.stroke(); g.restore();
+  text("YOU  →  YOUR AI AGENT", x, y - 24, 16, { mono: true, color: C.copper, alpha: k, track: 3 });
+  const n = Math.floor(clamp((t - 3.9) / 2.4) * ASK.length), shown = ASK.slice(0, n);
+  const words = shown.split(" "), lines = [""];
+  g.font = `400 34px ${SANS}`;
+  for (const wd of words) { const tryL = lines[lines.length - 1] ? lines[lines.length - 1] + " " + wd : wd;
+    if (g.measureText(tryL).width > w - 70) lines.push(wd); else lines[lines.length - 1] = tryL; }
+  lines.forEach((l, i) => text(l, x + 36, y + 68 + i * 48, 34, { alpha: k }));
+  if (n < ASK.length && Math.floor(t * 3) % 2 === 0) {
+    const last = lines[lines.length - 1]; g.font = `400 34px ${SANS}`;
+    g.save(); g.globalAlpha = k; g.fillStyle = C.copper;
+    g.fillRect(x + 40 + g.measureText(last).width, y + 42 + (lines.length - 1) * 48, 3, 34); g.restore();
+  }
+}
+
 function layer(alpha, fn) {
   if (alpha <= 0.001) return;
   if (!LAYER) { LAYER = document.createElement("canvas"); LAYER.width = W; LAYER.height = H; }
@@ -633,32 +840,98 @@ function layer(alpha, fn) {
   g.save(); g.globalAlpha = alpha; g.drawImage(LAYER, 0, 0); g.restore();
 }
 
-function render(t) {
+// film time -> the board scenes' own clock (made for a slower cut): piecewise, each beat tightened
+const WARP = [[3.4, 8.0], [7.6, 10.0], [10.6, 13.0], [11.4, 15.4], [12.0, 16.6], [16.6, 24.6], [17.4, 26.6], [17.8, 27.0],
+              [21.4, 32.4], [21.8, 32.6]];
+function warp(t) {
+  if (t <= WARP[0][0]) return WARP[0][1];
+  for (let i = 1; i < WARP.length; i++) if (t <= WARP[i][0]) {
+    const [a, A] = WARP[i - 1], [b, B] = WARP[i]; return A + (B - A) * (t - a) / (b - a); }
+  return WARP[WARP.length - 1][1];
+}
+const SHOW_AT = 21.6, SHOW_FROM = CV - 0.4;                   // (the line's last stretch and the panel)
+const END_AT = 28.6;
+
+const HOLD = 16.6, HOLD_LEN = 3.0;                        // (the chat after routing: the scene clock waits)
+const MONT = 21.45, MONT_LEN = 3.9, MONT_X = MONT + HOLD_LEN;   // (the "more" cards: the scene waits again)
+function heldT(tx) {
+  if (tx < HOLD) return tx;
+  if (tx < HOLD + HOLD_LEN) return HOLD;
+  if (tx < MONT_X) return tx - HOLD_LEN;
+  if (tx < MONT_X + MONT_LEN) return MONT;
+  return tx - HOLD_LEN - MONT_LEN;
+}
+function renderOld(tx) {
+  const t = heldT(tx);
+  const wid = ease(span(tx, HOLD + 1.15, HOLD + 1.55)), glow = wid * (1 - span(tx, HOLD + 1.55, HOLD + 2.3));
+  const slide = ease(fadeWindow(tx, HOLD, HOLD + HOLD_LEN, 0.45, 0.45)) * 300;   // the board makes room for the chat
   background(t);
-  layer(1 - span(t, 4.6, 5.2), () => title(t));
-  // the board's scenes (4.5 s to 38.6 s): it sits right, then centre during routing, then right again
-  if (t > 4.4 && t < 38.8) {
-    let cx = 1360, cy = 600, s = 20;
-    const toC = ease(span(t, 15.4, 16.6)), back = ease(span(t, 25.8, 27.0));
-    cx = lerp(lerp(1360, 1230, toC), 1380, back); cy = lerp(lerp(600, 610, toC), 600, back); s = lerp(lerp(14.5, 21, toC), 15, back);
-    if (t < 15.4) { s = 14.5; }
-    boardFrame(cx, cy, s);
-    const vis = fadeWindow(t, 4.6, 38.8, 0.6, 0.6);
-    layer(vis, () => drawBoard(t, { placed: t > 15.0, ghost: 1 - span(t, 13, 16), padAlpha: 1,
-                   route: ease(span(t, 16.6, 24.6)), pour: ease(span(t, 25.2, 26.6)), maskFill: ease(span(t, 25.2, 26.2)) }));
-    caption(t, 4.6, 10.0, "01  PARTS", "Start with a parts list.", "Real KiCad footprints. No positions needed.");
-    caption(t, 10.0, 15.8, "02  PLACEMENT", "It places them.", "Short wires, decoupling held to its pins, room for fan-out.");
-    caption(t, 16.0, 26.2, "03  ROUTING", "It routes them.", "RP2040, 0.4 mm pitch QFN-56, two layers.");
-    caption(t, 26.6, 32.6, "04  CHECKS", "Then it checks everything.", "Three independent judges. All must pass.");
-    caption(t, 32.6, 38.6, "05  OUTPUTS", "And writes what you order with.", "One folder, ready for JLCPCB, PCBWay or OSH Park.");
-    codeCard(t); counters(t); checks(t); outputs(t);
+  if (t < 4 * BEAT) hook(t);
+  else layer(1 - span(t, 3.3, 3.8), () => {                // the name slams in on the downbeat
+    const u = t - 4 * BEAT, z = 1 + 0.18 * Math.pow(1 - easeOut(clamp(u / 0.35)), 2);
+    g.save(); g.translate(W / 2, 560); g.scale(z, z); g.translate(-W / 2, -560);
+    title(3.45 + u * 1.2);
+    g.restore();
+    const fl = 1 - easeOut(clamp(u / 0.25));
+    if (fl > 0) { g.fillStyle = `rgba(255,236,200,${0.5 * fl})`; g.fillRect(0, 0, W, H); }
+  });
+  askCard(t);
+  const s = warp(t);
+  if (t > 3.4 && t < 22.0) {
+    let cx = 1360, cy = 600, sc = 14.5;
+    const toC = ease(span(s, 15.4, 16.6)), back = ease(span(s, 25.8, 27.0));
+    cx = lerp(lerp(1360, 1230, toC), 1380, back); cy = lerp(lerp(600, 610, toC), 600, back); sc = lerp(lerp(14.5, 21, toC), 15, back);
+    if (s < 15.4) sc = 14.5;
+    boardFrame(cx, cy, sc);
+    const vis = fadeWindow(t, 3.6, 21.6, 0.6, 0.05);
+    const zp = ease(span(s, 10.4, 13.6)) * (1 - ease(span(s, 14.6, 15.6))), zr = ease(span(s, 15.6, 16.8)) * (1 - ease(span(s, 17.4, 23.6)));
+    const z = 1 + 0.24 * zp + 0.18 * zr, rot = (-3 * zp + 3 * zr) * Math.PI / 180;
+    const u1 = D.compMap["U1"].at, px = sx(u1[0]), py = sy(u1[1]);
+    layer(vis, () => {
+      g.save(); g.translate(slide, 0); g.translate(px, py); g.rotate(rot); g.scale(z, z); g.translate(-px, -py);
+      drawBoard(s, { placed: s > 15.0, ghost: 1 - span(s, 13, 16), padAlpha: 1, hand: ease(span(s, 16.6, 24.6)),
+                   route: ease(span(s, 16.6, 24.6)), pour: ease(span(s, 25.2, 26.6)), maskFill: ease(span(s, 25.2, 26.2)), widen: wid, glow,
+                   conflict: fadeWindow(tx, HOLD + 1.6, HOLD + 2.6, 0.1, 0.3), resolved: span(tx, HOLD + 1.95, HOLD + 2.0) });
+      g.restore();
+    });
+    askFly(t);
+    { // your cursor: carries J1 to its spot, then draws the USB pair
+      const c = D.compMap[YOU_PART], [dx, dy] = partOffset(YOU_PART, s);
+      const kd = fadeWindow(s, 10.0, 11.35, 0.2, 0.25);
+      if (kd > 0) {
+        const p = new DOMMatrix().translate(slide, 0).translate(px, py).rotate(rot * 180 / Math.PI).scale(z, z).translate(-px, -py)
+          .transformPoint(new DOMPoint(sx(c.at[0]) + dx, sy(c.at[1]) + dy));
+        const m = ease(span(s, 10.0, 10.25));
+        cursorAt(lerp(W + 40, p.x, m), lerp(H - 100, p.y, m), kd, s > 10.25 && s < 11.05 ? 1 : 0);
+      }
+      if (CONF_SCR) {                                       // the clash's clearance, then fixed
+        const ok = span(tx, HOLD + 1.95, HOLD + 2.0) > 0.5, ck = fadeWindow(tx, HOLD + 1.6, HOLD + 2.6, 0.1, 0.3);
+        g.save(); g.globalAlpha = ck; g.fillStyle = "rgba(8,12,10,0.9)"; g.beginPath(); g.roundRect(CONF_SCR.x + 34, CONF_SCR.y - 22, ok ? 170 : 150, 40, 10); g.fill(); g.restore();
+        text(ok ? "0.15 mm  ✓" : "0.09 mm  ✗", CONF_SCR.x + 50, CONF_SCR.y + 6, 20, { mono: true, weight: 500, color: ok ? C.ok : "#ff5a4e", alpha: ck });
+      }
+
+    }
+    const wk = fadeWindow(t, 8.0, 21.9, 0.4, 0.4);
+    if (wk > 0) {
+      const lg = g.createLinearGradient(0, 0, W * 0.7, 0);
+      lg.addColorStop(0, `rgba(4,9,7,${0.9 * wk})`); lg.addColorStop(0.5, `rgba(4,9,7,${0.55 * wk})`); lg.addColorStop(1, "rgba(4,9,7,0)");
+      g.fillStyle = lg; g.fillRect(0, 0, W, H);
+      const tg = g.createLinearGradient(0, 0, 0, 300);
+      tg.addColorStop(0, `rgba(4,9,7,${0.85 * wk})`); tg.addColorStop(1, "rgba(4,9,7,0)");
+      g.fillStyle = tg; g.fillRect(0, 0, W, 300);
+    }
+    caption(t, 8.1, 11.3, "PLACE", "A first placement, in seconds.", "34 parts, decoupling held to its pins. Move anything you like.");
+    caption(t, 11.5, 16.6, "ROUTE", "Routed, ready for your review.", "0.4 mm QFN-56 on two layers, through KiCad. Open it and keep editing.");
+    caption(t, 17.4, 21.8, "CHECK", "Checked before you order.", "Five checks. Gerbers, BOM and a parts cart, ready.");
+    counters(s); checks(s);
   }
-  if (t >= 38.6 && t < 38.6 + SHIFT) showcase(t - 38.6);
-  agentLoop(t - SHIFT);
-  if (t > 63.2 && t < 70.6) viewer(t - 63.4);
-  layer(easeOut(span(t - SHIFT - VIEW, 44.4, 45.2)), () => endCard(t - SHIFT - VIEW));
-  // fade in / out of the whole film
-  const fo = Math.max(1 - span(t, 0, 0.4), span(t, T_END - 0.8, T_END));
+  reviews(t);
+  chatBeat(tx);
+  if (t >= SHOW_AT && t < SHOW_AT + SHIFT - SHOW_FROM) showcase(t - SHOW_AT + SHOW_FROM);
+  boardToPanel(t);
+  montage(tx);
+  layer(easeOut(span(t - END_AT + 44.4, 44.4, 45.2)), () => endCard(t - END_AT + 44.4));
+  const fo = Math.max(1 - span(t, 0, 0.4), span(t, T_END - 0.7, T_END));
   if (fo > 0) { g.fillStyle = `rgba(0,0,0,${fo})`; g.fillRect(0, 0, W, H); }
 }
 
@@ -672,10 +945,25 @@ window.__setup = async (data) => {
   // routing order: outward from the chip, so the board grows from its centre
   const u = D.compMap["U1"].at;
   D.tracks.sort((a, b) => Math.hypot(a.pts[0][0] - u[0], a.pts[0][1] - u[1]) - Math.hypot(b.pts[0][0] - u[0], b.pts[0][1] - u[1]));
+  {                                                       // routing order: your pair from the connector in, the rest from the chip out
+    const j = D.compMap["J1"].at, hand = [], auto = [];
+    D.tracks.forEach((tr, i) => (HAND_NETS.has(tr.net) ? hand : auto).push(i));
+    hand.sort((a, b) => Math.hypot(D.tracks[a].pts[0][0] - j[0], D.tracks[a].pts[0][1] - j[1]) - Math.hypot(D.tracks[b].pts[0][0] - j[0], D.tracks[b].pts[0][1] - j[1]));
+    D.rank = []; hand.forEach((i, r) => D.rank[i] = r); auto.forEach((i, r) => D.rank[i] = r);
+    D.nHand = hand.length; D.nAuto = auto.length;
+    // where widening VBUS runs too close to a neighbour: the nearest other front-layer track
+    let best = 1e9;
+    D.tracks.forEach(v => { if (v.net !== "VBUS" || v.L !== "F") return;
+      const vm = [(v.pts[0][0] + v.pts[v.pts.length - 1][0]) / 2, (v.pts[0][1] + v.pts[v.pts.length - 1][1]) / 2];
+      D.tracks.forEach(o => { if (o.net === "VBUS" || o.net === "GND" || o.L !== "F") return;
+        const om = [(o.pts[0][0] + o.pts[o.pts.length - 1][0]) / 2, (o.pts[0][1] + o.pts[o.pts.length - 1][1]) / 2], d = Math.hypot(vm[0] - om[0], vm[1] - om[1]);
+        if (d < best && d > 0.3) { best = d; D.conf = [(vm[0] + om[0]) / 2, (vm[1] + om[1]) / 2]; } }); });
+  }
   D.vias.sort((a, b) => Math.hypot(a.at[0] - u[0], a.at[1] - u[1]) - Math.hypot(b.at[0] - u[0], b.at[1] - u[1]));
-  for (const k of SHOW.map(r => r[0]).concat(VIEWS.map(v => v[0]))) {
+  for (const k of [...new Set(PANEL_KEYS.filter(k => k !== "rp2040").concat(VIEWS.map(v => v[0])))]) {
     IMG[k] = await new Promise(res => { const im = new Image(); im.onload = () => res(im); im.src = "img/" + (k.startsWith("view_") ? k : "cut_" + k) + ".png"; });
   }
+  IMG.schem = await new Promise(res => { const im = new Image(); im.onload = () => res(im); im.src = "img/schem_twilight.png"; });
   boardFrame(1360, 600, 14.5);
   setupTray();
   makeNoise();
@@ -691,5 +979,16 @@ window.__setup = async (data) => {
   await document.fonts.ready;
   return true;
 };
+// the cut's pace: the hook as it is, everything after it about 1.5x faster (new film seconds -> the scene clock)
+const PACE = [[0, 0], [3.4, 3.4], [6.4, 8.0], [8.7, 11.4], [12.0, 16.6], [15.4, 19.6], [15.9, 20.4], [18.6, 24.45], [22.0, 28.35], [22.1, 28.5], [26.5, 35.5], [30.2, 39.9]];
+const FILM_END = 30.2;
+function paced(t) {
+  for (let i = 1; i < PACE.length; i++) if (t <= PACE[i][0]) {
+    const [a, A] = PACE[i - 1], [b, B] = PACE[i]; return A + (t - a) / (b - a) * (B - A);
+  }
+  return 39.9;
+}
+function render(t) { renderOld(paced(t)); }
+window.__FILM_END = FILM_END;
 window.__render = t => { render(t); return true; };
 </script></body></html>

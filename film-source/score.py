@@ -1,4 +1,4 @@
-"""The release video's soundtrack, synthesised from nothing (no samples, no licences): a pad and a pulse that build
+"""The release video's soundtrack (30.2 s, 128 BPM), synthesised from nothing (no samples, no licences): a pad and a pulse that build
 with the film, and sound on its events - the title's copper reveal, the parts landing, the routing, each check
 passing, each order file, each board under the inspection beam, the panel, the end card. Times are the film's own
 (video.html). Writes score.wav (48 kHz stereo).
@@ -8,7 +8,21 @@ passing, each order file, each board under the inspection beam, the panel, the e
 import numpy as np
 from scipy.signal import butter, fftconvolve, sosfilt
 
-SR, T_END = 48000, 74.0
+SR, T_END = 48000, 30.2
+# the cut's pace (as video.html's PACE): the times below are the scene clock's, mapped to the film's
+PACE = [(0, 0), (3.4, 3.4), (6.4, 8.0), (8.7, 11.4), (12.0, 16.6), (15.4, 19.6), (15.9, 20.4), (18.6, 24.45), (22.0, 28.35), (22.1, 28.5), (26.5, 35.5), (30.2, 39.9)]
+HOLD, HOLD_LEN = 16.6, 3.0
+MONT, MONT_LEN = 21.45, 3.9        # the "more" cards: the scene clock waits again
+MONT_X = MONT + HOLD_LEN         # the chat after routing: the scene clock waits
+
+
+def M(x, held=False):               # scene clock -> film seconds (held: a time inside the chat's hold)
+    if not held:
+        x = x if x <= HOLD else x + HOLD_LEN if x <= MONT else x + HOLD_LEN + MONT_LEN
+    for (a, A), (b, B) in zip(PACE, PACE[1:]):
+        if x <= B:
+            return a + (x - A) / (B - A) * (b - a)
+    return T_END
 N = int(SR * T_END)
 rng = np.random.default_rng(7)
 L = np.zeros(N)
@@ -28,8 +42,8 @@ def env(n, a=0.005, d=None, r=0.1, hold=0.0):
     return e
 
 
-def put(sig, at, pan=0.0, gain=1.0):
-    i = int(at * SR)
+def put(sig, at, pan=0.0, gain=1.0, film=False, held=False):
+    i = int((at if film else M(at, held)) * SR)
     if i >= N:
         return
     sig = sig[: N - i] * gain
@@ -58,12 +72,13 @@ def saw(f, n, detune=0.0):
     return 2 * (ph % 1) - 1
 
 
-def fade(a, b):                     # 0 -> 1 over the film's seconds a..b, as a whole-length curve
+def fade(a, b):                     # 0 -> 1 over the scene's seconds a..b, as a whole-length curve
+    a, b = M(a), M(b)
     return np.clip((t_all - a) / max(b - a, 1e-6), 0, 1)
 
 
-# ---- the harmony: D minor, four chords a bar each at 112 BPM (a bar 2.14 s) ----
-BPM = 112.0
+# ---- the harmony: D minor, four chords a bar each at 128 BPM (a bar 1.88 s) ----
+BPM = 128.0
 BEAT = 60 / BPM
 BAR = 4 * BEAT
 CHORDS = [[50, 57, 60, 64, 65], [46, 53, 57, 62, 65], [41, 48, 53, 57, 64], [48, 55, 60, 64, 67]]  # Dm9 Bbmaj7 F C
@@ -78,21 +93,38 @@ for b in range(nb):
     s = sum(saw(hz(m), n, d) for m in ch for d in (-0.004, 0.004)) / (2 * len(ch))
     e = np.minimum(1, np.minimum(np.arange(n) / (0.4 * SR), (n - np.arange(n)) / (0.3 * SR)))
     pad[i0:i1] += s * e
-cut = 500 + 2200 * fade(16.0, 25.0) - 900 * fade(57.6, 63.0) + 500 * fade(63.4, 64.4) * (1 - fade(71.5, 74)) + 1100 * fade(70.4, 71.0) * (1 - fade(71.5, 74))
+cut = 500 + 2000 * fade(10.0, 17.0) - 700 * fade(17.4, 21.0) + 900 * fade(21.6, 23.0) * (1 - fade(30.5, 33))
 pad = sum(lp(pad, f) * ((cut > lo) & (cut <= hi)) for lo, hi, f in
           ((0, 700, 600), (700, 1300, 1000), (1300, 2000, 1600), (2000, 9999, 2600)))
 pad = hp(pad, 220)                                  # (the bass has the low end to itself)
-pad_gain = 0.05 + 0.12 * fade(0.0, 4.0) + 0.04 * fade(16, 24) - 0.06 * fade(71.5, 74.0)
+pad_gain = 0.05 + 0.12 * fade(0.0, 2.5) + 0.04 * fade(11, 16) - 0.07 * fade(31.0, 33.0)
 L += pad * pad_gain * 0.9
 R += np.roll(pad, int(0.011 * SR)) * pad_gain * 0.9
 
 # drone under the opening and the close
 dr = (np.sin(2 * np.pi * hz(38) * t_all) + 0.5 * np.sin(2 * np.pi * hz(50) * t_all + 0.3))
-dr_g = 0.10 * (fade(0, 2.2) * (1 - fade(4.6, 6.0)) + fade(69.5, 70.4) * (1 - fade(72.5, 74)))
+dr_g = 0.10 * (fade(0, 1.5) * (1 - fade(3.2, 4.4)) + fade(28.0, 28.6) * (1 - fade(31.5, 33)))
 L += dr * dr_g
 R += dr * dr_g
 
 # ---- rhythm ----
+def paced(t):                       # film seconds -> scene clock
+    x = 39.9
+    for (a, A), (b, B) in zip(PACE, PACE[1:]):
+        if t <= b:
+            x = A + (t - a) / (b - a) * (B - A)
+            break
+    if x <= HOLD:
+        return x
+    if x <= HOLD + HOLD_LEN:
+        return HOLD
+    if x <= MONT_X:
+        return x - HOLD_LEN
+    if x <= MONT_X + MONT_LEN:
+        return MONT
+    return x - HOLD_LEN - MONT_LEN
+
+
 def kick():
     n = int(0.45 * SR)
     tt = np.arange(n) / SR
@@ -118,23 +150,20 @@ def bass(note, dur):
     return s * env(n, 0.004, r=dur / 2.5)
 
 
-def level(t):                       # the groove's energy by section
-    if t < 4.6:
-        return 0
-    if t < 16.0:
-        return 1                    # parts, placement: a soft pulse
-    if t < 26.4:
-        return 3                    # routing: everything
-    if t < 38.6:
-        return 2                    # checks, outputs
-    if t < 53.4:
-        return 3                    # the line
-    if t < 57.6:
-        return 2                    # the panel
-    if t < 63.4:
-        return 1                    # the agent loop: breathing
-    if t < 70.4:
-        return 2                    # the viewer
+def level(t):                       # the groove's energy by beat (t: film seconds)
+    t = paced(t)
+    if t < 3.4:
+        return 0                    # the hook
+    if t < 8.0:
+        return 1                    # the ask
+    if t < 11.4:
+        return 2                    # placed
+    if t < 17.4:
+        return 3                    # routed: everything
+    if t < 21.6:
+        return 2                    # checked
+    if t < 28.6:
+        return 3                    # the boards
     return 0
 
 
@@ -146,17 +175,17 @@ while k * step < T_END:
     bar = int(t // BAR)
     ch = CHORDS[bar % 4]
     if lv >= 1 and k % 2 == 0:      # eighth-note bass pulse
-        put(lp(bass(ch[0] - 12, step * 1.8), 900), t, 0, 0.13 if lv == 1 else 0.16)
+        put(lp(bass(ch[0] - 12, step * 1.8), 900), t, 0, 0.13 if lv == 1 else 0.16, film=True)
     if lv >= 2 and k % 4 == 0:
-        put(kick(), t, 0, 0.42 if k % 16 in (0, 8) else 0.3)
+        put(kick(), t, 0, 0.42 if k % 16 in (0, 8) else 0.3, film=True)
     if lv >= 2 and k % 4 == 2:
-        put(hat(), t, 0.3, 0.17)
+        put(hat(), t, 0.3, 0.17, film=True)
     if lv >= 3:
-        put(hat(open_=(k % 8 == 6)), t, -0.25, 0.07 + 0.05 * (k % 2 == 0))
+        put(hat(open_=(k % 8 == 6)), t, -0.25, 0.07 + 0.05 * (k % 2 == 0), film=True)
         arp = [ch[1], ch[2], ch[3], ch[4], ch[3] + 12, ch[2], ch[4], ch[1] + 12]
-        put(pluck(arp[k % 8] + 12, 0.2, 1800 + 1400 * ((k % 8) / 7)), t, 0.5 * np.sin(k * 0.7), 0.08)
+        put(pluck(arp[k % 8] + 12, 0.2, 1800 + 1400 * ((k % 8) / 7)), t, 0.5 * np.sin(k * 0.7), 0.08, film=True)
     if lv == 1 and k % 8 == 4:
-        put(pluck(ch[3] + 12, 0.35, 1200), t, -0.3, 0.05)
+        put(pluck(ch[3] + 12, 0.35, 1200), t, -0.3, 0.05, film=True)
     k += 1
 
 
@@ -201,69 +230,72 @@ def beep(f, dur=0.09):
     return (np.sign(np.sin(2 * np.pi * f * tt)) * 0.3 + np.sin(2 * np.pi * f * tt)) * env(n, 0.002, r=0.03, hold=0.04)
 
 
-# title: rise into the copper reveal, a glint shimmer
-put(whoosh(2.2, 120, 3000), 0.1, 0, 0.16)
-put(hit(0.55), 2.25, 0)
-put(chime(74, 2.2), 2.3, -0.2, 0.08)
-put(chime(81, 2.2), 2.35, 0.2, 0.06)
-for j in range(10):                                         # the glint running along the letters
-    put(chime(86 + (j % 3) * 2, 0.4), 3.3 + j * 0.12, -0.8 + 0.16 * j, 0.025)
-# scene changes
-for ts in (4.55, 15.3, 26.5, 32.5):
-    put(whoosh(0.9, 400, 7000), ts - 0.45, 0.0, 0.11)
-put(whoosh(1.4, 200, 8000), 38.0, 0, 0.16)                   # into the line
-put(hit(0.35), 38.6, 0)
-# the parts list types in: soft keys
-for j in range(28):
-    put(tick(2200 + 300 * (j % 3), 0.02), 5.2 + j * 0.24 + 0.05 * np.sin(j), 0.4 * np.sin(j * 1.3), 0.05)
-# placement: each part landing (34 parts, 0.07 s apart from 12.6 s)
-for j in range(34):
-    put(tick(1400 + 90 * (j % 7), 0.04), 12.6 + j * 0.07, 0.8 * np.sin(j * 2.1), 0.07)
-# routing: a rising sweep under the tracks, a shimmer as the pour fills
-sweep_n = int(8.0 * SR)
-tt = np.arange(sweep_n) / SR
-sw = sum(np.sin(2 * np.pi * hz(62 + o) * (1 + 0.5 * tt / 8) * tt) for o in (0, 7, 12)) / 3
-put(lp(sw, 2500) * np.sin(np.pi * tt / 8) ** 2, 16.6, 0, 0.035)
-put(whoosh(1.6, 800, 9000, rise=False), 25.0, 0, 0.08)
-# checks: one chime per judge passing, rising
-for i, note in enumerate((74, 77, 81)):
-    put(chime(note, 1.4), 28.2 + i * 0.9, -0.4 + 0.4 * i, 0.13)
-    put(tick(5200, 0.02), 28.2 + i * 0.9, 0, 0.1)
-# outputs: a click per file
-for i in range(6):
-    put(tick(2600 + 200 * i, 0.035), 33.7 + i * 0.35, -0.5 + 0.2 * i, 0.1)
-    put(chime(86 + [0, 2, 3, 5, 7, 10][i], 0.5), 33.7 + i * 0.35, -0.5 + 0.2 * i, 0.03)
-# the line: a scan beep as each board meets the beam, a stamp as it leaves (v 680, spacing 780, from 0.3 s)
-for i in range(11):
-    t_in = 38.6 + 0.3 + (1920 + 330 + i * 780 - 960 - 320) / 680
-    if t_in > 53.3:
-        break
-    put(beep(1760, 0.07), t_in, 0.0, 0.05)
-    put(beep(2349, 0.07), t_in + 0.09, 0.0, 0.04)
-    put(hit(0.12) * 0.6, t_in + 1.05, 0.15, 1.0)
-    put(tick(900, 0.06), t_in + 1.05, 0.15, 0.12)
-# the panel: an impact and the count rising
-put(hit(0.5), 53.55, 0)
-put(chime(69, 2.5), 53.6, 0, 0.07)
-for j in range(20):
-    put(tick(1800 + j * 90, 0.02), 53.9 + j * 0.1, 0, 0.05)
-# the agent loop: four steps round the ring
+# the hook: a hit on each hard cut, the name slams in on the downbeat
+B = 60 / 112
 for j in range(4):
-    put(chime([74, 76, 77, 81][j], 0.9), 58.2 + j * 1.1, [-0.6, -0.2, 0.2, 0.6][j], 0.07)
-# the viewer: into the browser, a chime as each view comes up
-put(whoosh(1.2, 300, 7000), 62.4, 0, 0.09)
-put(hit(0.35), 63.4, 0)
-for j, ts in enumerate((63.9, 66.1, 68.3)):
-    put(chime([81, 83, 86][j], 1.2), ts, [-0.4, 0.0, 0.4][j], 0.07)
-    put(tick(4200, 0.02), ts, 0, 0.08)
-# the end card: the last hit, a wide final chord ringing out
-put(whoosh(1.6, 150, 6000), 69.2, 0, 0.13)
-put(hit(0.7), 70.4, 0)
-end_n = int(3.6 * SR)
+    put(hit(0.35 + 0.08 * j), j * B, 0)
+    put(tick(2600 + 300 * j, 0.03), j * B, -0.3 + 0.2 * j, 0.12)
+put(whoosh(0.5, 300, 9000), 4 * B - 0.5, 0, 0.12)
+put(hit(0.7), 4 * B, 0)
+put(chime(74, 2.0), 4 * B + 0.02, -0.2, 0.045)
+put(chime(81, 2.0), 4 * B + 0.06, 0.2, 0.035)
+# the ask: a key for each few characters
+for j in range(36):
+    put(tick(2600 + 300 * (j % 3), 0.02), 3.9 + j * 2.4 / 36, 0.3 * np.sin(j), 0.045)
+# the ask's phrases fly to their parts: a bright tick as each lands
+for j, done in enumerate((3.9 + 2.4 * 16 / 92, 3.9 + 2.4 * 29 / 92, 3.9 + 2.4 * 36 / 92, 3.9 + 2.4 * 60 / 92)):
+    put(tick(4200, 0.02), done + 0.62, 0, 0.08)
+# you approve each step: a soft click and a confirming chime
+for T0 in (10.6, 16.6, 20.3):
+    put(tick(1600, 0.025), T0 + 0.56, 0.4, 0.14)
+# placed: each part landing
+put(whoosh(0.9, 400, 7000), M(8.0) - 0.6, 0, 0.1, film=True)
+for j in range(34):
+    put(tick(1400 + 90 * (j % 7), 0.04), 8.6 + j * 0.05, 0.8 * np.sin(j * 2.1), 0.06)
+# routed: a rising sweep under the copper, the pour
+put(whoosh(0.9, 400, 7000), M(11.4) - 0.5, 0, 0.1, film=True)
+tt = np.arange(int(2.9 * SR)) / SR
+sw = np.sin(2 * np.pi * np.cumsum(180 + 700 * tt / 2.9) / SR) * 0.4
+put(lp(sw, 2500) * np.sin(np.pi * tt / 2.9) ** 2, 12.0, 0, 0.03)
+put(whoosh(1.2, 800, 9000, rise=False), 16.4, 0, 0.08)
+# the chat: your follow-up typed, Prometheus answers and the power traces widen
+for j in range(14):
+    put(tick(2600 + 300 * (j % 3), 0.02), HOLD + 0.2 + j * 0.8 / 14, -0.3 * np.sin(j), 0.04, held=True)
+put(whoosh(0.5, 300, 5000), HOLD + 0.7, 0, 0.07, held=True)
+put(lp(pluck(62, 0.5, 1400), 1600), HOLD + 1.15, 0, 0.12, held=True)
+put(lp(bass(38, 0.6), 600), HOLD + 1.15, 0, 0.18, held=True)
+for j, at in enumerate((2.2, 2.35)):          # the checks re-run: soft clicks
+    put(tick(1500 + 150 * j, 0.025), HOLD + at, 0.3, 0.09, held=True)
+# the clash: a low warning, then resolved
+put(lp(pluck(45, 0.4, 700), 900), HOLD + 1.6, 0, 0.16, held=True)
+put(lp(pluck(57, 0.4, 1400), 1600), HOLD + 1.95, 0, 0.12, held=True)
+# you may pin a part: the connector dragged
+put(whoosh(0.7, 300, 3000), 7.85, 0.3, 0.06)
+put(tick(1700, 0.03), 8.65, 0.3, 0.12)
+# the "more" cards: a soft whoosh as each slides in
+for j in range(4):
+    put(whoosh(0.35, 500, 6000), MONT_X + 0.15 + j * 1.2 - 0.1, 0.4 - 0.16 * j, 0.06, held=True)
+# checked: a chime as each check passes
+for i, m in enumerate((74, 76, 77, 79, 81)):
+    put(lp(pluck(m - 12, 0.25, 900), 1200), 17.85 + i * 0.37, -0.4 + 0.2 * i, 0.10)
+    put(tick(5200, 0.02), 17.85 + i * 0.37, 0, 0.1)
+# the boards: the panel lands, its eight tiles click in
+put(whoosh(1.4, 200, 8000), M(21.6) - 0.8, 0, 0.15, film=True)
+put(hit(0.5), 22.6, 0)                  # the board lands in its slot
+put(chime(69, 2.5), 21.8, 0, 0.035)
+for j in range(8):
+    put(tick(1800 + j * 120, 0.02), 22.05 + j * 0.08, -0.5 + j / 7, 0.06)
+# the end card: the last hit, a wide chord ringing out
+put(whoosh(1.6, 150, 6000), M(28.6) - 1.2, 0, 0.13, film=True)
+put(hit(0.7), 28.6, 0)
+end_n = int(4.2 * SR)
 tt = np.arange(end_n) / SR
 fin = sum(saw(hz(m), end_n, d) for m in (38, 50, 57, 62, 65, 69) for d in (-0.003, 0.003)) / 12
-put(lp(fin, 1800) * np.exp(-tt * 0.9) * np.minimum(1, tt / 0.05), 70.4, 0, 0.22)
-put(chime(86, 3.0), 70.45, 0.3, 0.06)
+put(lp(fin, 1800) * np.exp(-tt * 0.9) * np.minimum(1, tt / 0.05), 28.6, 0, 0.22)
+put(chime(86, 3.0), 28.65, 0.3, 0.03)
+# the end card: the install line typed, then sent
+for j in range(22):
+    put(tick(2400 + 200 * (j % 4), 0.02), 28.6 + (46.0 - 44.4) + j * 0.9 / 22, 0.2 * np.sin(j), 0.05)
 
 # ---- room, glue, level ----
 ir_n = int(2.2 * SR)
@@ -289,3 +321,4 @@ with wave.open("score.wav", "wb") as w:
     w.setframerate(SR)
     w.writeframes((np.stack([L, R], 1) * 32767).astype("<i2").tobytes())
 print(f"score.wav: {T_END:.0f} s, peak {max(np.abs(L).max(), np.abs(R).max()):.2f}")
+
