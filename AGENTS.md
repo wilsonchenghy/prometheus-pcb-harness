@@ -54,9 +54,10 @@ the shorter net, kept only when the check finds nothing new).
 
 ## Showing the user
 
-For a person following along, add `--view` to the run (or run `zeus view out/` after): a local page with
-the layout, a 3D view, the schematic and the findings, and live progress with an estimate of the time left. Give
-them the address it prints. Leave it off in unattended runs: with `--view` the command waits for Ctrl-C at the end.
+Every run opens a local page in the browser by itself (or run `zeus view out/` after): the layout, a 3D view of
+KiCad's part models, the schematic and the findings, and live progress with an estimate of the time left. It runs
+in the background, so the command still returns; later runs into the same folder reuse the page. Give the user the
+address it prints (`viewer: ...` on stderr). Pass `--no-view` in unattended runs (it is off when `CI` is set).
 
 ## KiCad's DRC
 
@@ -64,6 +65,12 @@ When KiCad 9+ is installed (`kicad-cli` on the PATH), every run also checks the 
 DRC and its findings come back with `stage: "kicad"`. When it is not, `result.json` says
 `"kicad_drc": {"run": false, "skipped": ..., "install": ...}` with the install command for the system: tell the
 user, do not install system software unasked. `--kicad-drc require` makes a missing KiCad a failure.
+
+## The schematic
+
+Every run writes `out/kicad/<name>.kicad_sch`, the board's schematic on KiCad's own symbols, and (with KiCad) reads
+it back: a `schematic` finding means its netlist differs from the board's. Place ICs with `symbol=` so they are drawn
+with their real pin names; a part without one is drawn on a generic symbol or a box of its pads.
 
 ## Rules for the agent
 

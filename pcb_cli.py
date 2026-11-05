@@ -255,8 +255,9 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
     ap.add_argument("--datasheets", action="store_true", help="also read each symbol part's datasheet and check its "
                     "pins against the datasheet's pin table (fetched once, then cached)")
-    ap.add_argument("--view", action="store_true", help="open the board in a browser while the run goes (its stage, "
-                    "the try it is on, about how long is left) and keep it open after; 'zeus view OUT' later")
+    ap.add_argument("--view", action="store_true", help="serve the viewer from this run and wait for Ctrl-C at the end "
+                    "(by default the viewer opens on its own in the background; 'zeus view OUT' later)")
+    ap.add_argument("--no-view", action="store_true", help="do not open the viewer (also off when CI is set)")
     a = ap.parse_args(argv)
     if a.json:                                           # (the progress lines go to stderr, the JSON alone to stdout)
         real_stdout, sys.stdout = sys.stdout, sys.stderr
@@ -270,6 +271,8 @@ def main(argv=None) -> int:
     pcb.PROGRESS = prog.event
     if a.view:
         srv, url = pcb_view.serve(a.out, block=False)
+    elif not a.no_view and not os.environ.get("CI"):     # (the board in a browser, live, without holding the run)
+        print(f"viewer: {pcb_view.launch(a.out)}", file=sys.stderr, flush=True)
     try:
         b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
     except pcb.FootprintNotFound as e:                   # (a mistyped footprint: one clear line, not a traceback)
@@ -333,7 +336,7 @@ def main(argv=None) -> int:
         notes.sort(key=lambda n: {"error": 0, "warning": 1, "info": 2}[n["severity"]])
     timings["critic"] = round(time.perf_counter() - t, 3)
     crit_err = [n for n in notes if n["severity"] == "error"]
-    chk, fchk, kchk, kicad, files = [], [], [], {"run": False}, {}
+    chk, fchk, kchk, schk, kicad, files = [], [], [], [], {"run": False}, {}
     routed = bool(b.tracks) or stage in ("check", "export")
     if stage in ("place", "critic"):
         chk = place                                       # (no copper yet: the placement is what can be checked)
@@ -356,6 +359,15 @@ def main(argv=None) -> int:
                 d = pcb.kicad_drc(kpaths[0])
                 kchk = d["errors"] + d["unconnected"]
                 kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+                sch = [k for k in kpaths if k.endswith(".kicad_sch")]
+                if sch:                                  # (the schematic, read back by KiCad: its nets are the board's)
+                    import kicad_sch
+                    try:
+                        schk = kicad_sch.check(b, sch[0])
+                    except RuntimeError as e:
+                        schk = [str(e)]
+                else:
+                    schk = ["the KiCad schematic was not written (see the line above)"]
             else:
                 why = f"KiCad {ver} is too old (9+ needed: the board is KiCad 9 format)" if ver else "KiCad (kicad-cli) is not installed"
                 how = pcb.KICAD_INSTALL.get(sys.platform, pcb.KICAD_INSTALL["linux"])
@@ -367,7 +379,8 @@ def main(argv=None) -> int:
             files["step"] = pcb.export_step(b, os.path.join(a.out, f"{b.name}.step"))
         timings["export"] = round(time.perf_counter() - t, 2)
     sections = [("routing", probs), ("placement" if stage in ("place", "critic") else "design check", chk),
-                ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else [])
+                ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else []) + (
+                [("schematic", schk)] if kicad["run"] else [])
     if stage in ("place", "critic"):
         sections = [s_ for s_ in sections if s_[0] != "house check"]
     if not b.tracks and not probs:                       # (nothing routed yet: no routing to call clean)
@@ -384,7 +397,7 @@ def main(argv=None) -> int:
     if files:
         print(f"wrote {a.out}: review {files['report']}, parts {files['html']}")
     print(f"({time.perf_counter() - t0:.1f} s: " + ", ".join(f"{k} {v} s" for k, v in timings.items()) + ")")
-    clean = not (probs or chk or fchk or kchk or crit_err) and (routed or stage in ("place", "critic"))
+    clean = not (probs or chk or fchk or kchk or schk or crit_err) and (routed or stage in ("place", "critic"))
     result = {"board": b.name, "script": os.path.abspath(a.script), "stage": stage, "clean": clean, "kicad_drc": kicad,
               "router": getattr(b, "router_used", "none (routed by the script)"),
               "environment": {k: r["ok"] for k, r in doctor().items()},   # (what this machine had: docs/setup.md)
@@ -392,12 +405,18 @@ def main(argv=None) -> int:
               "seconds": round(time.perf_counter() - t0, 1), "timings": timings,
               "placement": {r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")] for r, c in b.comps.items()},
               "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),
-                                                          ("kicad", kchk))
+                                                          ("kicad", kchk), ("schematic", schk))
                            for p in ps],
               "critic": notes,
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)
+    if not a.no_view and not os.environ.get("CI"):       # (KiCad's 3D model ready before the page asks for it)
+        for f in (pcb_view._model, pcb_view._schematic):
+            try:
+                f(pcb_view.Path(a.out).resolve(), a.script)
+            except Exception:
+                pass
     prog.finish(result["clean"])
     pcb.PROGRESS = None
     if a.json:

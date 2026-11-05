@@ -392,7 +392,7 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     import pcb
     work = keep or tempfile.mkdtemp()
     os.makedirs(work, exist_ok=True)
-    kpcb = pcb.export_kicad(board, os.path.join(work, "kicad"))[0]
+    kpcb = pcb.export_kicad(board, os.path.join(work, "kicad"), schematic=False)[0]
     script = os.path.join(work, "kicad_round_trip.py")
     with open(script, "w") as f:
         f.write(_KICAD_ROUND_TRIP)

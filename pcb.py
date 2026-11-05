@@ -37,6 +37,24 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+
+def _kicad_on_path():
+    """put kicad-cli on the PATH from KiCad's usual install place when it is not there already (the macOS app and
+    the Windows installer do not add it), so the DRC and the viewer's 3D parts work without setup"""
+    import glob
+    import os
+    import shutil
+    if shutil.which("kicad-cli"):
+        return
+    for d in ["/Applications/KiCad/KiCad.app/Contents/MacOS",
+              *sorted(glob.glob(r"C:\Program Files\KiCad\*\bin"), reverse=True)]:
+        if os.path.exists(os.path.join(d, "kicad-cli")) or os.path.exists(os.path.join(d, "kicad-cli.exe")):
+            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+            return
+
+
+_kicad_on_path()
+
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
@@ -437,6 +455,19 @@ class Board:
             if not value:
                 value = sym["value"]
         pads = footprint(fp)["pads"]
+        if sym is None:                                  # (no symbol given: KiCad's generic one for a passive or a
+            try:                                         #  connector - Device:R, Device:C ... - when its pins are the
+                import kicad_sch                         #  pads exactly; a chip needs its own: symbol=)
+                import parts
+                import pcb_view
+                if pcb_view.kind_of(ref, fp) == "ic":
+                    raise LookupError("a chip: no generic symbol")
+                name = kicad_sch.symbol_for(ref, {"fp": fp, "pads": pads, "value": value, "mpn": mpn, "note": note})
+                cand = parts.symbol(name)
+                if {q["num"] for q in cand["pins"]} == {n for n in pads if n}:
+                    sym = dict(cand, auto=True)
+            except Exception:                            # (offline, or no such symbol: the part goes without one)
+                sym = None
         if min_drill is None and self.rules is not None:
             import fab
             min_drill = (fab.RULES[self.rules] if isinstance(self.rules, str) else self.rules).get("pth_drill")
@@ -2045,7 +2076,7 @@ def _decap_target(c: dict, ref: str, num: str):
     if re.match(r"^(J|P|CN|CON)\d", ref, re.I):
         return None
     sym = c.get("symbol")
-    if sym:
+    if sym and not sym.get("auto"):                      # (a generic symbol says nothing of a chip's supply pins)
         return any(q["num"] == num and q["type"] == "power_in" for q in sym["pins"])
     return True
 
@@ -4034,8 +4065,8 @@ def kicad_version() -> Optional[str]:
 
 KICAD_INSTALL = {"linux": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad "
                           "(or your distribution's kicad package, version 9 or newer)",
-                 "darwin": "brew install --cask kicad (kicad-cli is in KiCad.app/Contents/MacOS: put it on the PATH)",
-                 "win32": "the installer from kicad.org (kicad-cli.exe is in KiCad's bin folder: put it on the PATH)"}
+                 "darwin": "brew install --cask kicad (found in /Applications/KiCad without a PATH entry)",
+                 "win32": "the installer from kicad.org (found in Program Files\\KiCad without a PATH entry)"}
 
 
 def kicad_drc(pcb_path: str, refill: bool = False) -> Dict[str, list]:
@@ -4114,8 +4145,9 @@ def pack(src_dir: str) -> str:
 
 
 def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.0, 100.0),
-                 place_labels: bool = True) -> List[str]:
-    """``<name>.kicad_pcb`` and ``<name>.kicad_pro`` (KiCad 9 format; KiCad 9 and later open it) for further work in
+                 place_labels: bool = True, schematic: bool = True) -> List[str]:
+    """``<name>.kicad_pcb``, ``<name>.kicad_pro`` and (``schematic``) ``<name>.kicad_sch`` on KiCad's own symbols
+    (kicad_sch.py) - KiCad 9 format; KiCad 9 and later open it - for further work in
     KiCad: every part on its library footprint (with its 3D model, MPN and note), the nets, tracks, vias, the pours as
     filled zones (solid pad connection, islands kept, as the harness fills them), keep-outs as rule areas, mounting
     holes, the outline on Edge.Cuts and the legend on the silkscreen. The project file carries the board's clearance,
@@ -4250,7 +4282,16 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     ppath = os.path.join(out_dir, f"{board.name}.kicad_pro")
     with open(ppath, "w") as f:
         json.dump(pro, f, indent=2)
-    return [path, ppath]
+    out = [path, ppath]
+    if not schematic:
+        return out
+    try:                                                 # the schematic, on KiCad's own symbols (kicad_sch.py)
+        import kicad_sch
+        out.append(kicad_sch.write(board, out_dir))
+    except Exception as e:                               # (no symbols offline: the board is still written)
+        import sys
+        print(f"KiCad schematic: not written ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr)
+    return out
 
 
 NET_COLORS ={"GND": (40, 40, 40), "VBUS": (200, 40, 40), "VIN": (230, 110, 20), "VD": (180, 80, 160),
