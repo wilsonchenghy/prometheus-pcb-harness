@@ -248,7 +248,7 @@ def export(out):
     import csv
     import tempfile
     import pcb
-    b, probs = routed(store=os.path.join(HERE, "..", "routes"))
+    b, probs = routed(store=os.path.join(HERE, "routes"))
     chk = b.check()
     print("route:", probs or "clean", "| check:", chk or "clean")
     assert not probs and not chk
@@ -277,4 +277,4 @@ def export(out):
 
 if __name__ == "__main__":
     import sys
-    export(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "..", "boards", "cube_main"))
+    export(sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "out"))

@@ -10,7 +10,7 @@ import datetime
 import os
 import sys
 
-sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")]
+sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")]
 import schemdraw.elements as elm
 from schem import Sheet, check_sheets, save_sheets
 

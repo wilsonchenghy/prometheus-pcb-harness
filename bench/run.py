@@ -101,10 +101,10 @@ BOARDS = {
     "blinker": _blinker,
     "usb_ldo": _usb_ldo,
     "esp32_sensor": _esp32,
-    "arm_pdb": lambda: [(*(lambda g: (g["PCB"], g["PCB_ROUTE_PROBLEMS"]))(_ex("arm_pdb.py")), "jlcpcb-2")],
-    "twilight": lambda: [(*(lambda g: (g["PCB"], g["PCB_ROUTE_PROBLEMS"]))(_ex("twilight_fc.py")), "jlcpcb-4")],
+    "arm_pdb": lambda: [(*(lambda g: (g["PCB"], g["PCB_ROUTE_PROBLEMS"]))(_ex("arm_pdb/arm_pdb.py")), "jlcpcb-2")],
+    "twilight": lambda: [(*(lambda g: (g["PCB"], g["PCB_ROUTE_PROBLEMS"]))(_ex("twilight_fc/twilight_fc.py")), "jlcpcb-4")],
     "cube": lambda: [(*_ex("balancing_cube/cube_board.py")["routed"](
-        store=os.path.join(ROOT, "examples", "routes")), "jlcpcb-2")],
+        store=os.path.join(ROOT, "examples", "balancing_cube", "routes")), "jlcpcb-2")],
     "ripple": lambda: [(*_ex("social_wheelbot/ripple_pcb.py")["build"](), "jlcpcb-2")],
     "qdd": lambda: [(*_ex("quadruped/qdd_power_board.py")["build"](), "jlcpcb-2")],
     "fpv": _fpv,

@@ -1,7 +1,7 @@
 # Twilight flight computer, Rev A
 
 The board described in the "Twilight Flight Computer" concept (Rev A, Aug 2026), designed in the harness:
-`Backend/cad_bench/projects/twilight_fc.py` (layout), `twilight_fc_sheet.py` (schematic). Run the first to regenerate
+`../twilight_fc.py` (layout), `twilight_fc_sheet.py` (schematic). Run the first to regenerate
 everything here. **165 x 50 mm, 4 layers, 1 oz copper, 0.15 mm tracks and clearance, 1.6 mm FR4, six M3 holes on a
 76.5 x 38 mm pattern (corners + midspan).**
 

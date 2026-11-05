@@ -2,7 +2,7 @@
 
 A 74-second 1080p film drawn on a canvas from real data: the RP2040 bench board's placement and routing
 (`board.json`, exported from `bench/rp2040_board.py`'s routed board) and the example boards' renders
-(`img/`, cut from `boards/*`) and the viewer's screenshots (`img/view_*.png`, from `media/viewer/`). Every frame is a function of time (`window.__render(t)`).
+(`img/`, cut from `examples/*/out/`) and the viewer's screenshots (`img/view_*.png`, from `media/viewer/`). Every frame is a function of time (`window.__render(t)`).
 
 ```
 cd media/release-video

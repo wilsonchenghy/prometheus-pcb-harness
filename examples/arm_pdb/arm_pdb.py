@@ -20,13 +20,13 @@
 # Fuses (on board, replaceable SMD bricks): Eaton CB61F40A (40 A, 63 VDC, 500 A DC breaking) on each AK feed (the
 #   team's 40 A choice; ATO PCB holders were rejected: 30 A max / 22.5 A continuous, 32 V); CB61F10A on each 24 V
 #   feed. The 500 A breaking capacity is below the prospective short-circuit current of the pack at the board
-#   (~1 kA): the pack's Class T fuse is the backstop for a bolted short - see boards/arm_pdb/README.md.
+#   (~1 kA): the pack's Class T fuse is the backstop for a bolted short - see out/README.md.
 
 import math
 import os
 import sys
 
-sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), os.path.dirname(os.path.abspath(__file__))]
+sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."), os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."), os.path.dirname(os.path.abspath(__file__))]
 from pcb import Board, route, cached_route
 from pcb_bodies import xt30pw_body, xt90pw_body, brick_fuse_body
 
@@ -330,7 +330,7 @@ if os.environ.get("ARM_PDB_SOLIDS", "1") == "1" and __name__ != "__main__":
 if __name__ == "__main__":
     import csv
     import pcb
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "boards", "arm_pdb")
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
     b, probs = PCB, PCB_ROUTE_PROBLEMS
     print("route:", probs)
     chk = b.check()
