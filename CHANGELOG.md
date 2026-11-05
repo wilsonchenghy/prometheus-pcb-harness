@@ -2,93 +2,46 @@
 
 ## v0.1.0 (2026-11-05)
 
-The first release, as Prometheus. Since the first tag (2026-11-04):
-
-- Renamed **Prometheus — AI PCB Harness** (was Zeus): the command is `prometheus` (`zeus` and `pcb-harness` still
-  work), the package `prometheus-pcb`, the Claude Code skill `prometheus`, `$PROMETHEUS_JAVA` (`$ZEUS_JAVA` still read);
-  the viewer's mark is a flame.
-- Renamed **Zeus — AI PCB Harness**: the command is `zeus` (`pcb-harness` still works), the package `zeus-pcb`.
-- `pcb-harness view out/` and `--view`: the board in a browser - layout with layers to switch, an interactive 3D
-  view (three.js, shipped with the page; KiCad's photoreal render when KiCad is installed), a net-label schematic,
-  the findings (click one: the board zooms to it) - and, during a run, its stage, the try it is on and about how
-  long is left.
-- Parts from KiCad's symbol library: wire a chip by pin name, every pin matched to a pad and every pad to a pin, an
-  ERC on the pin types in the critic, `pcb-harness part`, and a Parts view drawing each pin's thread to its pad.
-- The viewer: KiCad's own 3D export with every part's real model; a professional shell; light-drawn copper with
-  current flowing on a focused net; a build-up sweep, a cursor light, a 4x loupe, parts that drop in and explode.
-- Found by building boards as a new user: a mistyped footprint is named with the closest names KiCad has; a
-  "within d mm" requirement is measured pad to pad; parts that do not fit stop the run at once instead of being
-  routed round; via drops keep the board's edge gap; FreeRouting's edge slips are repaired; the critic stage no
-  longer reports routing it has not done.
-- The datasheet check reads more datasheets: numbered pin lists ("2- VOUT"), "4 GND" rows, the names datasheets give
-  a pin otherwise (VOUT for KiCad's VO), other letter case (RS for Rs), a table continued on the next page; a pinout
-  drawing is no longer taken for the table. Checked on DRV8833, SN65HVD230, AMS1117, AP63205, NE555 and LM75B.
-- The CAN node (STM32F103, SN65HVD230, AMS1117), the LED ring (ATtiny85) and the blinker (NE555) are wired from
-  KiCad's symbols by pin name. The ATtiny85-20SU is the 5.3 mm wide SOIC-8 its symbol names: the LED ring had the
-  3.9 mm one. The blinker's 100n sits by the 555's VCC pin.
-- A pin can be named by one of its functions (PB4 for "XTAL2/PB4"); the decoupling review counts a symbol's power
-  inputs only (not a reset tied high); a datasheet whose pin table is not found reads "not checked", never "differs".
-- Decoupling capacitors are held to a chip's supply pins (a symbol's power inputs), never to a connector's pin.
-- The ERC lists a chip's unused pins in one note, not one note a pin.
-- The release video is Zeus, with a scene of the viewer (74 s).
-- The known open boards are clean: the FPV 4-in-1 ESC's ground is whole (RB2V's ground via goes in before the
-  signals close its scrap of pour in; driver 4's logic ground joined by a thin track), the game controller's two
-  screw holes moved 0.25 mm inboard to x = 20.75 (0.54 mm from the 7.2 mm cut-outs; the shell's bosses move with
-  them), Twilight's buck regulators' thermal vias drilled at JLCPCB's 0.3 mm and two via pairs parted to 0.5 mm.
-  Every bench and example board passes; KiCad's DRC finds no errors or unconnected items on them.
-- Board.tidy(), run after routing: a via that meets its net on fewer than two layers joins nothing and is taken
-  away (KiCad's "via dangling"; the tracks meeting in it brought to its centre): 13 on the ESC, 2 on the controller.
-- The install lines use the repository's current address (github.com/wilsonchenghy/pcb-harness), which keeps
-  working after a rename.
-- pcb.nudge_vias(board, gap): two nets' vias closer than the house's drill gap are parted by the shortfall, their
-  tracks' ends with them, when every clearance holds.
-- A near-rule can name a pin: ["C4", "U1.VDDA", 3.0] (by number or symbol name), in the placer, the misses and the
-  critic.
-- Parallel place-and-route tries are repeatable: each runs in a process forked afresh (a pool's worker carried
-  its memos from one try into the next), and a FreeRouting run that exits without writing its session (it does,
-  now and then, beside other copies) is run again instead of being read as a routing that reached nothing.
-
-### The harness
-
-The first release: a printed circuit board harness for people and AI agents. Describe a board in Python (or start
-from a KiCad netlist), and it places, routes, checks and writes everything a board house needs to make and
-assemble it.
+The first release of Prometheus, a printed circuit board harness for engineers and the AI agents that work with them.
+Describe a board in Python (or start from a KiCad netlist), and it places, routes, checks and writes everything a
+board house needs to make and assemble it - explaining each finding, so the engineer stays in charge of the design.
 
 **Design**
-- Parts on real KiCad footprints (fetched on first use), nets with their current, pours, keep-outs, mounting
-  holes, 2 or 4 layers, any board outline; a KiCad netlist (`.net`) as a starting point.
-- Placement: `place_and_route` places the parts you leave without a position (short wire, decoupling held by its
-  pins, crystals by their chip, the requirements' "within d mm" kept), routes, and tries other placements when the
-  routing is not clean; tries run in parallel, and the same input always gives the same board.
+- Parts on real KiCad footprints and symbols (fetched on first use), wired by pin name and checked pin to pad both
+  ways with an ERC; nets with their current, pours, keep-outs, mounting holes, 2 or 4 layers, any outline; a KiCad
+  netlist (`.net`) as a starting point.
+- Placement for the parts you leave without a position (decoupling held by its pins, crystals by their chip, the
+  requirements' "within d mm" kept); routing tries other placements when it is not clean, in parallel and repeatably.
+- Footprints from a package drawing (`prometheus footprint`): IPC-7351B lands, checked, and a review page to compare
+  with the drawing.
 
 **Routing**
-- FreeRouting, the router KiCad users use, through KiCad's own Specctra export and import when KiCad is
-  installed, with fan-out stubs for fine-pitch parts (0.4 mm QFN) and a clearance repair after it; the harness's
-  own grid router when FreeRouting is not installed, and to finish the poured nets.
-- Track widths from each net's current (IPC-2221), necking down only at a pin narrower than the track.
-- Differential pairs length-tuned (a serpentine on the shorter net).
+- FreeRouting through KiCad's own Specctra export and import when KiCad is installed, with fan-out for fine-pitch
+  parts; the harness's own router otherwise. Track widths from each net's current (IPC-2221); differential pairs
+  length-tuned.
 
 **Checks**
-- The design check: every net joined (by KiCad's rules), no shorts, clearance, current, voltage drop, drill gaps,
-  bare holes, courtyards, dangling copper.
-- The board house's rules (JLCPCB 2 / 4 layer, PCBWay, OSH Park).
-- KiCad 9's own DRC on the exported board, when KiCad is installed.
-- A design critic against a requirements file (`--spec`: size, currents, distances, pairs, connectors at the edge,
-  holes) and the usual review points, in milliseconds.
+- The design check (every net joined, shorts, clearance, current, voltage drop, drills, courtyards), the board
+  house's rules (JLCPCB, PCBWay, OSH Park) and KiCad's own DRC.
+- A design critic against the engineer's requirements (`--spec`: size, currents, distances, pairs, connectors at
+  the edge, holes) and the usual review points; a board far larger than its parts is flagged when no size is given.
+- Every finding names its parts, pins and place, what to change, and why the rule matters.
 
 **Outputs**
-- Gerbers and drill, pick-and-place, the JLCPCB assembly BOM, parts carts for DigiKey, Mouser and LCSC, a KiCad
-  project, a review page, a STEP of the assembled board, schematics drawn from the netlist.
+- Gerbers and drill, pick-and-place, the JLCPCB assembly BOM with LCSC numbers looked up from JLCPCB's catalogue,
+  parts carts for DigiKey, Mouser and LCSC, a design summary, a STEP of the assembled board.
+- A KiCad project with the board and its schematic on KiCad's own symbols: functional blocks, decoupling drawn as
+  banks on one rail, a regulator's power stage wired, large designs on A3 pages joined by global labels; KiCad reads
+  its netlist back equal to the board's.
 
-**For agents**
-- `pcb-harness board.py out/ --json`: one JSON result with each finding's kind, pins, location and a hint;
-  `--stage critic | place | route | check | export` runs one step from the last run's saved board.
-- `pcb-harness doctor` and `pcb-harness setup`; a Claude Code skill and `AGENTS.md` in the repository.
+**The viewer** (`prometheus view out/`, opened by every run): the layout with its layers and nets, KiCad's 3D models,
+KiCad's schematic page by page, each part's symbol beside its land pattern, the findings, and the run's progress.
 
-**Boards** (`bench/`, `examples/`): eight bench boards placed and routed from scratch and clean, KiCad DRC
-included (a blinker, a USB LDO, an ESP32 sensor, an addressable LED ring, a LiPo power bank, a dual motor driver,
-a CAN node, an RP2040 board), and eight example boards from robot projects. Known open: the FPV 4-in-1 ESC's
-ground is in three pieces, and the game controller's mounting holes sit 0.3 mm from its shell's cut-outs.
+**For agents and engineers**
+- `prometheus board.py out/ --json`: one JSON result; `--stage critic | place | route | check | export` runs one
+  step from the last run's saved board. `prometheus doctor` and `prometheus setup`.
+- `AGENTS.md` and a Claude Code skill (`install.sh --skill`) that work with the engineer: their requirements first,
+  a stop at each decision, each fix explained.
 
-**Release video**: `media/release-video/` (a 67 s film drawn from the RP2040 board's real routing, with a
-synthesised soundtrack); the rendered film is attached to this release.
+**Boards** (`bench/`, `examples/`): bench boards placed and routed from scratch and clean, KiCad DRC included, and
+example boards from robot projects, among them a 199-part, 4-layer flight computer.
