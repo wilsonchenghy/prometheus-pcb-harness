@@ -957,6 +957,7 @@ function drawHeader() {
   $("#stime").textContent = R && R.seconds ? secs(R.seconds) : "";
   const vv = $("#vv"), vs = $("#vs");
   if (running) { vv.className = "v run"; vv.textContent = "Routing."; vs.textContent = P.tries ? `Try ${Math.min(P.tries_done + 1, P.tries)} of ${P.tries}` : ""; }
+  else if (P && P.stopped) { vv.className = "v bad"; vv.textContent = "Stopped."; vs.textContent = "The run ended before it finished: run it again."; }
   else if (R && R.board) { vv.className = "v " + (R.clean ? "ok" : "bad"); vv.textContent = R.clean ? "Ready to order." : (n === 1 ? "1 issue." : n + " issues.");
     const erc = B && !B.error && B.comps.some(c => c.symbol);
     vs.textContent = R.clean ? `Design, house rules${R.kicad_drc && R.kicad_drc.run ? ", KiCad DRC" : ""}${erc ? " and ERC" : ""} pass.` : "Click one to see it on the board."; }
@@ -967,7 +968,7 @@ function drawHeader() {
     $("#pline").style.width = (frac * 100) + "%";
     const st = P.stage === "place+route" ? "Placing and routing" : P.stage[0].toUpperCase() + P.stage.slice(1);
     $("#pt1").textContent = st;
-    $("#pt2").textContent = (P.tries ? `Try ${Math.min(P.tries_done + 1, P.tries)} of ${P.tries}` + (P.tries_done ? ` · ${P.tries_done} done` : "") + " · " : "") + secs(P.elapsed) + " so far";
+    $("#pt2").textContent = (P.tries ? `Try ${Math.min(P.tries_done + 1, P.tries)} of ${P.tries}` + (P.tries_done ? ` · ${P.tries_done} done` : "") + " · " : "") + (P.router_line ? P.router_line + " · " : "") + secs(P.elapsed) + " so far";
     $("#peta").textContent = P.eta == null ? "…" : clock(P.eta);
   }
 }

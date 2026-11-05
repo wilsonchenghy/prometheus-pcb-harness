@@ -34,7 +34,7 @@ class Progress:
         self.t0 = time.time()
         self.d = {"script": os.path.abspath(script), "started": self.t0, "stage": "loading", "done": False,
                   "tries": None, "tries_done": 0, "try_times": [], "workers": 1, "parts": parts, "stages": [],
-                  "snap": 0}
+                  "snap": 0, "pid": os.getpid()}
         self._write()
 
     def stage(self, name: str):
@@ -50,6 +50,8 @@ class Progress:
         "seconds": s, "clean": bool, "line": text} per try"""
         if ev.get("kind") == "tries":
             self.d["tries"], self.d["workers"] = ev["tries"], ev.get("workers", 1)
+        elif ev.get("kind") == "router":                # (the router's own progress inside a try)
+            self.d["router_line"] = ev.get("line", "")
         elif ev.get("kind") == "try":
             self.d["tries_done"] += 1
             self.d["try_times"].append(ev.get("seconds", 0.0))
@@ -426,6 +428,10 @@ def make_handler(out_dir: str):
                     d = json.loads(p.read_text())
                     if not d.get("done"):                # (elapsed counts on while the page waits)
                         d["elapsed"] = round(time.time() - d["started"], 1)
+                        try:                             # (a run that was stopped: said so, not "routing" for ever)
+                            os.kill(d.get("pid") or 0, 0) if d.get("pid") else None
+                        except ProcessLookupError:
+                            d.update(done=True, stopped=True, stage="stopped")
                     return self._json(d)
                 if path == "/api/result":
                     p = out / "result.json"

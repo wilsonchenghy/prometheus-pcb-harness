@@ -19,6 +19,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Dict, List, Optional, Sequence, Tuple
 
 UM = 1000.0                                              # .dsn units: micrometres (mm x 1000)
@@ -303,8 +304,18 @@ def run(dsn: str, ses: str, passes: int = 100, timeout: int = 1800, threads: int
     for attempt in range(3):                            # (run alongside other copies, FreeRouting now and then
         if os.path.exists(ses):                         # routes and exits leaving its session empty: a run that
             os.remove(ses)                              # gives no session is run again)
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        log += r.stdout + r.stderr
+        import pcb
+        t0 = time.time()
+        pr = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        for line in pr.stdout:                           # (each pass as it ends, to the page, as KiCad shows it)
+            log += line
+            m = re.search(r"pass #(\d+)", line)
+            if m:
+                pcb._progress(kind="router", line=f"FreeRouting pass {m.group(1)}")
+            if time.time() - t0 > timeout:
+                pr.kill()
+                raise RuntimeError(f"FreeRouting ran past {timeout} s")
+        pr.wait()
         if os.path.exists(ses) and "(session" in open(ses, errors="replace").read(4096):
             return log
     raise RuntimeError("FreeRouting wrote no session (3 runs):\n" + log[-3000:])
