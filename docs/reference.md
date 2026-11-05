@@ -180,21 +180,24 @@ KiCad footprints and 3D models are downloaded on first use into `~/.cache/promet
 
 ## Example boards
 
-Each writes its fabrication set (layer plot, BOM, Gerbers, KiCad project, zips) to `boards/<name>/` by default, or to
-the directory given as its argument. The KiCad DRC and renders at the end need KiCad 8+ (`kicad-cli` on the path). The results are in `boards/`.
+Each board has its own folder in `examples/`: its script (and schematic sheet), its routed copper (`routes/`, kept in
+git so it rebuilds without re-routing) and what it builds (`out/`: layer plot, BOM, Gerbers, KiCad project, renders).
+Run the script to rebuild `out/`, or give it another folder. The KiCad DRC and renders at the end need KiCad 8+
+(`kicad-cli` on the path).
 
-| Board | Script | |
+| Folder | Script | |
 |---|---|---|
-| `arm_pdb` | `examples/arm_pdb.py` (+ `arm_pdb_sheet.py` schematic) | a robot arm's power distribution board, 60 A, hot-swap |
-| `twilight_fc` | `examples/twilight_fc.py` (+ `twilight_fc_sheet.py`) | a 4-layer flight controller around a Teensy 4.1 |
-| `cube_main` | `examples/balancing_cube/cube_board.py` (+ sheet) | a balancing cube's main board: three motor channels, encoders |
-| `ripple_main` | `examples/social_wheelbot/ripple_pcb.py` | a wheeled robot's power / CAN board, six motors |
-| `qdd_main` | `examples/quadruped/qdd_power_board.py` | a quadruped's power / CAN board, twelve motors |
-| `fpv_esc`, `fpv_fc` | `examples/fpv_quad/fpv_boards.py` | a 5-inch quadcopter's 4-in-1 ESC and STM32F405 flight controller |
-| `controller_main` | `examples/game_controller/controller_pcb.py` | a game controller's board in its shell's outline (`controller_board.json`) |
+| `examples/arm_pdb/` | `arm_pdb.py` (+ `arm_pdb_sheet.py` schematic) | a robot arm's power distribution board, 60 A, hot-swap |
+| `examples/twilight_fc/` | `twilight_fc.py` (+ `twilight_fc_sheet.py`) | a 4-layer flight controller around a Teensy 4.1 |
+| `examples/balancing_cube/` | `cube_board.py` (+ sheet) | a balancing cube's main board: three motor channels, encoders |
+| `examples/social_wheelbot/` | `ripple_pcb.py` | a wheeled robot's power / CAN board, six motors |
+| `examples/quadruped/` | `qdd_power_board.py` | a quadruped's power / CAN board, twelve motors |
+| `examples/fpv_quad/` | `fpv_boards.py` | a 5-inch quadcopter's 4-in-1 ESC and STM32F405 flight controller (`out/fpv_esc`, `out/fpv_fc`) |
+| `examples/game_controller/` | `controller_pcb.py` | a game controller's board in its shell's outline (`controller_board.json`) |
+| `examples/netlist/` | `blinker_sch.net` | a KiCad netlist to start a board from |
 
-Routed copper for some boards is kept in `examples/routes/` so they rebuild without re-routing. Pinouts marked
-ASSUMED in the scripts are from datasheets as remembered: verify before you order boards.
+`examples/pcb_bodies.py` (3D bodies for parts KiCad has no model of) and `examples/export.py` are shared by the
+scripts. Pinouts marked ASSUMED in the scripts are from datasheets as remembered: verify before you order boards.
 
 `viewer/PCB.tsx` is a React component for showing a board's layers in a web app (kept for reference; it expects the
 host app's API).

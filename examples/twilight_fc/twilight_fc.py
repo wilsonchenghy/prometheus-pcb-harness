@@ -19,7 +19,7 @@
 #   continuous through the board; leave L2 off so the BEC cannot back-feed the buck).
 #   VIN -> F2 7 A -> D2 Schottky -> VPYRO (470 uF) -> external arm switch (JA) -> Q3 P-FET (ARM_EN) -> VPYRO_ARMED.
 #
-# Pin map (Teensy 4.1, every one of the 42 edge pins used; see boards/twilight_fc/README.md):
+# Pin map (Teensy 4.1, every one of the 42 edge pins used; see out/README.md):
 #   0/1 TELEM1 (Serial1)   2,3,4,5,6,9 servo 1-6 (FlexPWM)   7/8 GPS (Serial2)   10 CS ICM-42688   11/12/13 SPI0
 #   14 expansion CS   15 ARM_EN   16 ICM-42688 INT1   17 BTN   18/19 I2C (SDA/SCL)   20/21/40/41 pyro continuity ADC
 #   22/23 CS BMI088 accel/gyro   24 CS ADXL375   25 VSERVO sense ADC   26/27/39 SPI1 (MOSI1/SCK1/MISO1)   38 CS LoRa
@@ -30,7 +30,7 @@ import math
 import os
 import sys
 
-sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."),
+sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."), os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."),
                 os.path.dirname(os.path.abspath(__file__))]
 from pcb import Board, route, cached_route, route_jobs, nudge_vias
 import pcb_bodies as bodies
@@ -745,8 +745,7 @@ if os.environ.get("TWILIGHT_BUILD", "1") == "1":         # (0: only the definiti
 if __name__ == "__main__":
     import csv
     import pcb
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "boards",
-                                                              "twilight_fc")
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
     b, probs = PCB, PCB_ROUTE_PROBLEMS
     print("route:", len(probs))
     for p in probs:

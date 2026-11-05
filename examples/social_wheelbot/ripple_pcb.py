@@ -17,7 +17,7 @@ from pcb import Board, route, cached_route
 from vendor_parts import kicad
 
 C = (Align.CENTER, Align.CENTER, Align.MIN)
-ROUTES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "routes")
+ROUTES_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routes")
 PCB_Y = (-56.0, 102.0)
 POSTS = [(x, y) for x in (-58.0, 58.0) for y in (-52.0, 97.0)]
 XT30_H = 22.0                                      # XT30 pair, vertical, mated: body + plug height above the board
@@ -358,14 +358,13 @@ def build():
 
 
 if __name__ == "__main__":
-    # python ripple_pcb.py [out_dir]: the board's fabrication set (boards/ripple_main by default), checked by the
+    # python ripple_pcb.py [out_dir]: the board's fabrication set (out/ by default), checked by the
     # harness and by KiCad's own DRC on our fills and on KiCad's
     import csv
     import sys
     import tempfile
     import pcb
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..",
-                                                             "boards", "ripple_main")
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
     b, probs = build()
     print("route:", probs)
     chk = b.check()

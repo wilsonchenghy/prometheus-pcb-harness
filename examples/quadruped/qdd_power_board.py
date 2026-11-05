@@ -4,7 +4,7 @@ and an IMU, an XT30 + JST-GH pair per motor for twelve motors (the board Ripple'
 Taken from the quadruped's design (its legs, frame and wiring are not part of this example); the board code is as
 there. ASSUMED pinouts are from the makers' datasheets as remembered: verify before fab.
 
-    python qdd_power_board.py [out_dir]      # writes boards/qdd_main
+    python qdd_power_board.py [out_dir]      # writes out/
 """
 import math
 import os
@@ -261,7 +261,7 @@ def board_route(b, top_pours, vbus):
 def build():
     b, tp, vb = power_board()
     board_pours(b, tp, vb)
-    store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "routes")    # routed copper, kept in git
+    store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routes")    # routed copper, kept in git
     return b, cached_route(b, lambda b_: board_route(b_, tp, vb), tag="qdd-main-r7", store=store)
 
 
@@ -270,4 +270,4 @@ if __name__ == "__main__":
     from export import export
     b, probs = build()
     export(b, probs, sys.argv[1] if len(sys.argv) > 1 else
-           os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "boards", "qdd_main"))
+           os.path.join(os.path.dirname(os.path.abspath(__file__)), "out"))

@@ -3,7 +3,7 @@
 Taken from the quadcopter's design (its frame, motors and wiring are not part of this example); the board code is as
 there. ASSUMED pinouts are from the makers' datasheets as remembered: verify before fab.
 
-    python fpv_boards.py [out_dir]      # writes boards/fpv_esc and boards/fpv_fc
+    python fpv_boards.py [out_dir]      # writes out/fpv_esc and out/fpv_fc
 """
 import math
 import os
@@ -424,7 +424,7 @@ def fc_build():
 if __name__ == "__main__":
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
     from export import export
-    base = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "boards")
+    base = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "out")
     for name, make in (("fpv_esc", esc_build), ("fpv_fc", fc_build)):
         b, probs = make()
         export(b, probs, os.path.join(base, name))

@@ -196,7 +196,7 @@ def do_route(b):
 
 def routed(outline, at, holes, keepouts=()):
     b = build(outline, at, holes, keepouts)
-    store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "routes")    # routed copper, kept in git
+    store = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routes")    # routed copper, kept in git
     probs = cached_route(b, do_route, tag="ctl_v10", store=store)   # (bump the tag when do_route changes: the cache
     b.tidy()                                                        # keys the placement, not this code)
     return b, probs
@@ -213,4 +213,4 @@ if __name__ == "__main__":
     g = json.load(open(os.path.join(here, "controller_board.json")))
     keep = [([tuple(p) for p in pts], why) for pts, why in g["keepouts"]]
     b, probs = routed([tuple(p) for p in g["outline"]], g["at"], [tuple(h) for h in g["holes"]], keep)
-    export(b, probs, sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "..", "..", "boards", "controller_main"))
+    export(b, probs, sys.argv[1] if len(sys.argv) > 1 else os.path.join(here, "out"))
