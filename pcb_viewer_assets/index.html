@@ -203,7 +203,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     <div class="vtag" id="vtag">Layout · <b>01/04</b></div>
     <div class="view on" id="layout"><svg id="lsvg" class="pan"></svg></div>
     <div class="view" id="v3d"><div id="three" style="position:absolute;inset:0"></div><div class="float" id="mtagbox" style="right:34px;top:22px;padding:6px 11px;font:500 10px var(--mono);letter-spacing:1.6px;text-transform:uppercase;color:var(--ctext2)"><span id="mtag"></span></div><div id="render"><img id="rimg" alt="KiCad 3D render"></div></div>
-    <div class="view" id="schem"><svg id="ssvg" class="pan"></svg></div>
+    <div class="view" id="schem"><svg id="ssvg" class="pan"></svg><div class="float looks" id="sheets" style="display:none"></div></div>
     <div class="view" id="parts"><div class="plist" id="plist"></div><svg id="psvg"></svg>
       <div class="pfoot"><b id="pcount"></b><span id="pnow"></span><button class="btn" id="pverify">Verify pins</button></div></div>
     <div class="shimmer"></div><div class="spot"></div>
@@ -301,7 +301,7 @@ $$("#seg button").forEach(b => b.onclick = () => {
   $("#loupeb").style.display = b.dataset.v === "layout" ? "" : "none"; $("#explode").style.display = b.dataset.v === "v3d" ? "" : "none";
   if (b.dataset.v !== "layout") setLoupe(false);
   $("#tools").style.display = b.dataset.v === "parts" ? "none" : "";
-  $(".app").classList.toggle("focus", b.dataset.v === "parts");
+  $(".app").classList.toggle("focus", b.dataset.v === "parts" || b.dataset.v === "schem");   // (a figure or a sheet: the whole width)
   const vi = $$("#seg button").indexOf(b) + 1; $("#vtag").innerHTML = `${b.textContent} · <b>0${vi}/04</b>`;          // (a part's figure gets the whole width)
   if (b.dataset.v === "parts") setTimeout(drawParts, 380);
   $("#msg").textContent = "";                           // (one view's loading line never shows over another's)
@@ -567,11 +567,21 @@ async function drawSchem() {
     if (!got.length) { svg.innerHTML = ""; $("#msg").textContent = r && r.error ? r.error : "KiCad is drawing the schematic…";
       if (!(r && r.error)) setTimeout(() => activeView() === "schem" && drawSchem(), 1500); return; } }
   if (activeView() === "schem") $("#msg").textContent = "";
-  svg.innerHTML = ""; let y = 0;
-  for (const sh of SHEETS) { el("rect", { x: 0, y, width: sh.w, height: sh.h, fill: "#ffffff" }, svg);
-    el("image", { href: sh.url, x: 0, y, width: sh.w, height: sh.h }, svg); y += sh.h + 40; }
-  SZ.set(-20, -20, Math.max(...SHEETS.map(s => s.w)) + 40, y + 0);
-}
+  if (curSheet >= SHEETS.length) curSheet = SHEETS.length > 1 ? 1 : 0;        // (a large design: its first page, not the cover)
+  const bar = $("#sheets"); bar.style.display = SHEETS.length > 1 ? "flex" : "none"; bar.innerHTML = "";
+  SHEETS.forEach((sh, i) => { const n = decodeURIComponent(sh.url.split("/").pop().split("?")[0]).replace(/\.svg$/, "");
+    const name = i === 0 ? "Cover" : (n.split("-").slice(1).join("-") || `Page ${i + 1}`).replace(/\s*\(.*\)$/, "");
+    const bt = bar.appendChild(document.createElement("button")); bt.textContent = name.length > 22 ? name.slice(0, 21) + "…" : name; bt.title = n;
+    bt.classList.toggle("on", i === curSheet); bt.onclick = () => { curSheet = i; drawSchem(); }; });
+  const sh = SHEETS[curSheet]; svg.innerHTML = "";                            // (one page at a time, fitted: readable)
+  el("rect", { x: 0, y: 0, width: sh.w, height: sh.h, fill: "#ffffff" }, svg);
+  el("image", { href: sh.url, x: 0, y: 0, width: sh.w, height: sh.h }, svg);
+  const fit = () => SZ.set(-6, -6, sh.w + 12, sh.h + 12); fit(); setTimeout(fit, 400);   // (and again once the side panels
+}                                                                                          // have made room)
+let curSheet = 99;
+document.addEventListener("keydown", e => {                // (← → turn the page)
+  if (activeView() !== "schem" || !SHEETS || SHEETS.length < 2 || !["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+  curSheet = Math.max(0, Math.min(SHEETS.length - 1, curSheet + (e.key === "ArrowRight" ? 1 : -1))); drawSchem(); });
 
 // ---------- parts: every pin to its pad ----------
 let curPart = null, verifying = null;
