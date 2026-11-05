@@ -393,7 +393,7 @@ function drawLayout() {
   if (!B || B.error) return;
   const svg = el("g", { id: "lroot" }, host);
   const glow = look === "glow", made = look === "board";
-  el("path", { d: ring(B.outline), fill: made ? "#0b3a26" : glow ? "rgba(14,17,21,.92)" : "#0d0f12", stroke: made ? "#e8e0c8" : "rgba(255,255,255,.35)", "stroke-width": 0.14 }, svg);
+  el("path", { d: [B.outline, ...(B.cutouts || [])].map(ring).join(" "), "fill-rule": "evenodd", fill: made ? "#0b3a26" : glow ? "rgba(14,17,21,.92)" : "#0d0f12", stroke: made ? "#e8e0c8" : "rgba(255,255,255,.35)", "stroke-width": 0.14 }, svg);
   const layers = made ? [topL()] : [botL(), topL()];
   for (const L of layers) {
     if (!layerOn[L]) continue; const g = el("g", { filter: glow ? "url(#glow)" : "" }, svg);
@@ -813,6 +813,7 @@ function build3d() {
   sh.position.set(cx, cy, -T - 7); root.add(sh);
   const bs = new THREE.Shape(B.outline.map(p => new THREE.Vector2(p[0], p[1])));
   for (const h of B.holes) { const c = new THREE.Path(); c.absarc(h[0], h[1], h[2] / 2, 0, Math.PI * 2, true); bs.holes.push(c); }
+  for (const r of B.cutouts || []) bs.holes.push(new THREE.Path(r.map(p => new THREE.Vector2(p[0], p[1]))));
   const bg = new THREE.ExtrudeGeometry(bs, { depth: T, bevelEnabled: false, curveSegments: 28 }); bg.translate(0, 0, -T);
   root.add(new THREE.Mesh(bg, [new THREE.MeshBasicMaterial({ visible: false }),     // (the board's edge: KiCad's export has
     new THREE.MeshStandardMaterial({ color: new THREE.Color(0x6b734a).convertSRGBToLinear(), roughness: 0.8 })]));  // no walls)

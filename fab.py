@@ -219,7 +219,7 @@ def fab_check(board, rules=None) -> List[str]:
         out.append(f"{len(board.layers)} layers: the preset allows {r['max_layers']}")
     if board.clear < r["space"] - 1e-9:
         out.append(f"clearance {board.clear:.3f} mm is under the house's {r['space']:.3f} mm")
-    edge = board.outline.exterior
+    edge = board.outline.boundary                        # (cut-outs are edges too)
     for k, t in enumerate(board.tracks):
         if t["w"] < r["track"] - 1e-9:
             out.append(f"track {t['net']} ({t['layer']}) {t['w']:.3f} mm wide at {tuple(round(c, 2) for c in t['pts'][0])}: "
