@@ -169,6 +169,7 @@ sys.exit(0 if ok else 3)
 """
 
 
+@__import__("functools").lru_cache(maxsize=None)        # (asked once a run: it starts KiCad's Python)
 def kicad_available() -> bool:
     """KiCad's Python API (pcbnew) can be loaded"""
     import pcb
