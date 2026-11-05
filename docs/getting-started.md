@@ -138,7 +138,13 @@ each net of two or more pins, GND poured on the bottom. Parts in `at` stay where
 
 ## 6. Schematics
 
-`schem.py` draws schematic sheets from the board's netlist and checks them against the board; see
+Every run writes the board's KiCad schematic, `out/kicad/<name>.kicad_sch` (or `kicad_sch.write(b, dir)`): each part
+on its KiCad symbol (the one it was placed with, else Device:R / C / L / D / LED by its kind, else a box made from
+its pads), a titled block per IC with the parts on its signals, each pin wired to a net label or a GND symbol, on the
+smallest ISO sheet that holds it. Open it in Eeschema with the board. With KiCad installed the run reads it back
+(`kicad-cli sch export netlist`) and any net that differs from the board's is a finding with `stage: "schematic"`.
+
+`schem.py` draws sheets by hand, in an IC's datasheet form, and checks them against the board; see
 `examples/arm_pdb_sheet.py` for a full one.
 
 ## How fast

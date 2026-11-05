@@ -704,7 +704,7 @@ def test_pcb_kicad_board_file(tmp_path):
     b.net("GND", [("R1", "2"), ("R2", "2")])
     b.via("A", (8, 3))
     b.hole((17, 5), 2.2)
-    pcb_path, pro_path = pcb.export_kicad(b, str(tmp_path))
+    pcb_path, pro_path = pcb.export_kicad(b, str(tmp_path), schematic=False)
     tree = pcb._sx_parse(open(pcb_path).read())
     assert tree[0] == "kicad_pcb"
     fps = {next(p[2] for p in f if isinstance(p, list) and p[:2] == ["property", "Reference"]): f
@@ -1254,3 +1254,23 @@ def test_tidy_takes_away_a_via_that_joins_nothing():
     assert b.tidy() == 1
     assert [v["net"] for v in b.vias] == ["B"]
     assert any(t["pts"] == [(5.1, 5.0), (5.0, 5.0)] for t in b.tracks)   # (the end brought to where it met)
+
+
+@pytest.mark.parametrize("script", ["bench/blinker.py", "bench/usb_ldo.py", "bench/can_node.py",
+                                    "bench/power_bank.py", "bench/rp2040_board.py"])
+def test_kicad_schematic_is_the_board_and_nothing_overlaps(tmp_path, script):
+    """the KiCad schematic: every part on a symbol (its own, a generic one, or a box made from its pads), nothing on
+    the sheet overlapping, and - read back by KiCad - its netlist the board's"""
+    import kicad_sch
+    import pcb
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / script))
+    lay = kicad_sch.layout(b)
+    assert kicad_sch.overlaps(lay) == []
+    placed = {p.ref for _, _, ps in lay[0] for p in ps}
+    pn = b.pad_net()
+    assert placed == {r for (r, _) in pn}                # (every part on a net is on the sheet)
+    path = kicad_sch.write(b, str(tmp_path))
+    if not pcb.kicad_version():
+        pytest.skip("KiCad is not installed: the netlist read-back needs kicad-cli")
+    assert kicad_sch.check(b, path) == []

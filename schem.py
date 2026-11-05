@@ -141,13 +141,13 @@ class Sheet:
         return p
 
     def frame(self, x0, y0, x1, y1, title: str, sheet: str, board_name: str, rev: str = "A", date: str = "",
-              note: str = ""):
+              note: str = "", size: str = "A3"):
         """the drawing frame and the title block (bottom right), as on any engineering sheet"""
         self._poly([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], lw=1.6)
         self._poly([(x0 + 0.4, y0 + 0.4), (x1 - 0.4, y0 + 0.4), (x1 - 0.4, y1 - 0.4), (x0 + 0.4, y1 - 0.4)])
         bx0, by1 = x1 - 0.4 - 17.0, y0 + 0.4 + 4.2
         self._frame, self._tblock = (x0, y0, x1, y1), (bx0, y0 + 0.4, x1 - 0.4, by1)
-        self._frame_text = {title, board_name, note, f"SHEET  {sheet}", f"REV  {rev}", f"DATE  {date}", "SIZE  A3"}
+        self._frame_text = {title, board_name, note, f"SHEET  {sheet}", f"REV  {rev}", f"DATE  {date}", f"SIZE  {size}"}
         self._poly([(bx0, y0 + 0.4), (x1 - 0.4, y0 + 0.4), (x1 - 0.4, by1), (bx0, by1)])
         for yy in (by1 - 1.6, by1 - 2.6, by1 - 3.4):
             self._poly([(bx0, yy), (x1 - 0.4, yy)], close=False)
@@ -159,7 +159,7 @@ class Sheet:
         lab((bx0 + 0.3, by1 - 3.0), f"SHEET  {sheet}", 8)
         lab((bx0 + 8.8, by1 - 3.0), f"REV  {rev}", 8)
         lab((bx0 + 0.3, y0 + 0.75), f"DATE  {date}", 7)
-        lab((bx0 + 8.8, y0 + 0.75), "SIZE  A3", 7)
+        lab((bx0 + 8.8, y0 + 0.75), f"SIZE  {size}", 7)
 
     def netname(self, p, net: str, dx: float = 0.3, dy: float = -0.5):
         """name the net at point ``p`` (on a wire or pin) with a small label, as a schematic names a node"""

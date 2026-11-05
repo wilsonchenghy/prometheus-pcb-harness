@@ -155,7 +155,8 @@ def board_data(b) -> dict:
                       "courtyard": _poly(cy) if cy is not None else [], "pads": by_ref.get(ref, []),
                       "height": height_of(c["fp"]), "kind": kind_of(ref, c["fp"]),
                       "unplaced": bool(c.get("unplaced")),
-                      "symbol": ({k: c["symbol"][k] for k in ("name", "description", "datasheet", "pins", "body")}
+                      "symbol": ({k: c["symbol"].get(k, []) for k in ("name", "description", "datasheet", "pins", "body", "draw",
+                                                            "hide_names", "hide_numbers")}
                                  if c.get("symbol") else None)})
     cu = b.copper()
     copper = [{"net": n, "layer": L, "poly": _poly(g, 0.01)} for (n, L), g in sorted(cu.items()) if g is not None]
@@ -244,7 +245,7 @@ def _model(out: Path, script: str) -> dict:
     if not kpcbs:
         return {"error": "no KiCad board in this folder yet"}
     if not pcb.kicad_version():
-        return {"error": "KiCad is not installed: the 3D view shows the parts as simple bodies"}
+        return {"error": "KiCad is not installed: the 3D view shows the bare board"}
     glb = out / "board.glb"
     if not glb.exists() or glb.stat().st_mtime < kpcbs[0].stat().st_mtime:
         b, _ = pcb_cli.load(script)
@@ -259,6 +260,25 @@ def _model(out: Path, script: str) -> dict:
         if r.returncode != 0 or not glb.exists():
             return {"error": "KiCad's 3D export failed: " + (r.stderr or r.stdout)[-300:]}
     return {"glb": "/files/board.glb?t=%d" % int(glb.stat().st_mtime)}
+
+
+def _schematic(out: Path, script: str = "") -> dict:
+    """the board's KiCad schematic as KiCad draws it (``kicad-cli sch export svg``), for the page's schematic view;
+    cached as out/kicad/<name>.svg until the schematic changes"""
+    import subprocess
+    import pcb
+    schs = list((out / "kicad").glob("*.kicad_sch"))
+    if not schs:
+        return {"error": "no KiCad schematic in this folder yet"}
+    if not pcb.kicad_version():
+        return {"error": "KiCad is not installed: the schematic view shows the net labels"}
+    svg = schs[0].with_suffix(".svg")
+    if not svg.exists() or svg.stat().st_mtime < schs[0].stat().st_mtime:
+        r = subprocess.run(["kicad-cli", "sch", "export", "svg", "-o", str(schs[0].parent), str(schs[0])],
+                           capture_output=True, text=True, timeout=300)
+        if r.returncode != 0 or not svg.exists():
+            return {"error": "KiCad's schematic export failed: " + (r.stderr or r.stdout)[-300:]}
+    return {"svgs": ["/files/kicad/%s?t=%d" % (svg.name, int(svg.stat().st_mtime))]}
 
 
 def make_handler(out_dir: str):
@@ -318,6 +338,9 @@ def make_handler(out_dir: str):
                     s = cache.script()
                     with cache.lock:
                         return self._json(_model(out, s) if s else {"error": "no run in this folder yet"})
+                if path == "/api/schematic":
+                    with cache.lock:
+                        return self._json(_schematic(out))
                 if path == "/GLTFLoader.js":
                     return self._send(200, (PAGE.parent / "GLTFLoader.js").read_bytes(), "text/javascript")
                 if path == "/api/render3d":
@@ -357,6 +380,35 @@ def serve(out_dir: str, port: int = 0, open_browser: bool = True, block: bool = 
         except KeyboardInterrupt:
             srv.shutdown()
     return srv, url
+
+
+def launch(out_dir: str) -> Optional[str]:
+    """``zeus view OUT_DIR`` in the background, once per folder: it opens the browser and outlives the run; a viewer
+    already up for the folder is reused (its page follows the new run), so a run-edit-run loop opens one tab"""
+    import socket
+    import subprocess
+    import urllib.request
+    f = Path(out_dir) / "viewer.json"
+    here = Path(__file__).resolve().parent              # (the harness's code: a viewer started on older code is
+    code = max(q.stat().st_mtime for q in [*here.glob("*.py"), PAGE])  # replaced, not reused)
+    try:
+        v = json.loads(f.read_text())
+        if v.get("code") == code:
+            urllib.request.urlopen(v["url"], timeout=1)
+            return v["url"]
+        if v.get("pid"):
+            os.kill(v["pid"], 15)
+    except Exception:
+        pass
+    with socket.socket() as s:                           # (a free port, so the address is known before it starts)
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+    url = f"http://127.0.0.1:{port}/"
+    pr = subprocess.Popen([sys.executable, "-m", "pcb_cli", "view", str(Path(out_dir).resolve()), "--port", str(port)],
+                          cwd=os.path.dirname(os.path.abspath(__file__)), start_new_session=True,
+                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    f.write_text(json.dumps({"url": url, "pid": pr.pid, "code": code}))
+    return url
 
 
 def main(argv) -> int:
