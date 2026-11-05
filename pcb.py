@@ -4153,6 +4153,56 @@ def pack(src_dir: str) -> str:
     return out
 
 
+# KiCad 8's file format: what Altium's importer (File > Import Wizard > KiCad) reads. Its layer numbers, its version
+# stamps, and none of KiCad 9's new tokens
+_K8_LAYERS = {"F.Cu": 0, **{f"In{i}.Cu": i for i in range(1, 31)}, "B.Cu": 31, "B.Adhes": 32, "F.Adhes": 33,
+              "B.Paste": 34, "F.Paste": 35, "B.SilkS": 36, "F.SilkS": 37, "B.Mask": 38, "F.Mask": 39, "Dwgs.User": 40,
+              "Cmts.User": 41, "Eco1.User": 42, "Eco2.User": 43, "Edge.Cuts": 44, "Margin": 45, "B.CrtYd": 46,
+              "F.CrtYd": 47, "B.Fab": 48, "F.Fab": 49, **{f"User.{i}": 49 + i for i in range(1, 10)}}
+_K8_DROP = {"embedded_fonts", "embedded_files", "tenting", "placement"}   # (a rule area's placement: KiCad 9's)
+
+
+def export_kicad8(src_dir: str, out_dir: str) -> List[str]:
+    """the KiCad project in ``src_dir`` (as ``export_kicad`` writes it) again in KiCad 8's format, in ``out_dir``: for
+    tools that read KiCad 8 files and not later ones (Altium's KiCad import). The paths written"""
+    import os
+    import shutil
+    os.makedirs(out_dir, exist_ok=True)
+
+    def clean(node):
+        if not isinstance(node, list):
+            return node
+        node = [clean(x) for x in node if not (isinstance(x, list) and x and x[0] in _K8_DROP)]
+        if node and node[0] == "sheet":                  # (a page's box: KiCad 9 gave it these flags)
+            node = [x for x in node if not (isinstance(x, list) and x and x[0] in
+                                            ("exclude_from_sim", "in_bom", "on_board", "dnp"))]
+        if node and node[0] in ("pin_names", "pin_numbers") and ["hide", "yes"] in node:
+            node = [x for x in node if x != ["hide", "yes"]] + ["hide"]            # (KiCad 8: a bare flag there)
+        return node
+    out = []
+    for f in sorted(os.listdir(src_dir)):
+        src, dst = os.path.join(src_dir, f), os.path.join(out_dir, f)
+        if f.endswith(".kicad_pcb") or f.endswith(".kicad_sch"):
+            tree = clean(_sx_parse(open(src).read()))
+            for i, x in enumerate(tree):
+                if isinstance(x, list) and x and x[0] == "version":
+                    tree[i] = ["version", 20240108 if f.endswith(".kicad_pcb") else 20231120]
+                elif isinstance(x, list) and x and x[0] == "generator_version":
+                    tree[i] = ["generator_version", _Q("8.0")]
+                elif isinstance(x, list) and x and x[0] == "layers" and f.endswith(".kicad_pcb"):
+                    rows = [[_K8_LAYERS[str(r[1])]] + r[1:] for r in x[1:]]
+                    tree[i] = ["layers"] + sorted(rows, key=lambda r: r[0])
+            text = _sx_dump(tree)                        # (KiCad 8 reads the bare hide flag only after the offset)
+            text = re.sub(r"\((pin_names|pin_numbers) hide((?: \([^()]*\))*)\)", r"(\1\2 hide)", text)
+            with open(dst, "w") as fh:
+                fh.write(text + "\n")
+            out.append(dst)
+        elif f.endswith(".kicad_pro"):
+            shutil.copyfile(src, dst)
+            out.append(dst)
+    return out
+
+
 def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.0, 100.0),
                  place_labels: bool = True, schematic: bool = True) -> List[str]:
     """``<name>.kicad_pcb``, ``<name>.kicad_pro`` and (``schematic``) ``<name>.kicad_sch`` on KiCad's own symbols

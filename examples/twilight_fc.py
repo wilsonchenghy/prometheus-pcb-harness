@@ -733,10 +733,12 @@ def build(do_route=True, solids=False):
 
 
 PCBS, parts = {}, {}
+import importlib.util                                     # (the 3D solids need build123d: without it, the board alone)
+SOLIDS = os.environ.get("TWILIGHT_SOLIDS", "1" if importlib.util.find_spec("build123d") else "0") == "1"
 if os.environ.get("TWILIGHT_BUILD", "1") == "1":         # (0: only the definitions, for the schematic and tools)
-    PCB, PCB_ROUTE_PROBLEMS = build(solids=os.environ.get("TWILIGHT_SOLIDS", "1") == "1")
+    PCB, PCB_ROUTE_PROBLEMS = build(solids=SOLIDS)
     PCBS["twilight_fc"] = PCB
-    if os.environ.get("TWILIGHT_SOLIDS", "1") == "1" and __name__ != "__main__":
+    if SOLIDS and __name__ != "__main__":
         parts.update(PCB.parts(0.0))
 
 

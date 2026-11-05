@@ -113,6 +113,13 @@ placing pads by hand:
 4. Show the user the review page and ask them to compare it with the drawing before the board uses the footprint:
    the checks cannot see a dimension read wrong off the drawing. Say which dimensions you read and any you assumed.
 
+## Altium and older KiCad
+
+Every run also writes the KiCad project in KiCad 8's format: `out/kicad8/` and `out/kicad8.zip` (the board, the
+schematic, the project). That is the format Altium Designer's KiCad import reads (File > Import Wizard > KiCad
+Design Files); KiCad 8 itself opens it, passes its DRC and reads the schematic's netlist back equal to the board's
+(CI's kicad8 job). The Gerbers, drill files, BOM, pick-and-place and STEP need no conversion in any tool.
+
 ## The schematic
 
 Every run writes `out/kicad/<name>.kicad_sch`, the board's schematic on KiCad's own symbols, and (with KiCad) reads
