@@ -30,7 +30,8 @@ hands. Unless they ask you to just build it, work with them:
    optional: without them the harness uses its own router and checks (see the table in `docs/setup.md`).
 1. **Write `board.py`** with a `build()` that returns a `pcb.Board`: the outline, the parts (`place(ref,
    "Lib:Footprint", at, rot, value, mpn, lcsc=...)`; `at=None` lets the placer choose), the nets with their
-   current (`net(name, pins, amps=...)`), the pours. Or start from a KiCad netlist (`.net`).
+   current (`net(name, pins, amps=...)`), the pours. Or start from a KiCad netlist (`.net`), or from a finished
+   KiCad layout for a revision (below).
 2. **Run** `prometheus board.py out/ --json`. It places what has no position, routes, runs the design check and
    the house check, and writes the order files. Stdout is one JSON object; it is also saved as `out/result.json`.
 3. **Read `clean`.** If true, stop: `out/` holds the Gerbers, assembly files, parts cart and `report.html`.
@@ -112,6 +113,18 @@ placing pads by hand:
    render, the checks.
 4. Show the user the review page and ask them to compare it with the drawing before the board uses the footprint:
    the checks cannot see a dimension read wrong off the drawing. Say which dimensions you read and any you assumed.
+
+## A revision of a KiCad layout
+
+`prometheus import design.kicad_pcb rev2/` turns a finished KiCad board (KiCad 6 to 10, 2 or 4 layers) into
+`rev2/board.py`: every part at its place on the design's own footprints (`rev2/footprints/`), the nets, the zones as
+pours (higher-priority zones carved out), keep-outs, mounting holes, the outline and the silkscreen text. The routed
+copper is in `rev2/routes.json`. Run `prometheus rev2/board.py rev2/out/ --json` first, unchanged: it shows the
+design as it stands, and its findings are the existing board's, to talk through with the engineer before changing
+anything. Then make the change they ask for in `board.py` (move a part, add one, change a net's width) and run
+again: nets whose parts did not move keep their copper exactly, the nets of moved parts are routed again. The
+import prints what it left out (logos, drawings, cut-outs, other layers); keep the `.kicad_pro` beside the board, or
+its clearance is unknown.
 
 ## Altium and older KiCad
 

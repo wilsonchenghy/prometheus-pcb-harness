@@ -6,6 +6,7 @@ everything to order it.
     python -m pcb_cli my_board.py out/                 # route (if needed), check, report, order files
     python -m pcb_cli my_board.py out/ --boards 10 --rules jlcpcb-4 --step
     python -m pcb_cli my_schematic.net out/ --size 50x40 --at J1=4,20,90 --amps VBUS=2   # a KiCad netlist
+    python -m pcb_cli import design.kicad_pcb rev2/    # a finished KiCad layout as rev2/board.py, for a revision
 
 The script makes the board: it defines ``build()`` returning a Board (or a (Board, problems) pair, routed), or a
 module-level ``board`` / ``b`` / ``PCB``. Parts placed without a position (``at=None``) are placed and the board
@@ -234,6 +235,9 @@ def main(argv=None) -> int:
     if argv[:1] == ["footprint"]:
         import fpgen
         return fpgen.main(argv[1:])
+    if argv[:1] == ["import"]:                           # (a KiCad layout as a board script, for a revision)
+        import kicad_import
+        return kicad_import.main(argv[1:])
     if argv[:1] == ["view"]:
         import pcb_view
         return pcb_view.main(argv[1:])
