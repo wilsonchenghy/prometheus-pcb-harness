@@ -906,7 +906,7 @@ class Board:
         hko = getattr(self, "_hole_ko", {})
         holes = unary_union([Point(x, y).buffer(max(hko.get((x, y), 0), d / 2 + self.clear + 0.3), 24)
                              for x, y, d in self.all_holes()] or [Polygon()])
-        inner = self.outline.buffer(-0.3)
+        inner = self.outline.buffer(-(max(0.3, self.edge) + 0.005))   # (+5 um: a curved edge's chords come closer)
         clear_of: Dict[tuple, object] = {}
         kz_of: Dict[str, object] = {}
         import numpy as np
@@ -4124,7 +4124,9 @@ def _pcbnew_python() -> str:
     import subprocess
     if os.environ.get("PCBNEW_PYTHON"):
         return os.environ["PCBNEW_PYTHON"]
-    for exe in ("python3", "python3.12", "python3.11", "python3.10", "/usr/bin/python3.12", "/usr/bin/python3"):
+    for exe in ("python3", "python3.12", "python3.11", "python3.10", "/usr/bin/python3.12", "/usr/bin/python3",
+                "/Applications/KiCad/KiCad.app/Contents/Frameworks/Python.framework/Versions/Current/bin/python3"):
+                                                         # (macOS: KiCad's own Python, inside the app)
         path = shutil.which(exe) or (exe if os.path.exists(exe) else None)
         if path and subprocess.run([path, "-c", "import pcbnew"], capture_output=True).returncode == 0:
             return path
