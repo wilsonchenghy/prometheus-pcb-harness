@@ -9,7 +9,7 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [os.path.join(HERE, "..", ".."), HERE]
+sys.path[:0] = [os.path.join(HERE, "..", "..", "src"), HERE]
 import schemdraw.elements as elm  # noqa: E402
 from schem import Sheet, check_sheets, save_sheets, TERM2, REV2, ic, nets_out, conn, notes  # noqa: E402
 

@@ -208,7 +208,7 @@ if __name__ == "__main__":
     import json
     import sys
     here = os.path.dirname(os.path.abspath(__file__))
-    sys.path[:0] = [os.path.join(here, ".."), os.path.join(here, "..", "..")]
+    sys.path[:0] = [os.path.join(here, ".."), os.path.join(here, "..", "..", "src")]
     from export import export
     g = json.load(open(os.path.join(here, "controller_board.json")))
     keep = [([tuple(p) for p in pts], why) for pts, why in g["keepouts"]]

@@ -18,7 +18,7 @@ b.plot("layers.png"); b.bom()
 
 What it does (`pcb.py`, its docstring has the details):
 
-- **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `pcb_footprints/`.
+- **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `src/pcb_footprints/`.
 - **Placement**: give parts no position (`at=None`) and `place_and_route(board)` places them (short wire, courtyards
   apart, clear of holes and keep-outs, connectors you placed left alone) and routes the board, placing again if the
   routing is not clean; `autoplace(board)` places only.
