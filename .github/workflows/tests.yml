@@ -98,4 +98,5 @@ jobs:
       # (the RP2040 board is left out: through KiCad it is clean on some machines and one pad short on others,
       # after minutes of placement tries; run it by hand with bench/run.py)
       - run: python -m pcb_cli bench/can_node.py out/can --spec bench/specs/can_node.json --router freerouting --kicad-drc require
-      - run: grep -q '"router": "freerouting (through KiCad)"' out/can/result.json
+      - run: |
+          grep -q '"router": "freerouting (through KiCad)"' out/can/result.json
