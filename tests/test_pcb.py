@@ -1480,3 +1480,35 @@ def test_every_rule_says_why_it_matters():
     assert missing == []
     f = pcb_cli.finding("design", "F.Cu: A and B 0.18 mm apart (clearance 0.2) at (10.6, 10.6)")
     assert f["kind"] == "clearance" and "short" in f["why"]
+
+
+def test_kicad8_copy_opens_in_kicad8(tmp_path):
+    """every run also writes the KiCad project in KiCad 8's format (out/kicad8/, zipped), the format Altium's KiCad
+    import reads: with KiCad 8 installed, KiCad 8 opens the board and passes its DRC, and reads the schematic's
+    netlist back equal to the board's"""
+    import os
+    import subprocess
+    import zipfile
+    import kicad_sch
+    import pcb
+    import pcb_cli
+    here = Path(__file__).parent.parent
+    out = tmp_path / "o"
+    pcb_cli.main([str(here / "bench" / "blinker.py"), str(out), "--router", "harness", "--kicad-drc", "off"])
+    k8 = out / "kicad8"
+    assert (k8 / "blinker.kicad_pcb").read_text().splitlines()[1].strip() == "(version 20240108)"
+    assert "(31 \"B.Cu\" signal)" in (k8 / "blinker.kicad_pcb").read_text()
+    assert (k8 / "blinker.kicad_sch").read_text().splitlines()[1].strip() == "(version 20231120)"
+    assert sorted(zipfile.ZipFile(out / "kicad8.zip").namelist()) == ["blinker.kicad_pcb", "blinker.kicad_pro",
+                                                                       "blinker.kicad_sch"]
+    ver = pcb.kicad_version() or ""
+    if not ver.startswith("8."):
+        pytest.skip("KiCad 8 is not the installed KiCad: the KiCad 8 read-back runs in CI's kicad8 job")
+    r = subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", str(tmp_path / "drc.json"),
+                        str(k8 / "blinker.kicad_pcb")], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr + r.stdout
+    drc = json.load(open(tmp_path / "drc.json"))
+    assert drc["unconnected_items"] == []
+    assert [v for v in drc["violations"] if v["severity"] == "error"] == []
+    b, _ = pcb_cli.load(str(here / "bench" / "blinker.py"))
+    assert kicad_sch.check(b, str(k8 / "blinker.kicad_sch")) == []

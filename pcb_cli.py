@@ -375,6 +375,12 @@ def main(argv=None) -> int:
         prog.stage("export")
         files = fab.order(b, a.out, boards=a.boards)
         kpaths = pcb.export_kicad(b, os.path.join(a.out, "kicad"))
+        try:                                             # (KiCad 8's format too: what Altium's KiCad import reads)
+            import shutil
+            pcb.export_kicad8(os.path.join(a.out, "kicad"), os.path.join(a.out, "kicad8"))
+            files["kicad8"] = shutil.make_archive(os.path.join(a.out, "kicad8"), "zip", os.path.join(a.out, "kicad8"))
+        except Exception as e:
+            print(f"KiCad 8 copy not written: {e}", file=sys.stderr)
         if a.kicad_drc != "off":                        # a third, independent judge: KiCad's own DRC
             ver = pcb.kicad_version()
             major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0

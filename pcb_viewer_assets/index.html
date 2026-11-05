@@ -549,7 +549,7 @@ function drawRun() {
 }
 function drawFiles() {
   const box = $("#files"); box.innerHTML = ""; if (!R || !R.files) return;
-  const what = { gerbers: "For the board house", cpl: "Pick and place", bom_jlc: "Assembly BOM (JLCPCB)", digikey: "DigiKey cart", mouser: "Mouser cart", lcsc: "LCSC cart", html: "Parts, with buy links", report: "Design summary: checks, house rules, parts" };
+  const what = { gerbers: "For the board house", cpl: "Pick and place", bom_jlc: "Assembly BOM (JLCPCB)", digikey: "DigiKey cart", mouser: "Mouser cart", lcsc: "LCSC cart", html: "Parts, with buy links", report: "Design summary: checks, house rules, parts", kicad8: "KiCad 8 project (for Altium's KiCad import)" };
   for (const [k, v] of Object.entries(R.files)) { const p = String(v), rel = p.includes("/cart/") ? "cart/" + p.split("/cart/")[1] : p.split("/").pop(), ext = rel.split(".").pop().toUpperCase();
     const a = document.createElement("a"); a.className = "file"; a.href = "/files/" + rel; a.target = "_blank";
     a.innerHTML = `<span class="ic">${esc(ext)}</span><span>${esc(rel)}<small>${esc(what[k] || k)}</small></span>`; box.appendChild(a); }
