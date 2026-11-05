@@ -1438,7 +1438,7 @@ def test_schematic_of_a_large_design_is_a3_pages_joined_by_global_labels(tmp_pat
     import kicad_sch
     import pcb
     import pcb_cli
-    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "twilight_fc.py"))
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "twilight_fc" / "twilight_fc.py"))
     pgs = kicad_sch.pages(b)
     assert len(pgs) > 1 and {pg[1][0] for pg in pgs} == {"A3"}
     assert all(kicad_sch.overlaps(pg) == [] for pg in pgs)
@@ -1512,7 +1512,7 @@ def test_kicad8_copy_opens_in_kicad8(tmp_path):
     assert [v for v in drc["violations"] if v["severity"] == "error"] == []
     b, _ = pcb_cli.load(str(here / "bench" / "blinker.py"))
     assert kicad_sch.check(b, str(k8 / "blinker.kicad_sch")) == []
-    fc, _ = pcb_cli.load(str(here / "examples" / "twilight_fc.py"))      # (a multi-page sheet: its page boxes too)
+    fc, _ = pcb_cli.load(str(here / "examples" / "twilight_fc" / "twilight_fc.py"))      # (a multi-page sheet: its page boxes too)
     kicad_sch.write(fc, str(tmp_path / "fc9"))
     pcb.export_kicad8(str(tmp_path / "fc9"), str(tmp_path / "fc8"))
     assert kicad_sch.check(fc, str(tmp_path / "fc8" / "twilight_fc.kicad_sch")) == []

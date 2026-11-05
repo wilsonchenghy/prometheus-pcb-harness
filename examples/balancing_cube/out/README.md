@@ -1,7 +1,7 @@
 # Pioneer Cube main board, r1
 
-The carrier on the Pioneer Cube's -Z plate (`Backend/cad_bench/projects/balancing_cube/cube_board.py`, schematic
-`cube_board_sheet.py`; run each from `Backend/occ_services` to regenerate this folder). **112 x 98 mm, 2 layers,
+The carrier on the Pioneer Cube's -Z plate (`../cube_board.py`, schematic
+`cube_board_sheet.py`; run each to regenerate this folder). **112 x 98 mm, 2 layers,
 2 oz, 1.6 mm FR4, 0.2 mm clearance, every part through-hole (hand-solderable), 4 x M3 holes.**
 
 ## TL;DR

@@ -159,7 +159,7 @@ smallest ISO sheet that holds it. Open it in Eeschema with the board. With KiCad
 (`kicad-cli sch export netlist`) and any net that differs from the board's is a finding with `stage: "schematic"`.
 
 `schem.py` draws sheets by hand, in an IC's datasheet form, and checks them against the board; see
-`examples/arm_pdb_sheet.py` for a full one.
+`examples/arm_pdb/arm_pdb_sheet.py` for a full one.
 
 ## How fast
 

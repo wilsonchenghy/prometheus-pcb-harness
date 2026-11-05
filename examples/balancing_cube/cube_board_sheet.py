@@ -2,7 +2,7 @@
 Power is wired (XT30 -> fuse -> the battery rail, the bulk capacitor, the 5 V buck to the DevKit's VIN); the modules'
 logic pins carry net names, as is usual between an MCU and its drivers and sensors.
 
-    python cube_board_sheet.py [out_dir]       (default boards/cube_main)
+    python cube_board_sheet.py [out_dir]       (default out/, beside it)
 """
 import datetime
 import os
@@ -94,8 +94,8 @@ def draw(b, out_dir=None):
 
 if __name__ == "__main__":
     import cube_board as CB
-    b, _ = CB.routed(store=os.path.join(HERE, "..", "routes"))
-    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "..", "..", "boards", "cube_main")
+    b, _ = CB.routed(store=os.path.join(HERE, "routes"))
+    out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "out")
     probs, s = draw(b, out)
     print(len(probs), "problems")
     for p in probs[:60]:

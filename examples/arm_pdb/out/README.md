@@ -1,7 +1,7 @@
 # Arm power distribution board (Pioneer humanoid, one arm)
 
 One board per arm: the 12S pack in, five fused 49 V feeds for the CubeMars AK motors, and an on-board 24 V buck with
-two fused 24 V feeds for the GL40 II wrist and gripper motors. Source: `Backend/cad_bench/projects/arm_pdb.py`
+two fused 24 V feeds for the GL40 II wrist and gripper motors. Source: `../arm_pdb.py`
 (run it to regenerate everything here). 150 x 96 mm, 2 layers, 2 oz copper, 1.6 mm FR4, 4 x M3.
 
 Files:
