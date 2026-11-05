@@ -1178,9 +1178,14 @@ def test_progress_estimate_counts_the_tries_left(tmp_path):
     p.stage("place+route")
     p.event({"kind": "tries", "tries": 6, "workers": 4})
     p.event({"kind": "try", "k": 0, "seconds": 10.0, "clean": False, "line": "try 1"})
-    assert abs(p.eta() - (2 * 10.0 + 2.0)) < 1e-6          # (5 tries left, 4 at a time: two batches, then export)
+    export = 5.0 + 0.15 * 20                                 # (the export: 5 s and 0.15 s a part, as measured)
+    assert abs(p.eta() - (2 * 10.0 + export)) < 1e-6       # (5 tries left, 4 at a time: two batches, then export)
     p.event({"kind": "try", "k": 1, "seconds": 10.0, "clean": True, "line": "try 2"})
-    assert p.d["tries"] == 2 and p.eta() == 2.0
+    assert p.d["tries"] == 2 and abs(p.eta() - export) < 1e-6
+    q = pcb_view.Progress(str(tmp_path / "q"), "board.py", parts=20)   # a first try past its guess: unknown, not a
+    q.stage("place+route")                                              # number that stops counting
+    q.d["stages"][-1]["start"] -= 3600
+    assert q.eta() is None
 
 
 def test_parts_symbol_pin_names_pin_check_and_erc():

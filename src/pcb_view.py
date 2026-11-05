@@ -33,7 +33,8 @@ class Progress:
         self.path = Path(out_dir) / "progress.json"
         self.t0 = time.time()
         self.d = {"script": os.path.abspath(script), "started": self.t0, "stage": "loading", "done": False,
-                  "tries": None, "tries_done": 0, "try_times": [], "workers": 1, "parts": parts, "stages": []}
+                  "tries": None, "tries_done": 0, "try_times": [], "workers": 1, "parts": parts, "stages": [],
+                  "snap": 0}
         self._write()
 
     def stage(self, name: str):
@@ -57,6 +58,12 @@ class Progress:
                 self.d["tries"] = self.d["tries_done"]      # (a clean try ends the search)
         self._write()
 
+    def snapshot(self, b, script: str):
+        """the board as it stands (out/board.json): the page shows it at once, before the run is done"""
+        write_board(b, str(self.path.parent), script)
+        self.d["snap"] += 1
+        self._write()
+
     def finish(self, clean: bool):
         self.stage("done")
         self.d["stages"][-1]["end"] = time.time() - self.t0
@@ -67,7 +74,7 @@ class Progress:
         d = self.d
         if d["done"]:
             return 0.0
-        export = 2.0
+        export = 5.0 + 0.15 * d.get("parts", 10)           # (Gerbers, KiCad project, schematic, KiCad's DRC)
         if d["stage"] in ("place+route", "place", "route"):
             times = d["try_times"]
             t_try = (sum(times) / len(times)) if times else 3.0 + 0.3 * d.get("parts", 10)
@@ -77,7 +84,8 @@ class Progress:
             batches = 0 if left == 0 else (1 if d["tries_done"] == 0 else math.ceil(left / w))
             if d["tries_done"] == 0:               # (the first try runs alone; the rest only if it is not clean)
                 started = time.time() - self.t0 - (d["stages"][-1]["start"] if d["stages"] else 0)
-                return max(0.5, t_try - started) + export
+                return None if started > t_try else t_try - started + export   # (past the guess: unknown,
+                                                                                #  not a number that stops counting)
             return batches * t_try + export
         if d["stage"] in ("check", "critic"):
             return export
