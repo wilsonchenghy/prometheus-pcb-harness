@@ -334,10 +334,18 @@ class _Part:
                 break
         self.ref_at, self.val_at, self.justify = ra, va, "left"
         soft.append(box)
-        self.soft = soft
-        bb = _union(hard + soft)
-        self.box = (bb[0] - 1.0, bb[1] - 1.0, bb[2] + 1.0, bb[3] + 1.0)
+        self.soft, self.hard = soft, hard
+        self._rebox()
         self.at = (0.0, 0.0)
+        labels = [it for it in self.items if it[0] == "label"]
+        grounds = [it for it in self.items if it[0] == "gnd"]
+        # an upright two-pin part between one net on top and ground at its foot: it can stand in a bank on a rail
+        self.rail = (labels[0][3] if two and len(labels) == 1 and len(grounds) == 1 and grounds[0][2] == 0
+                     and labels[0][1][1] < grounds[0][1][1] else None)
+
+    def _rebox(self):
+        bb = _union(self.hard + self.soft)
+        self.box = (bb[0] - 1.0, bb[1] - 1.0, bb[2] + 1.0, bb[3] + 1.0)
 
     @property
     def w(self):
@@ -444,6 +452,54 @@ def blocks(board) -> List[Tuple[str, List[str]]]:
     return out
 
 
+BANK = 8                                                 # (parts on one rail, at most: a longer bank wraps)
+
+
+def _banks(ps):
+    """the parts in placing order, each a list: a bank of upright two-pin parts on one symbol between one rail and
+    ground (decoupling capacitors on 3V3) drawn as an engineer does - side by side on one pitch, the rail a wire across
+    their tops with one label, their feet joined to one ground symbol - else the part alone"""
+    out, seen = [], set()
+    for p in ps:
+        if id(p) in seen:
+            continue
+        mates = [q for q in ps if q.rail and p.rail and q.lib == p.lib and q.rail == p.rail and id(q) not in seen]
+        for k in range(0, max(len(mates), 1), BANK):
+            grp = mates[k:k + BANK] if p.rail else [p]
+            seen.update(id(q) for q in grp)
+            if len(grp) > 1:
+                _rail(grp)
+            out.append(grp)
+    return out
+
+
+def _rail(grp):
+    """join a bank's tops and feet (each part's own frame; the parts then stand ``pitch`` apart)"""
+    pitch = math.ceil(max(q.w for q in grp) / G) * G
+    for k, q in enumerate(grp):
+        q.pitch = pitch
+        top = next(it for it in q.items if it[0] == "label")
+        foot = next(it for it in q.items if it[0] == "gnd")
+        et, ef = top[1], foot[1]
+        q.items = [it for it in q.items if it is not top and it is not foot]
+        q.soft = [s_ for s_ in q.soft if not (_hit(s_, (et[0] - 0.01, et[1] - 0.01, et[0] + 0.01, et[1] + 0.01))
+                                            or _hit(s_, (ef[0] - 0.01, ef[1] + 0.01, ef[0] + 0.01, ef[1] + 0.02)))]
+        if k == 0:                                       # (the rail's one label, outward to the left; one ground)
+            n = top[3]
+            q.items += [("label", et, 180, n), ("gnd", ef, 0)]
+            w = len(n) * CH + 0.6
+            q.soft += [(et[0] - w, et[1] - 1.9, et[0], et[1] + 0.3), (ef[0] - 2.2, ef[1], ef[0] + 2.2, ef[1] + 5.2)]
+        if k < len(grp) - 1:                             # (on to the next part)
+            q.items += [("wire", et, (et[0] + pitch, et[1])), ("wire", ef, (ef[0] + pitch, ef[1]))]
+        if 0 < k < len(grp) - 1:                         # (three wires meet)
+            q.items += [("junction", et), ("junction", ef)]
+        if k == 0:
+            q.items.append(("junction", ef))             # (the ground symbol, the stub, the rail)
+        q._rebox()
+    for q, nxt in zip(grp, grp[1:]):                     # (its room reaches the next part's: the wires are inside)
+        q.box = (q.box[0], q.box[1], max(q.box[2], pitch + nxt.box[0] - 0.01), q.box[3])
+
+
 def layout(board):
     """[(title, frame, [_Part])], the paper and the title block's room"""
     pn = board.pad_net()
@@ -471,13 +527,17 @@ def layout(board):
         width = max([p.w for p in rest] + [((area / max(head.h, 40.0)) if head else (area * 1.6) ** 0.5) * 1.15])
         x0 = head.w + 4.0 if head else 0.0
         x, y, bottom = x0, 0.0, 0.0
-        for p in rest:                                   # (rows by each part's room as snapped to the grid)
-            if x > x0 and x + p.w > x0 + width:
+        for grp in _banks(rest):                         # (rows by each part's room as snapped to the grid)
+            p = grp[0]
+            gw = p.w + sum(q.pitch for q in grp[:-1]) if len(grp) > 1 else p.w
+            if x > x0 and x + gw > x0 + width:
                 x, y = x0, bottom + 1.0
             p.place(x, y)
             if p.room()[0] < x or p.room()[1] < y:       # (the snap went back: one grid step on)
                 p.at = (p.at[0] + (G if p.room()[0] < x else 0), p.at[1] + (G if p.room()[1] < y else 0))
-            x, bottom = p.room()[2] + 1.0, max(bottom, p.room()[3])
+            for k, q in enumerate(grp[1:], 1):           # (a bank: on its pitch, the rail wires meeting)
+                q.at = (p.at[0] + k * p.pitch, p.at[1])
+            x, bottom = grp[-1].room()[2] + 1.0, max([bottom] + [q.room()[3] for q in grp])
         if head:
             head.place(0.0, 0.0)
         out.append([title, _union([p.room() for p in ps]), ps])
