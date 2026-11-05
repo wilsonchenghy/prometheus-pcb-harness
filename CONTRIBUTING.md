@@ -33,8 +33,9 @@ pytest -q                  # about 30 s
   clean run is not one.
 - **Close to KiCad.** Where KiCad has a way (its DRC, its Specctra round trip, its footprints, its 3D models), the
   harness uses it rather than its own.
-- **Optional extras stay optional.** Java, FreeRouting, KiCad, build123d: without each, the harness still runs and
-  says what is missing and how to add it.
+- **Fail loudly, no silent fallbacks.** What a run needs it requires: without KiCad, Java or FreeRouting routing stops
+  and names what is missing (the built-in router is an explicit `--router harness`, never picked behind the user's
+  back). Extras that only add an output (build123d for the STEP) stay optional and say when they are skipped.
 - **The same input, the same board.** Anything that depends on set order or the clock is a bug.
 - **Findings are data.** Every problem names what, where (pins, mm) and, where it can, what to change.
 

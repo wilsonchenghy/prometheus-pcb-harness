@@ -1852,7 +1852,7 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     return _join_islands(board, net, probs, kw, only)
 
 
-def route_board(board: Board, router: str = "auto", **kw) -> List[str]:
+def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     """route the whole board (``_route_board``), then length-match the differential pairs (``tune_pairs``)"""
     probs = _route_board(board, router, **kw)
     if getattr(board, "pairs", None):
@@ -1862,32 +1862,25 @@ def route_board(board: Board, router: str = "auto", **kw) -> List[str]:
     return probs
 
 
-def _route_board(board: Board, router: str = "auto", **kw) -> List[str]:
-    """route the whole board with ``router``: "freerouting" (FreeRouting, the router KiCad users use, through a
-    Specctra round trip: ``freerouting.py``; needs Java and its jar), "harness" (``autoroute``, this file's grid
-    router), or "auto" (FreeRouting when it is installed, else the harness's). Sets ``board.router_used``"""
-    if router not in ("auto", "freerouting", "harness"):
-        raise ValueError("router: auto, freerouting or harness")
-    if router != "harness":
-        import freerouting
-        if freerouting.available():
-            freerouting.escape_fine_pitch(board)         # (fine-pitch pins' first stretch drawn by the harness)
-            if freerouting.kicad_available():            # (KiCad writes the Specctra design and reads the session)
-                t0, v0 = list(board.tracks), list(board.vias)
-                try:
-                    board.router_used = "freerouting (through KiCad)"
-                    probs = freerouting.route_kicad(board, **kw)
-                    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw)) + nudge_vias(board)
-                except (RuntimeError, OSError) as e:      # (KiCad's import refused a session now and then: the
-                    board.tracks, board.vias = t0, v0     # harness's own Specctra round trip instead)
-                    board.__dict__.pop("_cu_memo", None)
-                    board.router_note = f"KiCad round trip failed ({str(e).splitlines()[0][:120]}); direct"
-            board.router_used = "freerouting"            # (FreeRouting does not know the drill gap: its vias are
-            return freerouting.route(board, **kw) + nudge_vias(board)   # parted from the others after)
-        if router == "freerouting":
-            raise RuntimeError("FreeRouting not found (Java and the jar: see freerouting.find_jar)")
-    board.router_used = "harness"
-    return autoroute(board, **kw)
+def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
+    """route the whole board with ``router``: "freerouting" (FreeRouting through KiCad, as KiCad users route:
+    ``freerouting.route_kicad``; needs KiCad, Java and the FreeRouting jar, and says which is missing) or "harness"
+    (``autoroute``, this file's grid router, chosen explicitly). Sets ``board.router_used``"""
+    if router == "harness":
+        board.router_used = "harness"
+        return autoroute(board, **kw)
+    if router != "freerouting":
+        raise ValueError("router: freerouting or harness")
+    import freerouting
+    missing = [w for w, ok in (("KiCad (its Python API, pcbnew)", freerouting.kicad_available()),
+                               ("Java 17+ and the FreeRouting jar (prometheus setup)", freerouting.available())) if not ok]
+    if missing:
+        raise RuntimeError("FreeRouting needs " + " and ".join(missing) + ": see docs/setup.md, or route with the "
+                           "harness's own router (--router harness)")
+    freerouting.escape_fine_pitch(board)                 # (fine-pitch pins' first stretch drawn by the harness)
+    board.router_used = "freerouting (through KiCad)"    # (FreeRouting does not know the drill gap: its vias are
+    probs = freerouting.route_kicad(board, **kw)         #  parted from the others after)
+    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw)) + nudge_vias(board)
 
 
 def tune_pairs(board: Board, tries_per_seg: int = 6) -> List[str]:
@@ -2605,7 +2598,7 @@ _NO_LATEST = False
 
 
 def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: int = 6, gap: float = 1.0,
-                    route_kw: Optional[dict] = None, router: str = "auto", workers: Optional[int] = None,
+                    route_kw: Optional[dict] = None, router: str = "freerouting", workers: Optional[int] = None,
                     **kw) -> List[str]:
     """``autoplace`` then ``autoroute``, and when the routing is not clean, place again (another seed) and route
     again, up to ``tries`` times; keeps the placement and routing with the fewest problems (``kw`` go to

@@ -82,7 +82,7 @@ def _placed(script, fixed, rules="jlcpcb-2"):
 
 def _specced(script):
     """a bench board placed and routed the way the command line does it (``place_and_route``: FreeRouting through
-    KiCad when installed), against its requirements file in ``bench/specs/`` when there is one: the critic's errors
+    KiCad, which this needs), against its requirements file in ``bench/specs/`` when there is one: the critic's errors
     count as problems"""
     def go():
         import critic

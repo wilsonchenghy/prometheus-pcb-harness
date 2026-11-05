@@ -99,7 +99,7 @@ def case(seed: int, router: str) -> dict:
 def main(argv):
     n = int(argv[0]) if argv and argv[0].isdigit() else 10
     s0 = int(argv[argv.index("--seed") + 1]) if "--seed" in argv else 0
-    router = argv[argv.index("--router") + 1] if "--router" in argv else "auto"
+    router = argv[argv.index("--router") + 1] if "--router" in argv else "freerouting"
     crashed = 0
     for seed in range(s0, s0 + n):
         try:

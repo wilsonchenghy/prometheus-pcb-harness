@@ -899,7 +899,7 @@ def test_autoplace_then_route_a_parts_list():
     b.net("OUT", [("U1", "3"), ("R3", "1")])
     b.net("LED", [("R3", "2"), ("D1", "2")])
     b.pour("GND", "B", out)
-    assert pcb.place_and_route(b) == []
+    assert pcb.place_and_route(b, router="harness") == []
     assert b.comps["J1"]["at"] == (4.0, 11.0) and b.check_placement() == []
     from shapely.geometry import Point
     assert all(not b.courtyard(r).intersects(Point(30, 20).buffer(1.6)) for r in b.comps)
@@ -920,7 +920,7 @@ def test_kicad_netlist_to_a_clean_board():
     assert set(b.nets) == {"+5V", "GND", "DIS", "THR", "Net-(U1-Q)", "Net-(D1-A)"}
     assert b.comps["U1"]["mpn"] == "TI NE555DR" and b.comps["R1"]["lcsc"] == "C21190"
     assert [p["net"] for p in b.pours] == ["GND"]
-    assert pcb.place_and_route(b) == [] and b.check() == [] and fab.fab_check(b) == []
+    assert pcb.place_and_route(b, router="harness") == [] and b.check() == [] and fab.fab_check(b) == []
 
 
 def test_clearance_between_pours_tracks_and_pads():
@@ -979,37 +979,31 @@ def test_cli_findings_are_data_for_an_agent():
     assert pcb_cli.finding("design", "net GP0 is split in 2: J2.1 | U1.2")["pins"] == ["J2.1", "U1.2"]
 
 
-def test_freerouting_round_trip(tmp_path):
-    """the Specctra design names every netted pad and the net widths; a session's wires and vias come back as
-    tracks and vias at the session's resolution; with FreeRouting installed, a small board routes clean through it"""
+def test_freerouting_through_kicad(tmp_path, monkeypatch):
+    """FreeRouting gets KiCad's design without the poured nets (their pads and wires stay as obstacles); a missing
+    KiCad or FreeRouting stops the routing with what to install, no other router taken quietly; with them, a small
+    board routes clean through KiCad"""
     import freerouting
     import pcb
+    dsn = ('(pcb x (network (net A (pins R1-2 R2-1)) (net GND (pins R1-1 R2-2)) (class W A GND (rule (width 300))))'
+           ' (wiring (wire (path F.Cu 200 0 0 1 1) (net GND) (type route))))')
+    got = freerouting._drop_nets(dsn, {"GND"})
+    assert "(net GND (pins" not in got and "(net A (pins R1-2 R2-1))" in got and "(class W A (rule" in got
+    assert "(net GND) (type route)" in got                              # (the ground wire stays, an obstacle)
     out = [(0, 0), (30, 0), (30, 20), (0, 20)]
     b = pcb.Board("frt", out)
-    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (8.0, 10.0), 0, "1k")
-    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (22.0, 10.0), 0, "1k")
-    b.net("A", [("R1", "2"), ("R2", "1")], width=0.3)
+    for r, x in (("R1", 8.0), ("R2", 22.0)):
+        b.place(r, "Resistor_SMD:R_0603_1608Metric", (x, 10.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
     b.net("GND", [("R1", "1"), ("R2", "2")])
     b.pour("GND", "B", out)
-    dsn = freerouting.export_dsn(b, str(tmp_path / "frt.dsn"), skip_nets=["GND"])
-    tree = freerouting._sexpr(open(dsn).read())
-    nets = {n[1]: n for n in freerouting._walk(tree, "net")}
-    assert set(nets) == {"A"} and '"R1"-"2"' in open(dsn).read()
-    assert any("300.0" in " ".join(map(str, c)) for c in freerouting._walk(tree, "rule") if "width" in str(c))
-    ses = tmp_path / "frt.ses"
-    ses.write_text('(session "frt.ses" (routes (resolution um 10) (network_out (net "A" '
-                   '(wire (path F.Cu 3000 88000 100000 150000 100000)) (via "V" 150000 100000)))))')
-    assert freerouting.import_ses(b, str(ses)) == (1, 1)
-    assert b.tracks[-1]["pts"] == [(8.8, 10.0), (15.0, 10.0)] and b.tracks[-1]["w"] == 0.3
-    assert b.vias[-1]["at"] == (15.0, 10.0)
-    if freerouting.available():
-        b2 = pcb.Board("frt2", out)
-        for r, x in (("R1", 8.0), ("R2", 22.0)):
-            b2.place(r, "Resistor_SMD:R_0603_1608Metric", (x, 10.0), 0, "1k")
-        b2.net("A", [("R1", "2"), ("R2", "1")])
-        b2.net("GND", [("R1", "1"), ("R2", "2")])
-        b2.pour("GND", "B", out)
-        assert freerouting.route(b2) == [] and b2.check() == []
+    real = freerouting.kicad_available()
+    monkeypatch.setattr(freerouting, "kicad_available", lambda: False)
+    with pytest.raises(RuntimeError, match="KiCad"):
+        pcb.route_board(b)
+    monkeypatch.setattr(freerouting, "kicad_available", lambda: real)
+    if real and freerouting.available():
+        assert pcb.route_board(b) == [] and b.check() == [] and b.router_used == "freerouting (through KiCad)"
 
 
 def test_footprint_bare_holes_are_obstacles_and_drilled():
