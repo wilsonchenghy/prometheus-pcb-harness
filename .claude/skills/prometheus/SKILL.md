@@ -13,7 +13,8 @@ and let them choose; explain each fix with its finding's `why`. Build end to end
    (FreeRouting, no root) and show the user the setup guide (`docs/setup.md`, https://github.com/wilsonchenghy/pcb-harness/blob/main/docs/setup.md) for the rest; install system software only with their
    approval. Everything is optional; the harness falls back to its own router and checks.
 2. Write `board.py` with a `build()` returning a `pcb.Board` (outline, parts with real KiCad footprints and pin
-   numbers from the datasheet, nets with their current, pours), or start from a KiCad netlist (`.net`). Place
+   numbers from the datasheet, nets with their current, pours), or start from a KiCad netlist (`.net`); for a revision of a finished KiCad
+   board, `prometheus import design.kicad_pcb rev2/` writes that board.py (AGENTS.md). Place
    every IC with its KiCad symbol (`symbol="Lib:Name"`; `prometheus part Lib:Name` shows it) and wire its pins by
    name: pins are then checked against pads both ways and an ERC runs. Place
    connectors, buttons and mounting holes yourself; give other parts `at=None` for the placer.

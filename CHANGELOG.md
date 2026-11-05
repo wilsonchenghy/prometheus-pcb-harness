@@ -9,7 +9,8 @@ board house needs to make and assemble it - explaining each finding, so the engi
 **Design**
 - Parts on real KiCad footprints and symbols (fetched on first use), wired by pin name and checked pin to pad both
   ways with an ERC; nets with their current, pours, keep-outs, mounting holes, 2 or 4 layers, any outline; a KiCad
-  netlist (`.net`) as a starting point.
+  netlist (`.net`) as a starting point, or a finished KiCad layout for a revision (`prometheus import`): moving
+  parts re-routes only their nets.
 - Placement for the parts you leave without a position (decoupling held by its pins, crystals by their chip, the
   requirements' "within d mm" kept); routing tries other placements when it is not clean, in parallel and repeatably.
 - Footprints from a package drawing (`prometheus footprint`): IPC-7351B lands, checked, and a review page to compare

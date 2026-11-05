@@ -8,7 +8,7 @@ Use it to:
 
 - **Source parts**: real KiCad footprints, LCSC numbers and carts for JLCPCB, DigiKey and Mouser
 - **Prototype a board**: from your requirements to Gerbers, BOM and pick-and-place
-- **Import a design**: start from your KiCad schematic's netlist
+- **Import a design**: start from your KiCad board or your schematic's netlist
 - **Do a revision**: ask for a change, and every check runs again on the whole board
 
 [![Prometheus: the release film](media/prometheus.gif)](https://github.com/wilsonchenghy/pcb-harness/releases/download/v0.1.0/prometheus-v0.1.0.mp4)
@@ -34,7 +34,7 @@ Tell the agent what you need, in your own words:
 
 > Make me a prototype board for it with screw terminals and two M3 holes.
 
-> Here is my KiCad netlist (design.net): lay it out for JLCPCB.
+> Here is my KiCad board (design.kicad_pcb): import it so we can do a revision.
 
 > Rev 2: make the USB power traces wider and move J1 to the left edge.
 

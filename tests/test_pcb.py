@@ -1516,3 +1516,41 @@ def test_kicad8_copy_opens_in_kicad8(tmp_path):
     kicad_sch.write(fc, str(tmp_path / "fc9"))
     pcb.export_kicad8(str(tmp_path / "fc9"), str(tmp_path / "fc8"))
     assert kicad_sch.check(fc, str(tmp_path / "fc8" / "twilight_fc.kicad_sch")) == []
+
+
+def test_kicad_layout_imports_as_a_board_script_and_a_revision_keeps_the_rest(tmp_path):
+    """a .kicad_pcb comes back (prometheus import) with every pad where it was, a part on each side of the same
+    footprint included, its copper clean; moving one part re-routes only that part's nets"""
+    import pcb
+    import pcb_cli
+    import kicad_import
+    try:
+        pcb.footprint("Package_TO_SOT_SMD:SOT-23")
+    except Exception as e:
+        pytest.skip(f"KiCad footprints unavailable: {e}")
+    b = pcb.Board("imp", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("Q1", "Package_TO_SOT_SMD:SOT-23", (8.0, 10.0), 90, "Q")
+    b.place("Q2", "Package_TO_SOT_SMD:SOT-23", (22.0, 10.0), 30, "Q", side="B")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (15.0, 4.0), 0, "1k")
+    b.net("A", [("Q1", "1"), ("Q2", "1")])
+    b.net("B", [("Q1", "3"), ("R1", "1")])
+    b.net("GND", [("Q1", "2"), ("Q2", "2"), ("R1", "2")])
+    b.pour("GND", "B", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.hole((3.0, 3.0), 3.2)
+    assert not pcb.autoroute(b) and not b.check()
+    path = pcb.export_kicad(b, str(tmp_path / "k"), schematic=False)[0]
+    got = kicad_import.write(path, str(tmp_path / "rev"))
+    segs = sum(1 for t in b.tracks for p, q in zip(t["pts"], t["pts"][1:]) if p != q)
+    assert (got["parts"], got["tracks"], got["vias"], got["pours"]) == (3, segs, len(b.vias), 1)
+    script = str(tmp_path / "rev" / "board.py")
+    c, _ = pcb_cli.load(script)
+    where = lambda x: sorted((r, n, L, round(g.centroid.x, 3), round(g.centroid.y, 3)) for r, n, L, g, _ in x.pad_shapes())
+    assert where(c) == where(b) and c.holes == b.holes
+    assert c.check() == []
+    # a revision: Q2 moves, so its nets are routed again and R1's own net keeps its copper exactly
+    s = open(script).read().replace("(22.0, 10.0)", "(23.0, 12.0)")
+    open(script, "w").write(s)
+    d, probs = pcb_cli.load(script)
+    assert not probs and d.check() == []
+    key = lambda x, n: sorted((t["layer"], tuple(map(tuple, t["pts"]))) for t in x.tracks if t["net"] == n)
+    assert key(d, "B") == key(c, "B") and key(d, "A") != key(c, "A")
