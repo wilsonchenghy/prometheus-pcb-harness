@@ -1274,3 +1274,63 @@ def test_kicad_schematic_is_the_board_and_nothing_overlaps(tmp_path, script):
     if not pcb.kicad_version():
         pytest.skip("KiCad is not installed: the netlist read-back needs kicad-cli")
     assert kicad_sch.check(b, path) == []
+
+
+KICAD_TWINS = [  # (KiCad's footprint, the same package's drawing dimensions: JEDEC / the maker's datasheet)
+    ("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", {"family": "soic", "pins": 8, "pitch": 1.27, "body": [[4.8, 5.0], [3.8, 4.0]],
+     "span": [5.8, 6.2], "lead_length": [0.4, 1.27], "lead_width": [0.31, 0.51]}),
+    ("Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm", {"family": "soic", "pins": 20, "pitch": 0.65, "body": [[6.4, 6.6], [4.3, 4.5]],
+     "span": [6.2, 6.6], "lead_length": [0.45, 0.75], "lead_width": [0.19, 0.30]}),
+    ("Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm", {"family": "qfn", "pins": 16, "pitch": 0.5, "body": [3, 3],
+     "lead_length": [0.3, 0.5], "lead_width": [0.18, 0.30], "ep": [1.7, 1.7]}),
+    ("Package_TO_SOT_SMD:SOT-23", {"family": "soic", "pins": 3, "pitch": 0.95, "body": [[2.8, 3.04], [1.2, 1.4]],
+     "span": [2.1, 2.64], "lead_length": [0.3, 0.6], "lead_width": [0.3, 0.5],
+     "rows": {"left": ["1", None, "2"], "right": [None, "3", None]}}),
+    ("Package_QFP:LQFP-48_7x7mm_P0.5mm", {"family": "qfp", "pins": 48, "pitch": 0.5, "body": [7, 7], "span": [8.8, 9.2],
+     "lead_length": [0.45, 0.75], "lead_width": [0.17, 0.27]}),
+    ("Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical", {"family": "tht", "grid": [5, 2], "pitch": 2.54,
+     "lead": [0.64, 0.64]}),
+]
+
+
+@pytest.mark.parametrize("kicad,spec", KICAD_TWINS, ids=[k.split(":")[1] for k, _ in KICAD_TWINS])
+def test_fpgen_lands_match_kicads_own_footprint(kicad, spec):
+    """a footprint made from a package's drawing dimensions (IPC-7351B) lands where KiCad's own does, within 0.1 mm"""
+    import fpgen
+    import pcb
+    ref = pcb.footprint(kicad)["pads"]
+    fp = fpgen.generate(spec)
+    assert {p["num"] for p in fp["pads"]} == {n for n in ref if n}
+    for p in fp["pads"]:
+        k = max(ref[p["num"]], key=lambda q: q["size"][0] * q["size"][1])
+        assert abs(p["at"][0] - k["at"][0]) <= 0.1 and abs(p["at"][1] + k["at"][1]) <= 0.1, p["num"]
+        assert abs(p["size"][0] - k["size"][0]) <= 0.1 and abs(p["size"][1] - k["size"][1]) <= 0.1, p["num"]
+
+
+@pytest.mark.parametrize("family", ["soic", "sot23", "qfp", "qfn", "dfn", "bga", "tht", "pads"])
+def test_fpgen_every_family_passes_its_checks_and_reads_back(tmp_path, family):
+    import fpgen
+    r = fpgen.build(fpgen.TEMPLATES[family], str(tmp_path / "footprints"))
+    assert r["ok"], [c for c in r["checks"] if c["severity"] != "ok"]
+    assert Path(r["review"]).exists()
+
+
+def test_fpgen_a_board_uses_a_generated_footprint_from_its_own_folder(tmp_path):
+    """a footprint made for a board, in footprints/ beside its script, places, routes and checks like any other"""
+    import fpgen
+    import pcb_cli
+    r = fpgen.build(fpgen.TEMPLATES["soic"], str(tmp_path / "footprints"), lib="Mine")
+    (tmp_path / "board.py").write_text(f'''
+from pcb import Board
+def build():
+    b = Board("gen", [(0, 0), (20, 0), (20, 14), (0, 14)], rules="jlcpcb-2")
+    b.place("U1", "{r['footprint']}", (10, 7), 0, "IC")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (3, 7), 90, "10k")
+    b.net("A", [("U1", "1"), ("R1", "1")])
+    b.net("B", [("U1", "8"), ("R1", "2")])
+    return b
+''')
+    b, _ = pcb_cli.load(str(tmp_path / "board.py"))
+    assert len(b.comps["U1"]["pads"]) == 8
+    import pcb
+    assert pcb.autoroute(b) == [] and b.check() == []

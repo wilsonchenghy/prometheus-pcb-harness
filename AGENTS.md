@@ -66,6 +66,25 @@ DRC and its findings come back with `stage: "kicad"`. When it is not, `result.js
 `"kicad_drc": {"run": false, "skipped": ..., "install": ...}` with the install command for the system: tell the
 user, do not install system software unasked. `--kicad-drc require` makes a missing KiCad a failure.
 
+## A part KiCad has no footprint for: from its drawing
+
+When the user pastes a package drawing (an image or a datasheet page), make the footprint with `fpgen.py`, never by
+placing pads by hand:
+
+1. If the datasheet has a recommended land pattern ("example board layout", "land pattern"), use it: family
+   `pads`, each land's number, centre and size as drawn. The maker's land beats any formula.
+2. Otherwise read the package outline into a spec (`zeus footprint template:qfn` prints one; every family:
+   soic, sot23, qfp, qfn, dfn, bga, tht, pads). Give each dimension as the drawing does, `[min, max]`: span (E),
+   body (D x E1), lead length (L), lead width (b), pitch (e), exposed pad (D2 x E2). A BSC / nominal value is one
+   number. The lands then come from IPC-7351B.
+3. `zeus footprint spec.json --drawing drawing.png --symbol Lib:Name` writes `footprints/<Lib>.pretty/<Name>.kicad_mod`
+   beside the board script (the harness reads that folder first), checks it (pin count, the symbol's pins, pad gaps
+   against the house, pitch, the land past the toe and inside the heel, the exposed pad's clearance, KiCad and the
+   harness reading it back) and opens a review page: the drawing, the land pattern with its dimensions, KiCad's
+   render, the checks.
+4. Show the user the review page and ask them to compare it with the drawing before the board uses the footprint:
+   the checks cannot see a dimension read wrong off the drawing. Say which dimensions you read and any you assumed.
+
 ## The schematic
 
 Every run writes `out/kicad/<name>.kicad_sch`, the board's schematic on KiCad's own symbols, and (with KiCad) reads

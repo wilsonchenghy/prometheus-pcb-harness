@@ -87,12 +87,18 @@ def _find(node, key):
     return [c for c in node if isinstance(c, list) and c and c[0] == key]
 
 
+FP_DIRS: List[Path] = [LOCAL_FP]                         # (project footprint folders, searched in order; a board
+                                                         #  script's own footprints/ goes first: pcb_cli.load)
+
+
 def _fp_file(name: str) -> Path:
-    """where footprint "Lib:Name" lives: the project library (``LOCAL_FP``) first, else KiCad's, cached"""
+    """where footprint "Lib:Name" lives: a project library (``FP_DIRS``: the board's footprints/, then the
+    harness's own) first, else KiCad's, cached"""
     lib, fp = name.split(":")
-    local = LOCAL_FP / f"{lib}.pretty" / f"{fp}.kicad_mod"
-    if local.exists():
-        return local
+    for d in FP_DIRS:
+        local = Path(d) / f"{lib}.pretty" / f"{fp}.kicad_mod"
+        if local.exists():
+            return local
     from vendor_parts import CACHE
     return CACHE / "kicad_fp" / f"{fp}.kicad_mod"
 

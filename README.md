@@ -30,6 +30,10 @@ What it does (`pcb.py`, its docstring has the details):
 - **Output**: a STEP of the assembled board (`export_step`, every part's KiCad 3D model by default) for the
   enclosure; Gerbers (copper, mask, paste for the stencil, silkscreen with the reference designators, outline) + Excellon drill, a KiCad project (`export_kicad`, then KiCad's own DRC with `kicad_drc` when
   KiCad is installed), 3D boards with the components' KiCad models (`parts`, needs `build123d`), BOM, layer plots.
+- **Footprints from a package drawing** (`fpgen.py`, `zeus footprint spec.json --drawing d.png`): the drawing's
+  dimensions in, the land pattern from IPC-7351B out (SOIC / SOP / SOT, QFP, QFN / DFN with exposed pad, BGA,
+  through-hole grids, or the maker's own land table), checked and shown beside the drawing for a person to confirm.
+  Within 0.1 mm of KiCad's own footprints for the same packages.
 - **Schematics**: every run writes a KiCad schematic (`kicad_sch.py`, `out/kicad/<name>.kicad_sch`) on KiCad's own
   symbols, grouped into a block per IC, every pin wired to a net label, nothing overlapping; KiCad reads it back and
   its netlist must be the board's. Hand-drawn sheets in an IC's datasheet form: `schem.py` (needs `schemdraw`).
