@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.1.0 (2026-11-05)
+
+The first release, as Prometheus. Since the first tag (2026-11-04):
 
 - Renamed **Prometheus — AI PCB Harness** (was Zeus): the command is `prometheus` (`zeus` and `pcb-harness` still
   work), the package `prometheus-pcb`, the Claude Code skill `prometheus`, `$PROMETHEUS_JAVA` (`$ZEUS_JAVA` still read);
@@ -46,7 +48,7 @@
   its memos from one try into the next), and a FreeRouting run that exits without writing its session (it does,
   now and then, beside other copies) is run again instead of being read as a routing that reached nothing.
 
-## v0.1.0 (2026-11-04)
+### The harness
 
 The first release: a printed circuit board harness for people and AI agents. Describe a board in Python (or start
 from a KiCad netlist), and it places, routes, checks and writes everything a board house needs to make and
