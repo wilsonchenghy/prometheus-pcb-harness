@@ -13,8 +13,6 @@ Use it to:
 
 [![Prometheus: the release film](media/prometheus.gif)](https://github.com/wilsonchenghy/pcb-harness/releases/download/v0.1.0/prometheus-v0.1.0.mp4)
 
-*Click for the film with sound.*
-
 ## Install
 
 Open [Claude Code](https://claude.com/claude-code) and type:
