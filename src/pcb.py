@@ -4115,6 +4115,7 @@ def kicad_models(board: Board, model_dir: str) -> List[str]:
     return sorted(set(missing))
 
 
+@__import__("functools").lru_cache(maxsize=None)        # (probed once a run: it starts a Python each time)
 def _pcbnew_python() -> str:
     """a Python that can import KiCad's pcbnew: $PCBNEW_PYTHON, else the first of python3, python3.12, ... that has it
     (KiCad's Ubuntu package builds pcbnew for the system Python, which need not be the one running the harness)"""
