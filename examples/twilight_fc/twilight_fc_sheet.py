@@ -13,7 +13,7 @@ import datetime
 import os
 import sys
 
-sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")]
+sys.path[:0] = [os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src")]
 import schemdraw.elements as elm
 from schem import Sheet, check_sheets, save_sheets, TERM2, REV2, ic, nets_out, leg, tp, tp_on, conn, notes
 W, H = 46.0, 32.5

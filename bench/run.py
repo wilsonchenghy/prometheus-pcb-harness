@@ -18,7 +18,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, "..")
-sys.path[:0] = [ROOT, os.path.join(ROOT, "examples")]
+sys.path[:0] = [os.path.join(ROOT, "src"), os.path.join(ROOT, "examples")]
 os.environ.setdefault("ARM_PDB_SOLIDS", "0")
 os.environ.setdefault("TWILIGHT_SOLIDS", "0")
 

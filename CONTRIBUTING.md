@@ -40,7 +40,7 @@ pytest -q                  # about 30 s
 
 ## Code
 
-Plain Python 3.10+, no build step. The main modules: `pcb.py` (the board, placement, routing, checks, exports),
+Plain Python 3.10+, no build step. The main modules, in `src/`: `pcb.py` (the board, placement, routing, checks, exports),
 `freerouting.py` (FreeRouting and the KiCad round trip), `fab.py` (house rules, order files, carts), `critic.py`
 (the review against requirements), `pcb_cli.py` (the command line), `schem.py` (schematics). Keep lines under 120
 characters and comments about why, not what.
