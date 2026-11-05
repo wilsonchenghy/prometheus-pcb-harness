@@ -39,8 +39,49 @@ def load_spec(path: str) -> dict:
         return json.load(f)
 
 
+# why each rule matters, in a sentence: a finding teaches the engineer reading it, it does not only order a fix
+WHY = {
+    "decoupling": "A supply pin draws current in fast edges that its capacitor supplies; the farther the capacitor, the "
+                  "larger the loop those edges flow round, and that loop's inductance becomes supply noise and EMI.",
+    "near": "Parts that work together (a crystal and its chip, a sense resistor and its amplifier) work best with short "
+            "connections; you set this distance in the requirements.",
+    "crystal": "A crystal's traces are high impedance and pick up noise, and their length adds capacitance that pulls "
+               "its frequency: keep it beside its chip, over unbroken ground.",
+    "edge": "A connector a cable plugs into has to reach the board edge; copper too close to the edge is cut or exposed "
+            "when the board is routed out of its panel.",
+    "antenna": "Copper near an antenna detunes it and absorbs its power: the module's keep-out is what keeps its range.",
+    "ground": "A solid ground plane gives every signal a return path right under it, keeping current loops small: less "
+              "noise and less EMI.",
+    "pair": "A differential pair's halves must match in length so both edges arrive together; skew turns into noise "
+            "and bit errors at speed.",
+    "current": "A trace too narrow for its current heats up (IPC-2221 relates width, copper weight and temperature "
+               "rise); too hot, it degrades or lifts.",
+    "voltage drop": "Every trace has resistance: at high current the drop along it lowers the voltage the load sees.",
+    "size": "Board area costs money and empty board means long traces: size the board to its parts unless an enclosure "
+            "decides it.",
+    "holes": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts "
+             "crowd the corners.",
+    "house": "Every fab has a smallest track, gap and drill it can make; below them the board cannot be built or costs "
+             "more.",
+    "layers": "You set the layer count: more layers cost more but give room for planes and routing.",
+    "assembly": "JLCPCB assembles only the parts it stocks, named by their LCSC number.",
+    "clearance": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum "
+                 "gap is the floor.",
+    "short": "Two nets touch: the circuit cannot work and may be damaged at power-up.",
+    "unreached": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never "
+                 "gets its signal.",
+    "split": "A net in pieces is an open circuit between them.",
+    "dangling": "A track or via that leads nowhere does nothing but add an antenna and take room.",
+    "drill": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
+    "erc": "Each pin's electrical type says how it must be driven: an input left open or two outputs tied together are "
+           "faults no copper check can see.",
+    "datasheet": "A symbol's pin numbers must match the manufacturer's: a wrong pin is the one mistake the board checks "
+                 "cannot catch.",
+}
+
+
 def _note(sev, kind, text, refs=(), hint=""):
-    return {"severity": sev, "kind": kind, "text": text, "refs": list(refs), "hint": hint}
+    return {"severity": sev, "kind": kind, "text": text, "refs": list(refs), "hint": hint, "why": WHY.get(kind, "")}
 
 
 def _pad_points(board):
@@ -206,6 +247,8 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
     if any(cc.get("symbol") for cc in board.comps.values()):   # (the ERC, from the parts' symbols' pin types)
         import parts
         notes += parts.erc(board)
+    for n in notes:                                      # (the ERC's and the datasheet's notes too)
+        n.setdefault("why", WHY.get(n["kind"], ""))
     return sorted(notes, key=lambda n: order[n["severity"]])
 
 

@@ -1465,3 +1465,18 @@ def test_schematic_draws_a_regulator_power_stage_as_one_wired_chain():
     assert max(ends) - min(ends) < 1e-6                       # (one straight rail)
     assert len([it for p in chain for it in p.items if it[0] == "label"]) == 2
     assert kicad_sch.overlaps(lay) == []
+
+
+def test_every_rule_says_why_it_matters():
+    """each kind of critic note and finding carries the engineering reason behind it, so a finding teaches the
+    engineer reading it"""
+    import re
+    import critic
+    import pcb_cli
+    here = Path(__file__).resolve().parent.parent
+    kinds = set(re.findall(r'_note\("\w+", "([\w ]+)"', (here / "critic.py").read_text()))
+    kinds |= {k for k, _, _ in pcb_cli.HINTS}
+    missing = sorted(k for k in kinds if not critic.WHY.get(k) and k not in ("parts", "net", "placement"))
+    assert missing == []
+    f = pcb_cli.finding("design", "F.Cu: A and B 0.18 mm apart (clearance 0.2) at (10.6, 10.6)")
+    assert f["kind"] == "clearance" and "short" in f["why"]

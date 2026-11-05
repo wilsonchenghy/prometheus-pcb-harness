@@ -5,6 +5,10 @@ description: Design a printed circuit board with Prometheus - parts on KiCad foo
 
 # Prometheus
 
+Work with the engineer, not around them (AGENTS.md, "Working with an engineer"): ask for their requirements and
+write them into `req.json`; stop at decisions (placement, part swaps, values, assumed pins, looked-up LCSC numbers)
+and let them choose; explain each fix with its finding's `why`. Build end to end only when they ask for that.
+
 1. Once per machine: `prometheus doctor`. If KiCad, Java or FreeRouting is missing, run `prometheus setup`
    (FreeRouting, no root) and show the user the setup guide (`docs/setup.md`, https://github.com/wilsonchenghy/pcb-harness/blob/main/docs/setup.md) for the rest; install system software only with their
    approval. Everything is optional; the harness falls back to its own router and checks.
