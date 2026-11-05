@@ -3,7 +3,7 @@ to 1.5 A each from a 2.7-10.8 V supply, a fuse and a power LED, screw terminals 
 header for the logic. 2 layers, 2 oz copper, 42 x 32 mm, ground poured on both sides. Tests current sizing and an
 exposed-pad power IC. Pin map is TI's DRV8833 PWP datasheet as remembered: verify before fab.
 
-    zeus bench/motor_driver.py out/ --spec bench/specs/motor_driver.json
+    prometheus bench/motor_driver.py out/ --spec bench/specs/motor_driver.json
 """
 import os
 import sys

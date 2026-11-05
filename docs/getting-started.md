@@ -141,13 +141,13 @@ each net of two or more pins, GND poured on the bottom. Parts in `at` stay where
 Read the package drawing's dimensions into a spec and let `fpgen.py` draw the lands (IPC-7351B):
 
 ```
-zeus footprint template:qfn > spec.json          # then edit it to the drawing: pins, pitch, body, L, b, EP
-zeus footprint spec.json --drawing qfn.png --symbol Sensor:MyPart
+prometheus footprint template:qfn > spec.json          # then edit it to the drawing: pins, pitch, body, L, b, EP
+prometheus footprint spec.json --drawing qfn.png --symbol Sensor:MyPart
 ```
 
-It writes `footprints/Zeus_Generated.pretty/<Name>.kicad_mod` beside the board script (keep `footprints/` there: the
+It writes `footprints/Prometheus_Generated.pretty/<Name>.kicad_mod` beside the board script (keep `footprints/` there: the
 harness reads it before KiCad's library), checks it, and opens a page with the drawing, the land pattern with its
-dimensions, KiCad's render and the checks. Then `b.place("U1", "Zeus_Generated:<Name>", ...)`. When the datasheet
+dimensions, KiCad's render and the checks. Then `b.place("U1", "Prometheus_Generated:<Name>", ...)`. When the datasheet
 gives a recommended land pattern, use family `pads` with its lands: the maker's pattern beats the formula.
 
 ## 6. Schematics

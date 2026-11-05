@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Renamed **Prometheus — AI PCB Harness** (was Zeus): the command is `prometheus` (`zeus` and `pcb-harness` still
+  work), the package `prometheus-pcb`, the Claude Code skill `prometheus`, `$PROMETHEUS_JAVA` (`$ZEUS_JAVA` still read);
+  the viewer's mark is a flame.
 - Renamed **Zeus — AI PCB Harness**: the command is `zeus` (`pcb-harness` still works), the package `zeus-pcb`.
 - `pcb-harness view out/` and `--view`: the board in a browser - layout with layers to switch, an interactive 3D
   view (three.js, shipped with the page; KiCad's photoreal render when KiCad is installed), a net-label schematic,

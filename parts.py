@@ -6,7 +6,7 @@ symbol pin has a pad and every pad a pin - and an ERC can run on the netlist bef
     b.place("U1", None, None, 0, "DRV8833", symbol="Driver_Motor:DRV8833PWP")   # (footprint: the symbol's own)
     b.net("AIN2", [("U1", "AIN2"), ("J4", "2")])                                 # (pin 15, by its name)
 
-``zeus part Driver_Motor:DRV8833PWP`` prints the pin table, the footprint and the pin-to-pad check.
+``prometheus part Driver_Motor:DRV8833PWP`` prints the pin table, the footprint and the pin-to-pad check.
 """
 from __future__ import annotations
 
@@ -279,7 +279,7 @@ def datasheet_text(url: str) -> List[str]:
     from vendor_parts import CACHE
     dst = CACHE / "datasheets" / (hashlib.sha1(url.encode()).hexdigest()[:16] + ".pdf")
     if not dst.exists() or dst.stat().st_size < 2000:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Zeus datasheet check)"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Prometheus datasheet check)"})
         with urllib.request.urlopen(req, timeout=90) as r:
             data = r.read()
         if not data.startswith(b"%PDF"):

@@ -2,9 +2,9 @@
 switchable 120 R terminator, an AMS1117 regulator from the bus's 12 V, two JST-XH bus connectors (daisy chain), a
 Cortex 10-pin SWD header, a reset and a status LED. 2 layers, 50 x 36 mm, ground poured on both sides; CANH / CANL
 declared as a pair. The three chips come from KiCad's symbol library and are wired by pin name: every pin is held to a
-pad, the ERC runs on their pin types, and `zeus part` checks each symbol against the maker's datasheet.
+pad, the ERC runs on their pin types, and `prometheus part` checks each symbol against the maker's datasheet.
 
-    zeus bench/can_node.py out/ --spec bench/specs/can_node.json
+    prometheus bench/can_node.py out/ --spec bench/specs/can_node.json
 """
 import os
 import sys

@@ -3,7 +3,7 @@ with the film, and sound on its events - the title's copper reveal, the parts la
 passing, each order file, each board under the inspection beam, the panel, the end card. Times are the film's own
 (video.html). Writes score.wav (48 kHz stereo).
 
-    python score.py && ffmpeg -i zeus-release.mp4 -i score.wav -c:v copy -c:a aac -b:a 192k -shortest out.mp4
+    python score.py && ffmpeg -i prometheus-release.mp4 -i score.wav -c:v copy -c:a aac -b:a 192k -shortest out.mp4
 """
 import numpy as np
 from scipy.signal import butter, fftconvolve, sosfilt

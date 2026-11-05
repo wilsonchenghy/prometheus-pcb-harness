@@ -116,7 +116,7 @@ def doctor() -> dict:
                          "without": "the harness writes the Specctra file itself"},
         "java": {"ok": bool(java), "have": f"Java {java[1]}: {java[0]}" if java else
                  (f"only Java {freerouting.java_version(old)} ({old}): FreeRouting needs 17+" if old else "not installed"),
-                 "gives": "runs FreeRouting (any Java 17+ found, the default one may stay older; or set ZEUS_JAVA)",
+                 "gives": "runs FreeRouting (any Java 17+ found, the default one may stay older; or set PROMETHEUS_JAVA)",
                  "without": "no FreeRouting: the built-in grid router"},
         "freerouting": {"ok": bool(jar), "have": jar or "not found", "gives": "the router KiCad users use",
                         "without": "the built-in grid router (fine for simple boards; dense 0.4 mm pitch chips fail)"},
@@ -222,7 +222,7 @@ def main(argv=None) -> int:
     if argv[:1] == ["part"]:                             # (a part's symbol: pins, datasheet, footprint, the check)
         import parts
         if len(argv) < 2:
-            print("usage: zeus part Lib:Symbol   e.g. zeus part Driver_Motor:DRV8833PWP", file=sys.stderr)
+            print("usage: prometheus part Lib:Symbol   e.g. prometheus part Driver_Motor:DRV8833PWP", file=sys.stderr)
             return 2
         try:
             print(parts.describe(argv[1]))
@@ -266,7 +266,7 @@ def main(argv=None) -> int:
     ap.add_argument("--datasheets", action="store_true", help="also read each symbol part's datasheet and check its "
                     "pins against the datasheet's pin table (fetched once, then cached)")
     ap.add_argument("--view", action="store_true", help="serve the viewer from this run and wait for Ctrl-C at the end "
-                    "(by default the viewer opens on its own in the background; 'zeus view OUT' later)")
+                    "(by default the viewer opens on its own in the background; 'prometheus view OUT' later)")
     ap.add_argument("--no-lcsc", action="store_true", help="do not look up LCSC numbers for parts without one "
                     "(JLCPCB's catalogue; also off when CI is set)")
     ap.add_argument("--no-view", action="store_true", help="do not open the viewer (also off when CI is set)")

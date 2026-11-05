@@ -22,7 +22,7 @@ jobs:
         run: |
           v="${V}"
           awk -v h="## ${v} " 'index($0, h) == 1 {on=1; next} /^## v/ {on=0} on' CHANGELOG.md > notes.md
-          test -s notes.md || echo "Zeus ${v}" > notes.md
+          test -s notes.md || echo "Prometheus ${v}" > notes.md
       - name: assets
         run: |
           mkdir -p assets
@@ -38,10 +38,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release view "${V}" >/dev/null 2>&1 || \
-            gh release create "${V}" --target "${GITHUB_SHA}" --title "Zeus ${V}" --notes-file notes.md
+            gh release create "${V}" --target "${GITHUB_SHA}" --title "Prometheus ${V}" --notes-file notes.md
           if ls assets/* >/dev/null 2>&1; then gh release upload "${V}" assets/* --clobber; fi
           # (a release made earlier: its title kept to the name, and files no longer kept on release-assets taken off)
-          gh release edit "${V}" --title "Zeus ${V}"
+          gh release edit "${V}" --title "Prometheus ${V}"
           for f in $(gh release view "${V}" --json assets --jq '.assets[].name'); do
             test -e "assets/${f}" || gh release delete-asset "${V}" "${f}" --yes
           done

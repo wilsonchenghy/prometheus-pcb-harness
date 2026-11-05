@@ -4,7 +4,7 @@ ground poured on the bottom. Tests current sizing: the battery and boost paths c
 the mounting holes are placed by hand; place_and_route does the rest. Pin maps are the makers' datasheets as
 remembered (TP4056, DW01A, FS8205A, MT3608): verify before fab.
 
-    zeus bench/power_bank.py out/ --spec bench/specs/power_bank.json
+    prometheus bench/power_bank.py out/ --spec bench/specs/power_bank.json
 """
 import os
 import sys

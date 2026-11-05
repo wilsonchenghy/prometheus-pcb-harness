@@ -5,16 +5,16 @@ check judges every board, and FreeRouting (the router KiCad users use) routes th
 machine has at any time:
 
 ```
-zeus doctor
+prometheus doctor
 ```
 
 | Piece | What it gives | Without it |
 |---|---|---|
-| Python 3.10+ and `pip install zeus-pcb` | everything: parts, placement, routing, the design check, the house check, Gerbers, KiCad project, BOM, cart | (required) |
+| Python 3.10+ and `pip install prometheus-pcb` | everything: parts, placement, routing, the design check, the house check, Gerbers, KiCad project, BOM, cart | (required) |
 | KiCad 9+ (`kicad-cli`, and its Python `pcbnew`) | KiCad's own DRC on every run; FreeRouting through KiCad's Specctra export | the harness's design check and house check only |
 | Java 17+ and FreeRouting | the router KiCad users use; dense boards (0.4 mm pitch chips) route clean | the built-in grid router: fine for simple boards, dense fine-pitch boards leave pins unrouted |
-| `pip install "zeus-pcb[3d]"` (build123d) | STEP of the assembled board | no STEP |
-| `pip install "zeus-pcb[schematic]"` | schematic sheets | no sheets |
+| `pip install "prometheus-pcb[3d]"` (build123d) | STEP of the assembled board | no STEP |
+| `pip install "prometheus-pcb[schematic]"` | schematic sheets | no sheets |
 
 Each run's `result.json` says what it used (`"router"`, `"kicad_drc"`), so an agent knows what judged the board.
 
@@ -23,15 +23,15 @@ Each run's `result.json` says what it used (`"router"`, `"kicad_drc"`), so an ag
 **FreeRouting** (any OS, needs Java):
 
 ```
-zeus setup          # downloads FreeRouting 2.0.1 into ~/.cache/prometheus/freerouting, checks its SHA-256
+prometheus setup          # downloads FreeRouting 2.0.1 into ~/.cache/prometheus/freerouting, checks its SHA-256
 ```
 
 or put the jar anywhere and set `FREEROUTING_JAR=/path/to/freerouting.jar`.
 
 **Java 17+**: Ubuntu / Debian `sudo apt install openjdk-21-jre-headless`; macOS `brew install openjdk`;
 Windows: the Temurin installer from adoptium.net. It need not be the default Java: the harness finds any Java 17+
-(`$ZEUS_JAVA`, macOS's `java_home`, `$JAVA_HOME`, the PATH, Homebrew, `/usr/lib/jvm`), so a machine that keeps an
-older default for something else still routes. `zeus doctor` says which one it uses.
+(`$PROMETHEUS_JAVA`, macOS's `java_home`, `$JAVA_HOME`, the PATH, Homebrew, `/usr/lib/jvm`), so a machine that keeps an
+older default for something else still routes. `prometheus doctor` says which one it uses.
 
 **KiCad 9+**:
 
@@ -56,16 +56,16 @@ set `PCBNEW_PYTHON` to a Python that can import it (on Ubuntu, `/usr/bin/python3
 
 The agent runs the same commands; what differs is whether it may install system software.
 
-- **Tell the agent once**: "run `zeus doctor`; install what is missing per docs/setup.md". Installing KiCad
+- **Tell the agent once**: "run `prometheus doctor`; install what is missing per docs/setup.md". Installing KiCad
   needs root and adds a package source, so many agents (and Claude Code's auto mode) ask first or refuse: that
   is the agent's safety check working, not a fault.
 - **Claude Code**: approve the install when it asks. In a cloud session in auto mode the install is refused; switch
   the mode picker next to the prompt to *Accept edits* (then you approve each command), or add allow rules for
   the install commands to the repository's `.claude/settings.json`. FreeRouting needs no root:
-  `zeus setup` is enough.
+  `prometheus setup` is enough.
 - **Containers / CI**: bake KiCad 9, Java and the FreeRouting jar into the image, or run the commands above in the
   setup script, so every session starts complete.
-- **No root at all**: the harness still works fully with its own checks and router; `zeus setup` still adds
+- **No root at all**: the harness still works fully with its own checks and router; `prometheus setup` still adds
   FreeRouting if Java is there. Run KiCad's DRC later on any machine with KiCad, on the exported
   `out/kicad/<name>.kicad_pcb`.
 
