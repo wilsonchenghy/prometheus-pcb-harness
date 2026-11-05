@@ -136,9 +136,29 @@ value, MPN (a field named MPN or Manufacturer_Part_Number, with Manufacturer) an
 each net of two or more pins, GND poured on the bottom. Parts in `at` stay where you put them; then
 `pcb.place_and_route(b)` does the rest. A part the schematic gives no footprint is listed in `b.import_notes`.
 
+## A footprint KiCad does not have
+
+Read the package drawing's dimensions into a spec and let `fpgen.py` draw the lands (IPC-7351B):
+
+```
+prometheus footprint template:qfn > spec.json          # then edit it to the drawing: pins, pitch, body, L, b, EP
+prometheus footprint spec.json --drawing qfn.png --symbol Sensor:MyPart
+```
+
+It writes `footprints/Prometheus_Generated.pretty/<Name>.kicad_mod` beside the board script (keep `footprints/` there: the
+harness reads it before KiCad's library), checks it, and opens a page with the drawing, the land pattern with its
+dimensions, KiCad's render and the checks. Then `b.place("U1", "Prometheus_Generated:<Name>", ...)`. When the datasheet
+gives a recommended land pattern, use family `pads` with its lands: the maker's pattern beats the formula.
+
 ## 6. Schematics
 
-`schem.py` draws schematic sheets from the board's netlist and checks them against the board; see
+Every run writes the board's KiCad schematic, `out/kicad/<name>.kicad_sch` (or `kicad_sch.write(b, dir)`): each part
+on its KiCad symbol (the one it was placed with, else Device:R / C / L / D / LED by its kind, else a box made from
+its pads), a titled block per IC with the parts on its signals, each pin wired to a net label or a GND symbol, on the
+smallest ISO sheet that holds it. Open it in Eeschema with the board. With KiCad installed the run reads it back
+(`kicad-cli sch export netlist`) and any net that differs from the board's is a finding with `stage: "schematic"`.
+
+`schem.py` draws sheets by hand, in an IC's datasheet form, and checks them against the board; see
 `examples/arm_pdb_sheet.py` for a full one.
 
 ## How fast

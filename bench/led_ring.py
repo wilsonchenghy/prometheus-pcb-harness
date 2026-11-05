@@ -4,7 +4,7 @@ capacitors are placed on the ring by hand (the design's look); the rest by place
 on the bottom; the 5 V net carries the LEDs' 0.8 A. Pin maps are the WS2812B and ATtiny85 datasheets as remembered:
 verify before fab.
 
-    zeus bench/led_ring.py out/ --spec bench/specs/led_ring.json
+    prometheus bench/led_ring.py out/ --spec bench/specs/led_ring.json
 """
 import math
 import os

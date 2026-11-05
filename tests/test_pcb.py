@@ -2,10 +2,13 @@
 schematic sheets. Some fetch KiCad footprints on first run (cached in ~/.cache/prometheus/parts)."""
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
 import pytest
+
+os.environ["CI"] = "1"   # (no viewer tabs from the test runs)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -704,7 +707,7 @@ def test_pcb_kicad_board_file(tmp_path):
     b.net("GND", [("R1", "2"), ("R2", "2")])
     b.via("A", (8, 3))
     b.hole((17, 5), 2.2)
-    pcb_path, pro_path = pcb.export_kicad(b, str(tmp_path))
+    pcb_path, pro_path = pcb.export_kicad(b, str(tmp_path), schematic=False)
     tree = pcb._sx_parse(open(pcb_path).read())
     assert tree[0] == "kicad_pcb"
     fps = {next(p[2] for p in f if isinstance(p, list) and p[:2] == ["property", "Reference"]): f
@@ -1071,6 +1074,21 @@ def test_cli_stages(tmp_path):
     pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "a"), "--kicad-drc", "off", "--router", "harness"])
     r = json.load(open(tmp_path / "a" / "result.json"))
     assert r["stage"] == "all" and "gerbers" in r["files"] and r["parts"] == 8
+    assert not [c for c in r["critic"] if c["kind"] == "size"]   # (the blinker: 24 x 15 mm, no more than it needs)
+
+
+def test_critic_fails_a_board_far_larger_than_its_parts():
+    """no size_mm in the requirements: a board its parts barely cover is an error (the agent shrinks it), with the size
+    that would do; with size_mm given the enclosure decides and the check is the maximum only"""
+    import critic
+    from shapely.geometry import Polygon
+    sys.path.insert(0, str(Path(__file__).parent.parent / "bench"))
+    import blinker
+    b = blinker.build()
+    b.outline = Polygon([(0, 0), (60, 0), (60, 40), (0, 40)])
+    size = [n for n in critic.review(b) if n["kind"] == "size"]
+    assert size and size[0]["severity"] == "error" and "would do" in size[0]["text"]
+    assert not [n for n in critic.review(b, {"size_mm": [60, 40]}) if n["kind"] == "size"]
 
 
 def test_tune_pairs_lengthens_the_shorter_net():
@@ -1143,7 +1161,7 @@ def test_viewer_serves_a_run_and_its_progress(tmp_path):
     try:
         op = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         get = lambda p: op.open(url + p, timeout=120).read()
-        assert b"Zeus" in get("")
+        assert b"Prometheus" in get("")
         assert len(get("three.min.js")) > 100000
         b = json.loads(get("api/board"))
         assert b["name"] == "blinker" and len(b["comps"]) == 8 and b["tracks"] and b["copper"]
@@ -1254,3 +1272,196 @@ def test_tidy_takes_away_a_via_that_joins_nothing():
     assert b.tidy() == 1
     assert [v["net"] for v in b.vias] == ["B"]
     assert any(t["pts"] == [(5.1, 5.0), (5.0, 5.0)] for t in b.tracks)   # (the end brought to where it met)
+
+
+@pytest.mark.parametrize("script", ["bench/blinker.py", "bench/usb_ldo.py", "bench/can_node.py",
+                                    "bench/power_bank.py", "bench/rp2040_board.py"])
+def test_kicad_schematic_is_the_board_and_nothing_overlaps(tmp_path, script):
+    """the KiCad schematic: every part on a symbol (its own, a generic one, or a box made from its pads), nothing on
+    the sheet overlapping, and - read back by KiCad - its netlist the board's"""
+    import kicad_sch
+    import pcb
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / script))
+    lay = kicad_sch.layout(b)
+    assert kicad_sch.overlaps(lay) == []
+    placed = {p.ref for _, _, ps in lay[0] for p in ps}
+    pn = b.pad_net()
+    assert placed == {r for (r, _) in pn}                # (every part on a net is on the sheet)
+    path = kicad_sch.write(b, str(tmp_path))
+    if not pcb.kicad_version():
+        pytest.skip("KiCad is not installed: the netlist read-back needs kicad-cli")
+    assert kicad_sch.check(b, path) == []
+
+
+KICAD_TWINS = [  # (KiCad's footprint, the same package's drawing dimensions: JEDEC / the maker's datasheet)
+    ("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", {"family": "soic", "pins": 8, "pitch": 1.27, "body": [[4.8, 5.0], [3.8, 4.0]],
+     "span": [5.8, 6.2], "lead_length": [0.4, 1.27], "lead_width": [0.31, 0.51]}),
+    ("Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm", {"family": "soic", "pins": 20, "pitch": 0.65, "body": [[6.4, 6.6], [4.3, 4.5]],
+     "span": [6.2, 6.6], "lead_length": [0.45, 0.75], "lead_width": [0.19, 0.30]}),
+    ("Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm", {"family": "qfn", "pins": 16, "pitch": 0.5, "body": [3, 3],
+     "lead_length": [0.3, 0.5], "lead_width": [0.18, 0.30], "ep": [1.7, 1.7]}),
+    ("Package_TO_SOT_SMD:SOT-23", {"family": "soic", "pins": 3, "pitch": 0.95, "body": [[2.8, 3.04], [1.2, 1.4]],
+     "span": [2.1, 2.64], "lead_length": [0.3, 0.6], "lead_width": [0.3, 0.5],
+     "rows": {"left": ["1", None, "2"], "right": [None, "3", None]}}),
+    ("Package_QFP:LQFP-48_7x7mm_P0.5mm", {"family": "qfp", "pins": 48, "pitch": 0.5, "body": [7, 7], "span": [8.8, 9.2],
+     "lead_length": [0.45, 0.75], "lead_width": [0.17, 0.27]}),
+    ("Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical", {"family": "tht", "grid": [5, 2], "pitch": 2.54,
+     "lead": [0.64, 0.64]}),
+]
+
+
+@pytest.mark.parametrize("kicad,spec", KICAD_TWINS, ids=[k.split(":")[1] for k, _ in KICAD_TWINS])
+def test_fpgen_lands_match_kicads_own_footprint(kicad, spec):
+    """a footprint made from a package's drawing dimensions (IPC-7351B) lands where KiCad's own does, within 0.1 mm"""
+    import fpgen
+    import pcb
+    ref = pcb.footprint(kicad)["pads"]
+    fp = fpgen.generate(spec)
+    assert {p["num"] for p in fp["pads"]} == {n for n in ref if n}
+    for p in fp["pads"]:
+        k = max(ref[p["num"]], key=lambda q: q["size"][0] * q["size"][1])
+        assert abs(p["at"][0] - k["at"][0]) <= 0.1 and abs(p["at"][1] + k["at"][1]) <= 0.1, p["num"]
+        assert abs(p["size"][0] - k["size"][0]) <= 0.1 and abs(p["size"][1] - k["size"][1]) <= 0.1, p["num"]
+
+
+@pytest.mark.parametrize("family", ["soic", "sot23", "qfp", "qfn", "dfn", "bga", "tht", "pads"])
+def test_fpgen_every_family_passes_its_checks_and_reads_back(tmp_path, family):
+    import fpgen
+    r = fpgen.build(fpgen.TEMPLATES[family], str(tmp_path / "footprints"))
+    assert r["ok"], [c for c in r["checks"] if c["severity"] != "ok"]
+    assert Path(r["review"]).exists()
+
+
+def test_fpgen_a_board_uses_a_generated_footprint_from_its_own_folder(tmp_path):
+    """a footprint made for a board, in footprints/ beside its script, places, routes and checks like any other"""
+    import fpgen
+    import pcb_cli
+    r = fpgen.build(fpgen.TEMPLATES["soic"], str(tmp_path / "footprints"), lib="Mine")
+    (tmp_path / "board.py").write_text(f'''
+from pcb import Board
+def build():
+    b = Board("gen", [(0, 0), (20, 0), (20, 14), (0, 14)], rules="jlcpcb-2")
+    b.place("U1", "{r['footprint']}", (10, 7), 0, "IC")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (3, 7), 90, "10k")
+    b.net("A", [("U1", "1"), ("R1", "1")])
+    b.net("B", [("U1", "8"), ("R1", "2")])
+    return b
+''')
+    b, _ = pcb_cli.load(str(tmp_path / "board.py"))
+    assert len(b.comps["U1"]["pads"]) == 8
+    import pcb
+    assert pcb.autoroute(b) == [] and b.check() == []
+
+
+def test_lcsc_match_takes_the_mpn_else_the_exact_value_in_stock():
+    """the catalogue entry is the part's MPN; else a resistor's exact value at 1 % / a capacitor's value at no less than
+    its voltage, in its footprint's size; basic parts first; never short of stock; nothing rather than a near miss"""
+    import parts
+    row = lambda n, mfr, pkg, d, stock=10000, basic=False: {"lcsc": n, "mfr": mfr, "package": pkg, "description": d,
+                                                             "stock": stock, "is_basic": basic}
+    r = {"fp": "Resistor_SMD:R_0603_1608Metric", "value": "10k2", "mpn": ""}
+    found = [row(1, "a", "0603", "100mW 2.2kΩ ±1% 0603"), row(2, "b", "0603", "100mW 10.2kΩ ±1% 0603", stock=5),
+             row(3, "c", "0603", "100mW 10.2kΩ ±1% 0603"), row(4, "d", "0402", "62mW 10.2kΩ ±1% 0402", basic=True)]
+    assert parts.lcsc_match(r, found, need=10)["lcsc"] == 3
+    c = {"fp": "Capacitor_SMD:C_1210_3225Metric", "value": "4u7 50V", "mpn": ""}
+    found = [row(5, "e", "1210", "4.7uF 25V X7R ±10% 1210", basic=True), row(6, "f", "1210", "4.7uF 50V X7R ±10% 1210")]
+    assert parts.lcsc_match(c, found)["lcsc"] == 6
+    assert parts.lcsc_match(c, found[:1]) is None
+    u = {"fp": "Package_SO:SOIC-8", "value": "TPS54360", "mpn": "TI TPS54360BDDAR"}
+    assert parts.lcsc_match(u, [row(7, "TPS54360DDAR", "SOIC-8", ""), row(8, "TPS54360BDDAR", "SOIC-8", "")])["lcsc"] == 8
+    assert parts.lcsc_query(r) == ["10.2kΩ 0603 1%"] and parts.lcsc_query(c) == ["4.7uF 50V 1210"]
+
+
+def test_compact_glb_merges_primitives_of_one_material(tmp_path):
+    """KiCad's glTF has a primitive per copper shape; compacted, a mesh has one per material, the same triangles"""
+    import struct
+    import numpy as np
+    import pcb_view
+    tri = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], np.float32)
+    blob, views, accs, prims = bytearray(), [], [], []
+    for k, mat in enumerate((0, 0, 1)):
+        for arr, tgt in ((tri + k, 34962), (np.array([0, 0, 1] * 3, np.float32).reshape(3, 3), 34962),
+                         (np.array([0, 1, 2], np.uint16), 34963)):
+            while len(blob) % 4:
+                blob.append(0)
+            views.append({"buffer": 0, "byteOffset": len(blob), "byteLength": arr.nbytes, "target": tgt})
+            blob += arr.tobytes()
+            accs.append({"bufferView": len(views) - 1, "componentType": 5126 if arr.dtype == np.float32 else 5123,
+                         "count": 3, "type": "VEC3" if arr.ndim == 2 else "SCALAR"})
+        prims.append({"attributes": {"POSITION": len(accs) - 3, "NORMAL": len(accs) - 2}, "indices": len(accs) - 1,
+                      "material": mat})
+    j = {"asset": {"version": "2.0"}, "meshes": [{"primitives": prims}], "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}],
+         "scene": 0, "materials": [{}, {}], "accessors": accs, "bufferViews": views, "buffers": [{"byteLength": len(blob)}]}
+    js = json.dumps(j).encode()
+    js += b" " * (-len(js) % 4)
+    blob += b"\0" * (-len(blob) % 4)
+    body = struct.pack("<I4s", len(js), b"JSON") + js + struct.pack("<I4s", len(blob), b"BIN\0") + bytes(blob)
+    p = tmp_path / "b.glb"
+    p.write_bytes(struct.pack("<4sII", b"glTF", 2, 12 + len(body)) + body)
+    pcb_view.compact_glb(p)
+    raw = p.read_bytes()
+    out = json.loads(raw[20:20 + struct.unpack_from("<I", raw, 12)[0]])
+    ps = out["meshes"][0]["primitives"]
+    assert sorted(q["material"] for q in ps) == [0, 1]
+    m0 = next(q for q in ps if q["material"] == 0)
+    assert out["accessors"][m0["attributes"]["POSITION"]]["count"] == 6 and out["accessors"][m0["indices"]]["count"] == 6
+    assert out["accessors"][m0["attributes"]["POSITION"]]["max"] == [2.0, 2.0, 1.0]
+    pcb_view.compact_glb(p)                               # (twice: a no-op)
+    assert p.read_bytes() == raw
+
+
+def test_schematic_draws_decoupling_as_a_bank_on_one_rail():
+    """capacitors between one rail and ground stand side by side on one pitch: one rail label, one ground symbol, the
+    tops and feet joined by wires (as an engineer draws them), not a label and a ground on each"""
+    import kicad_sch
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "bench" / "rp2040_board.py"))
+    lay = kicad_sch.layout(b)
+    banks = {}
+    for _, _, ps in lay[0]:
+        for p in ps:
+            if getattr(p, "pitch", 0):
+                banks.setdefault((p.lib, p.rail, p.at[1]), []).append(p)
+    big = max(banks.values(), key=len)
+    assert len(big) >= 3
+    assert sum(1 for p in big for it in p.items if it[0] == "label") == 1
+    assert sum(1 for p in big for it in p.items if it[0] == "gnd") == 1
+    xs = sorted(p.at[0] for p in big)
+    assert len({round(b_ - a, 3) for a, b_ in zip(xs, xs[1:])}) == 1          # (one pitch)
+    assert kicad_sch.overlaps(lay) == []
+
+
+def test_schematic_of_a_large_design_is_a3_pages_joined_by_global_labels(tmp_path):
+    """a design that needs more than A3 (the flight controller) is A3 pages under a cover sheet, every part on one
+    page, nothing overlapping, and - read back by KiCad - one netlist, the board's"""
+    import kicad_sch
+    import pcb
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "twilight_fc.py"))
+    pgs = kicad_sch.pages(b)
+    assert len(pgs) > 1 and {pg[1][0] for pg in pgs} == {"A3"}
+    assert all(kicad_sch.overlaps(pg) == [] for pg in pgs)
+    placed = [p.ref for pg in pgs for _, _, ps in pg[0] for p in ps]
+    assert sorted(set(placed)) == sorted({r for (r, _) in b.pad_net()})
+    path = kicad_sch.write(b, str(tmp_path))
+    assert len(list(tmp_path.glob("twilight_fc_*.kicad_sch"))) == len(pgs)
+    if not pcb.kicad_version():
+        pytest.skip("KiCad is not installed: the netlist read-back needs kicad-cli")
+    assert kicad_sch.check(b, path) == []
+
+
+def test_schematic_draws_a_regulator_power_stage_as_one_wired_chain():
+    """a regulator's power stage as an engineer draws it - the inductor lying on the rail, the capacitors on its far
+    node standing on it (a buck: SW -+-[L]-+--+- VOUT) - one wire, one label at each end, nothing overlapping"""
+    import kicad_sch
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "bench" / "power_bank.py"))
+    lay = kicad_sch.layout(b)
+    chain = [p for _, _, ps in lay[0] for p in ps if p.off is not None]
+    assert [p.ref for p in chain] == ["L1", "C4"]
+    ends = [p.at[1] + it[1][1] for p in chain for it in p.items
+            if it[0] == "label" or (it[0] == "wire" and abs(it[1][1] - it[2][1]) < 1e-6)]   # (the rail: all level)
+    assert max(ends) - min(ends) < 1e-6                       # (one straight rail)
+    assert len([it for p in chain for it in p.items if it[0] == "label"]) == 2
+    assert kicad_sch.overlaps(lay) == []

@@ -37,6 +37,24 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
+
+def _kicad_on_path():
+    """put kicad-cli on the PATH from KiCad's usual install place when it is not there already (the macOS app and
+    the Windows installer do not add it), so the DRC and the viewer's 3D parts work without setup"""
+    import glob
+    import os
+    import shutil
+    if shutil.which("kicad-cli"):
+        return
+    for d in ["/Applications/KiCad/KiCad.app/Contents/MacOS",
+              *sorted(glob.glob(r"C:\Program Files\KiCad\*\bin"), reverse=True)]:
+        if os.path.exists(os.path.join(d, "kicad-cli")) or os.path.exists(os.path.join(d, "kicad-cli.exe")):
+            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+            return
+
+
+_kicad_on_path()
+
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
@@ -69,12 +87,18 @@ def _find(node, key):
     return [c for c in node if isinstance(c, list) and c and c[0] == key]
 
 
+FP_DIRS: List[Path] = [LOCAL_FP]                         # (project footprint folders, searched in order; a board
+                                                         #  script's own footprints/ goes first: pcb_cli.load)
+
+
 def _fp_file(name: str) -> Path:
-    """where footprint "Lib:Name" lives: the project library (``LOCAL_FP``) first, else KiCad's, cached"""
+    """where footprint "Lib:Name" lives: a project library (``FP_DIRS``: the board's footprints/, then the
+    harness's own) first, else KiCad's, cached"""
     lib, fp = name.split(":")
-    local = LOCAL_FP / f"{lib}.pretty" / f"{fp}.kicad_mod"
-    if local.exists():
-        return local
+    for d in FP_DIRS:
+        local = Path(d) / f"{lib}.pretty" / f"{fp}.kicad_mod"
+        if local.exists():
+            return local
     from vendor_parts import CACHE
     return CACHE / "kicad_fp" / f"{fp}.kicad_mod"
 
@@ -437,6 +461,19 @@ class Board:
             if not value:
                 value = sym["value"]
         pads = footprint(fp)["pads"]
+        if sym is None:                                  # (no symbol given: KiCad's generic one for a passive or a
+            try:                                         #  connector - Device:R, Device:C ... - when its pins are the
+                import kicad_sch                         #  pads exactly; a chip needs its own: symbol=)
+                import parts
+                import pcb_view
+                if pcb_view.kind_of(ref, fp) == "ic":
+                    raise LookupError("a chip: no generic symbol")
+                name = kicad_sch.symbol_for(ref, {"fp": fp, "pads": pads, "value": value, "mpn": mpn, "note": note})
+                cand = parts.symbol(name)
+                if {q["num"] for q in cand["pins"]} == {n for n in pads if n}:
+                    sym = dict(cand, auto=True)
+            except Exception:                            # (offline, or no such symbol: the part goes without one)
+                sym = None
         if min_drill is None and self.rules is not None:
             import fab
             min_drill = (fab.RULES[self.rules] if isinstance(self.rules, str) else self.rules).get("pth_drill")
@@ -2045,7 +2082,7 @@ def _decap_target(c: dict, ref: str, num: str):
     if re.match(r"^(J|P|CN|CON)\d", ref, re.I):
         return None
     sym = c.get("symbol")
-    if sym:
+    if sym and not sym.get("auto"):                      # (a generic symbol says nothing of a chip's supply pins)
         return any(q["num"] == num and q["type"] == "power_in" for q in sym["pins"])
     return True
 
@@ -3367,28 +3404,28 @@ def _text_poly(txt: str, x: float, y: float, size: float, angle: float = 0.0):
     return affinity.rotate(shape, angle, origin=(x, y)) if angle else shape
 
 
+def _fp_silk(board: Board, ref: str):
+    """one part's footprint silk strokes (as KiCad draws them), board mm"""
+    import math
+    from shapely.geometry import LineString
+    from shapely.ops import unary_union
+    c = board.comps[ref]
+    ax, ay = c["at"]
+    a = math.radians(c["rot"])
+    ca, sa = math.cos(a), math.sin(a)
+    mx = -1.0 if c.get("side", "F") == "B" else 1.0
+    tf = lambda px, py: (ax + px * mx * ca - py * sa, ay + px * mx * sa + py * ca)
+    return unary_union([LineString([tf(x1, y1), tf(x2, y2)]).buffer(max(w, 0.1) / 2, 4)
+                        for x1, y1, x2, y2, w in footprint(c["fp"]).get("silk", [])])
+
+
 def silkscreen(board: Board, layer: str = "F"):
     """the silkscreen of one side as shapely geometry: each part's footprint silk lines (as KiCad draws them) and its
     reference designator where ``place_refs`` finds room, the board's own ``silk_text``; clipped clear of the pads
     and the drills (a fab clips silk off exposed copper)"""
-    import math
-    from shapely.geometry import LineString, Point
+    from shapely.geometry import Point
     from shapely.ops import unary_union
-    geoms = []
-    for ref, c in board.comps.items():
-        side = c.get("side", "F")
-        if side != layer:
-            continue
-        ax, ay = c["at"]
-        a = math.radians(c["rot"])
-        ca, sa = math.cos(a), math.sin(a)
-        mx = -1.0 if side == "B" else 1.0
-
-        def tf(px, py):
-            px *= mx
-            return (ax + px * ca - py * sa, ay + px * sa + py * ca)
-        for x1, y1, x2, y2, w in footprint(c["fp"]).get("silk", []):
-            geoms.append(LineString([tf(x1, y1), tf(x2, y2)]).buffer(max(w, 0.1) / 2, 4))
+    geoms = [_fp_silk(board, ref) for ref, c in board.comps.items() if c.get("side", "F") == layer]
     for ref, at in place_refs(board).items():
         if at and board.comps[ref].get("side", "F") == layer:
             x, y, ang, size = at
@@ -3656,6 +3693,7 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
                         [g.centroid.buffer(d / 2 + gap, 16) for _, _, _, g, d in board.pad_shapes() if d] or [Point(0, 0).buffer(0)])
     inside = board.outline.buffer(-0.5)
     crt = {r: board.courtyard(r) for r in board.comps}
+    silk = {r: _fp_silk(board, r) for r in board.comps}
     taken = {"F": [], "B": []}
     for txt, (x, y), size, ang in getattr(board, "silk_text", []):     # (the board's own text: a title)
         w, h = len(txt) * size * 0.78 + 0.2, size + 0.25
@@ -3668,6 +3706,7 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
         body = crt[r] if crt[r] is not None else Point(*board.comps[r]["at"]).buffer(1.0)
         bodies = unary_union([crt[o] for o in board.comps if o != r and crt[o] is not None and side(o) == L] or
                              [Point(0, 0).buffer(0)])
+        strokes = unary_union([silk[o] for o in board.comps if o != r and side(o) == L] or [Point(0, 0).buffer(0)])
         x0, y0, x1, y1 = body.bounds
         cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
         found = None
@@ -3684,7 +3723,8 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
                 tw, th = (w, h) if a == 0.0 else (h, w)
                 bb = box(x - tw / 2, y - th / 2, x + tw / 2, y + th / 2)
                 if (inside.contains(bb) and not bb.intersects(pads[L]) and not bb.intersects(holes)
-                        and not bb.intersects(bodies) and not bb.intersects(body)
+                        and not bb.intersects(bodies) and not bb.intersects(body) and not bb.intersects(strokes)
+                        and bb.distance(bodies) > bb.distance(body) + 0.3      # (read as its own part's, not a neighbour's)
                         and not any(bb.intersects(t) for t in taken[L])):
                     found = (round(x, 3), round(y, 3), a, size)
                     taken[L].append(bb.buffer(gap))
@@ -4034,8 +4074,8 @@ def kicad_version() -> Optional[str]:
 
 KICAD_INSTALL = {"linux": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad "
                           "(or your distribution's kicad package, version 9 or newer)",
-                 "darwin": "brew install --cask kicad (kicad-cli is in KiCad.app/Contents/MacOS: put it on the PATH)",
-                 "win32": "the installer from kicad.org (kicad-cli.exe is in KiCad's bin folder: put it on the PATH)"}
+                 "darwin": "brew install --cask kicad (found in /Applications/KiCad without a PATH entry)",
+                 "win32": "the installer from kicad.org (found in Program Files\\KiCad without a PATH entry)"}
 
 
 def kicad_drc(pcb_path: str, refill: bool = False) -> Dict[str, list]:
@@ -4114,8 +4154,9 @@ def pack(src_dir: str) -> str:
 
 
 def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.0, 100.0),
-                 place_labels: bool = True) -> List[str]:
-    """``<name>.kicad_pcb`` and ``<name>.kicad_pro`` (KiCad 9 format; KiCad 9 and later open it) for further work in
+                 place_labels: bool = True, schematic: bool = True) -> List[str]:
+    """``<name>.kicad_pcb``, ``<name>.kicad_pro`` and (``schematic``) ``<name>.kicad_sch`` on KiCad's own symbols
+    (kicad_sch.py) - KiCad 9 format; KiCad 9 and later open it - for further work in
     KiCad: every part on its library footprint (with its 3D model, MPN and note), the nets, tracks, vias, the pours as
     filled zones (solid pad connection, islands kept, as the harness fills them), keep-outs as rule areas, mounting
     holes, the outline on Edge.Cuts and the legend on the silkscreen. The project file carries the board's clearance,
@@ -4250,7 +4291,16 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     ppath = os.path.join(out_dir, f"{board.name}.kicad_pro")
     with open(ppath, "w") as f:
         json.dump(pro, f, indent=2)
-    return [path, ppath]
+    out = [path, ppath]
+    if not schematic:
+        return out
+    try:                                                 # the schematic, on KiCad's own symbols (kicad_sch.py)
+        import kicad_sch
+        out.append(kicad_sch.write(board, out_dir))
+    except Exception as e:                               # (no symbols offline: the board is still written)
+        import sys
+        print(f"KiCad schematic: not written ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr)
+    return out
 
 
 NET_COLORS ={"GND": (40, 40, 40), "VBUS": (200, 40, 40), "VIN": (230, 110, 20), "VD": (180, 80, 160),
