@@ -144,7 +144,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .canvas.running .shimmer { display: block; }
 @keyframes sweep { from { background-position: 150% 0; } to { background-position: -100% 0; } }
 .spot { position: absolute; inset: 0; pointer-events: none; z-index: 1;
-  background: radial-gradient(320px circle at var(--mx, -999px) var(--my, -999px), rgba(255,255,255,.35), transparent 70%); }
+  background: radial-gradient(120px circle at var(--mx, -999px) var(--my, -999px), rgba(255,255,255,.12), transparent 70%); }
 .loupe { position: absolute; z-index: 8; width: 200px; height: 200px; border-radius: 50%; pointer-events: none; display: none; overflow: hidden;
   background: #e6e8ea; box-shadow: 0 0 0 1px rgba(24,33,43,.25), 0 0 0 6px rgba(255,255,255,.7), 0 18px 40px rgba(17,24,39,.35); transform: translate(-50%, -50%); }
 .loupe svg { width: 100%; height: 100%; }
@@ -187,7 +187,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     <div class="crumb">/ <span id="folder">board</span> / <b id="name">—</b></div>
     <div class="seg" id="seg"><button class="on" data-v="layout">Layout</button><button data-v="v3d">3D</button><button data-v="schem">Schematic</button><button data-v="parts">Parts</button></div>
     <span class="pill" id="pill"><span class="dot"></span><span id="pilltext">Loading</span></span>
-    <a class="btn" id="report" href="/files/report.html" target="_blank">Report</a>
+    <a class="btn" id="report" href="/files/report.html" target="_blank" title="Checks, house rules and parts, on one printable page">Design summary</a>
     <a class="btn primary" id="gerbers" href="/files/gerbers.zip">Download Gerbers</a>
   </div>
 
@@ -527,7 +527,7 @@ function drawRun() {
 }
 function drawFiles() {
   const box = $("#files"); box.innerHTML = ""; if (!R || !R.files) return;
-  const what = { gerbers: "For the board house", cpl: "Pick and place", bom_jlc: "Assembly BOM (JLCPCB)", digikey: "DigiKey cart", mouser: "Mouser cart", lcsc: "LCSC cart", html: "Parts, with buy links", report: "Review page" };
+  const what = { gerbers: "For the board house", cpl: "Pick and place", bom_jlc: "Assembly BOM (JLCPCB)", digikey: "DigiKey cart", mouser: "Mouser cart", lcsc: "LCSC cart", html: "Parts, with buy links", report: "Design summary: checks, house rules, parts" };
   for (const [k, v] of Object.entries(R.files)) { const p = String(v), rel = p.includes("/cart/") ? "cart/" + p.split("/cart/")[1] : p.split("/").pop(), ext = rel.split(".").pop().toUpperCase();
     const a = document.createElement("a"); a.className = "file"; a.href = "/files/" + rel; a.target = "_blank";
     a.innerHTML = `<span class="ic">${esc(ext)}</span><span>${esc(rel)}<small>${esc(what[k] || k)}</small></span>`; box.appendChild(a); }
