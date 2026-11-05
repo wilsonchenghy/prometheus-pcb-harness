@@ -1449,3 +1449,19 @@ def test_schematic_of_a_large_design_is_a3_pages_joined_by_global_labels(tmp_pat
     if not pcb.kicad_version():
         pytest.skip("KiCad is not installed: the netlist read-back needs kicad-cli")
     assert kicad_sch.check(b, path) == []
+
+
+def test_schematic_draws_a_regulator_power_stage_as_one_wired_chain():
+    """a regulator's power stage as an engineer draws it - the inductor lying on the rail, the capacitors on its far
+    node standing on it (a buck: SW -+-[L]-+--+- VOUT) - one wire, one label at each end, nothing overlapping"""
+    import kicad_sch
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "bench" / "power_bank.py"))
+    lay = kicad_sch.layout(b)
+    chain = [p for _, _, ps in lay[0] for p in ps if p.off is not None]
+    assert [p.ref for p in chain] == ["L1", "C4"]
+    ends = [p.at[1] + it[1][1] for p in chain for it in p.items
+            if it[0] == "label" or (it[0] == "wire" and abs(it[1][1] - it[2][1]) < 1e-6)]   # (the rail: all level)
+    assert max(ends) - min(ends) < 1e-6                       # (one straight rail)
+    assert len([it for p in chain for it in p.items if it[0] == "label"]) == 2
+    assert kicad_sch.overlaps(lay) == []

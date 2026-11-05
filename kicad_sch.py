@@ -239,8 +239,9 @@ class _Part:
     two-pin part stands upright, ground at its foot (else its anode, else pin 1, on top)"""
 
     def __init__(self, ref: str, c: dict, lib: str, sym: dict, unit: int, pn: Dict[Tuple[str, str], str],
-                 pad: float = 0.0):
-        self.ref, self.c, self.lib, self.unit, self.pad = ref, c, lib, unit, pad
+                 pad: float = 0.0, flat: Optional[str] = None):
+        self.ref, self.c, self.lib, self.unit, self.pad, self.sym, self.pn = ref, c, lib, unit, pad, sym, pn
+        self.off = None
         self.pins = [p for p in sym["pins"] if p["unit"] in (0, unit)]
         self.value = str(c.get("value") or sym.get("value") or "")
         net = {p["num"]: pn.get((ref, p["num"])) for p in self.pins}
@@ -249,6 +250,10 @@ class _Part:
         if two:
             def score(r):
                 (x1, y1), (x2, y2) = (_rot(*p["at"], r) for p in self.pins)
+                if flat:                                 # (lying down, the net ``flat`` on its left: in a power chain)
+                    if abs(y1 - y2) > 1e-6:
+                        return None
+                    return (net[(self.pins[0] if x1 < x2 else self.pins[1])["num"]] == flat, r == 0)
                 if abs(x1 - x2) > 1e-6:
                     return None                          # (not upright)
                 top = self.pins[0] if y1 > y2 else self.pins[1]
@@ -262,7 +267,7 @@ class _Part:
         ex = _extent(lib)
         corners = [sheet(x, y) for x, y in ((ex[0], ex[1]), (ex[2], ex[3]))]
         self.body = _union([(x, y, x, y) for x, y in corners])
-        if two:
+        if two and not flat:
             if self.body[2] - self.body[0] < 3.2:
                 cx = (self.body[0] + self.body[2]) / 2
                 self.body = (cx - 1.6, self.body[1], cx + 1.6, self.body[3])
@@ -323,7 +328,9 @@ class _Part:
         # reference and value: right of an upright part, else the first free place above / below the body
         b = self.body
         tw = max(len(ref), len(self.value)) * CH + 0.6
-        if two:
+        if flat:                                         # (lying in a chain: its text above it, clear of the wires)
+            cands = [((b[0], b[1] - 3.4), (b[0], b[1] - 1.4), (b[0], b[1] - 4.4, b[0] + tw, b[1] - 0.4))]
+        elif two:
             m = (b[1] + b[3]) / 2
             cands = [((b[2] + 0.6, m - 1.0), (b[2] + 0.6, m + 1.0), (b[2], m - 2.0, b[2] + 0.6 + tw, m + 2.0))]
         else:
@@ -331,7 +338,7 @@ class _Part:
             cands = [((b[0], y - 2.9), (b[0], y - 0.9), (b[0], y - 3.9, b[0] + tw, y)) for y in (b[1], allb[1])]
             cands += [((b[0], y + 1.0), (b[0], y + 3.0), (b[0], y, b[0] + tw, y + 4.0)) for y in (b[3], allb[3])]
         for ra, va, box in cands:
-            if not any(_hit(box, o) for o in (hard[1:] if two else hard) + soft if o is not self.body):
+            if not any(_hit(box, o) for o in (hard[1:] if two and not flat else hard) + soft if o is not self.body):
                 break
         self.ref_at, self.val_at, self.justify = ra, va, "left"
         soft.append(box)
@@ -456,11 +463,77 @@ def blocks(board) -> List[Tuple[str, List[str]]]:
 BANK = 8                                                 # (parts on one rail, at most: a longer bank wraps)
 
 
+def _chain(ps):
+    """a regulator's output stage as an engineer draws it: the inductor lying on the rail, the parts on its switch node
+    (the catch diode) standing on its left, the output capacitors on its right, all on one wire, one label each end:
+    SW --+--[L]--+---+-- VOUT. [parts] in rail order, each with its offset; [] when the block has none"""
+    for L in ps:
+        if L.lib != "Device:L" or not L.c.get("pads"):
+            continue
+        nets = [L.pn.get((L.ref, q["num"])) for q in L.pins]
+        if len(nets) != 2 or None in nets or "GND" in nets:
+            continue
+        a, b = nets
+        left = [q for q in ps if q.rail == a and q is not L]
+        right = [q for q in ps if q.rail == b and q is not L]
+        if not right:
+            a, b, left, right = b, a, right, left
+        if not right:
+            continue
+        flat = _Part(L.ref, L.c, L.lib, L.sym, L.unit, L.pn, L.pad, flat=a)
+        fl = [it[1] for it in flat.items if it[0] == "label"]
+        if len(fl) != 2 or abs(fl[0][1] - fl[1][1]) > 1e-6:
+            continue                                     # (its symbol does not lie down)
+        chain = left + [flat] + right
+        ends = {}                                        # (each part's points on the rail, its own frame)
+        for q in chain:
+            ls = [it for it in q.items if it[0] == "label"]
+            ends[id(q)] = (min(ls, key=lambda it: it[1][0])[1], max(ls, key=lambda it: it[1][0])[1])
+        x, right_edge = 0.0, None
+        for q in chain:                                  # (side by side, each part's left point on the rail at y 0)
+            lp = ends[id(q)][0]
+            if right_edge is not None:
+                x = max(x, right_edge + 1.0 + (lp[0] - q.box[0]))
+            x = math.ceil(x / G - 1e-9) * G
+            q.off = (x - lp[0], -lp[1])
+            right_edge = q.off[0] + q.box[2]
+            x = q.off[0] + ends[id(q)][1][0]
+        for k, q in enumerate(chain):
+            lp, rp = ends[id(q)]
+            labels = [it for it in q.items if it[0] == "label"]
+            at = lambda e: next(it[3] for it in labels if it[1] == e)                   # (the net at that point)
+            keep = []
+            if k == 0:
+                keep.append(("label", lp, 180, at(lp)))
+            if k == len(chain) - 1:
+                keep.append(("label", rp, 0, at(rp)))
+            q.items = [it for it in q.items if it[0] != "label"] + keep
+            q.soft = [s_ for s_ in q.soft if not any(_hit(s_, (e[0] - .01, e[1] - .01, e[0] + .01, e[1] + .01))
+                                                     for e in (lp, rp))]
+            for it in keep:
+                w = len(it[3]) * CH + 0.6 + q.pad
+                e = it[1]
+                q.soft.append((e[0] - w, e[1] - 1.9, e[0], e[1] + 0.3) if it[2] == 180 else (e[0], e[1] - 1.9, e[0] + w, e[1] + 0.3))
+            if k < len(chain) - 1:                       # (on along the rail to the next part's left point)
+                nxt = chain[k + 1]
+                to = (nxt.off[0] + ends[id(nxt)][0][0] - q.off[0], rp[1])
+                q.items.append(("wire", rp, to))
+                if q is not flat and 0 < k:              # (its stub, the wire in, the wire on)
+                    q.items.append(("junction", rp))
+            q._rebox()
+        for q, nxt in zip(chain, chain[1:]):             # (a room reaches the next one's: the rail wire is inside)
+            q.box = (q.box[0], q.box[1], max(q.box[2], nxt.off[0] - q.off[0] + nxt.box[0] - 0.01), q.box[3])
+        ps[ps.index(L)] = flat
+        return chain
+    return []
+
+
 def _banks(ps):
     """the parts in placing order, each a list: a bank of upright two-pin parts on one symbol between one rail and
     ground (decoupling capacitors on 3V3) drawn as an engineer does - side by side on one pitch, the rail a wire across
     their tops with one label, their feet joined to one ground symbol - else the part alone"""
-    out, seen = [], set()
+    chain = _chain(ps)
+    out, seen = ([chain] if chain else []), {id(q) for q in chain}
     for p in ps:
         if id(p) in seen:
             continue
@@ -531,6 +604,18 @@ def _blocks(board, pad: float = 0.0):
         x, y, bottom = x0, 0.0, 0.0
         for grp in _banks(rest):                         # (rows by each part's room as snapped to the grid)
             p = grp[0]
+            if p.off is not None:                        # (a power chain: placed whole, by its own box)
+                l_ = min(q.off[0] + q.box[0] for q in grp)
+                t_ = min(q.off[1] + q.box[1] for q in grp)
+                gw = max(q.off[0] + q.box[2] for q in grp) - l_
+                if x > x0 and x + gw > x0 + width:
+                    x, y = x0, bottom + 1.0
+                ox, oy = math.ceil((x - l_) / G - 1e-9) * G, math.ceil((y - t_) / G - 1e-9) * G
+                for q in grp:
+                    q.at = (round(ox + q.off[0], 4), round(oy + q.off[1], 4))    # (the origin on the grid, the
+                                                                                     # parts on their exact offsets)
+                x, bottom = max(q.room()[2] for q in grp) + 1.0, max([bottom] + [q.room()[3] for q in grp])
+                continue
             gw = p.w + sum(q.pitch for q in grp[:-1]) if len(grp) > 1 else p.w
             if x > x0 and x + gw > x0 + width:
                 x, y = x0, bottom + 1.0
@@ -542,6 +627,7 @@ def _blocks(board, pad: float = 0.0):
             x, bottom = grp[-1].room()[2] + 1.0, max([bottom] + [q.room()[3] for q in grp])
         if head:
             head.place(0.0, 0.0)
+        ps = ([head] if head else []) + rest              # (a chain's inductor is its lying-down twin now)
         out.append([title, _union([p.room() for p in ps]), ps])
     return out
 
@@ -576,9 +662,9 @@ def _shelf(st, bw, bh, pw, ph, tb):
 
 
 def _settle(blk, frame):
-    dx, dy = frame[0] + G - blk[1][0], frame[1] + G + 5.0 - blk[1][1]
-    for p in blk[2]:
-        p.at = (_snap(p.at[0] + dx), _snap(p.at[1] + dy))
+    dx, dy = _snap(frame[0] + G - blk[1][0]), _snap(frame[1] + G + 5.0 - blk[1][1])   # (one shift for the block:
+    for p in blk[2]:                                                                     # its parts keep their places)
+        p.at = (round(p.at[0] + dx, 4), round(p.at[1] + dy, 4))
     blk[1] = frame
 
 
