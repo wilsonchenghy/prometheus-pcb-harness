@@ -1371,3 +1371,41 @@ def test_lcsc_match_takes_the_mpn_else_the_exact_value_in_stock():
     u = {"fp": "Package_SO:SOIC-8", "value": "TPS54360", "mpn": "TI TPS54360BDDAR"}
     assert parts.lcsc_match(u, [row(7, "TPS54360DDAR", "SOIC-8", ""), row(8, "TPS54360BDDAR", "SOIC-8", "")])["lcsc"] == 8
     assert parts.lcsc_query(r) == ["10.2kΩ 0603 1%"] and parts.lcsc_query(c) == ["4.7uF 50V 1210"]
+
+
+def test_compact_glb_merges_primitives_of_one_material(tmp_path):
+    """KiCad's glTF has a primitive per copper shape; compacted, a mesh has one per material, the same triangles"""
+    import struct
+    import numpy as np
+    import pcb_view
+    tri = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], np.float32)
+    blob, views, accs, prims = bytearray(), [], [], []
+    for k, mat in enumerate((0, 0, 1)):
+        for arr, tgt in ((tri + k, 34962), (np.array([0, 0, 1] * 3, np.float32).reshape(3, 3), 34962),
+                         (np.array([0, 1, 2], np.uint16), 34963)):
+            while len(blob) % 4:
+                blob.append(0)
+            views.append({"buffer": 0, "byteOffset": len(blob), "byteLength": arr.nbytes, "target": tgt})
+            blob += arr.tobytes()
+            accs.append({"bufferView": len(views) - 1, "componentType": 5126 if arr.dtype == np.float32 else 5123,
+                         "count": 3, "type": "VEC3" if arr.ndim == 2 else "SCALAR"})
+        prims.append({"attributes": {"POSITION": len(accs) - 3, "NORMAL": len(accs) - 2}, "indices": len(accs) - 1,
+                      "material": mat})
+    j = {"asset": {"version": "2.0"}, "meshes": [{"primitives": prims}], "nodes": [{"mesh": 0}], "scenes": [{"nodes": [0]}],
+         "scene": 0, "materials": [{}, {}], "accessors": accs, "bufferViews": views, "buffers": [{"byteLength": len(blob)}]}
+    js = json.dumps(j).encode()
+    js += b" " * (-len(js) % 4)
+    blob += b"\0" * (-len(blob) % 4)
+    body = struct.pack("<I4s", len(js), b"JSON") + js + struct.pack("<I4s", len(blob), b"BIN\0") + bytes(blob)
+    p = tmp_path / "b.glb"
+    p.write_bytes(struct.pack("<4sII", b"glTF", 2, 12 + len(body)) + body)
+    pcb_view.compact_glb(p)
+    raw = p.read_bytes()
+    out = json.loads(raw[20:20 + struct.unpack_from("<I", raw, 12)[0]])
+    ps = out["meshes"][0]["primitives"]
+    assert sorted(q["material"] for q in ps) == [0, 1]
+    m0 = next(q for q in ps if q["material"] == 0)
+    assert out["accessors"][m0["attributes"]["POSITION"]]["count"] == 6 and out["accessors"][m0["indices"]]["count"] == 6
+    assert out["accessors"][m0["attributes"]["POSITION"]]["max"] == [2.0, 2.0, 1.0]
+    pcb_view.compact_glb(p)                               # (twice: a no-op)
+    assert p.read_bytes() == raw
