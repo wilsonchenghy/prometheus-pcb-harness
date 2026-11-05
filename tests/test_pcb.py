@@ -1430,3 +1430,22 @@ def test_schematic_draws_decoupling_as_a_bank_on_one_rail():
     xs = sorted(p.at[0] for p in big)
     assert len({round(b_ - a, 3) for a, b_ in zip(xs, xs[1:])}) == 1          # (one pitch)
     assert kicad_sch.overlaps(lay) == []
+
+
+def test_schematic_of_a_large_design_is_a3_pages_joined_by_global_labels(tmp_path):
+    """a design that needs more than A3 (the flight controller) is A3 pages under a cover sheet, every part on one
+    page, nothing overlapping, and - read back by KiCad - one netlist, the board's"""
+    import kicad_sch
+    import pcb
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "twilight_fc.py"))
+    pgs = kicad_sch.pages(b)
+    assert len(pgs) > 1 and {pg[1][0] for pg in pgs} == {"A3"}
+    assert all(kicad_sch.overlaps(pg) == [] for pg in pgs)
+    placed = [p.ref for pg in pgs for _, _, ps in pg[0] for p in ps]
+    assert sorted(set(placed)) == sorted({r for (r, _) in b.pad_net()})
+    path = kicad_sch.write(b, str(tmp_path))
+    assert len(list(tmp_path.glob("twilight_fc_*.kicad_sch"))) == len(pgs)
+    if not pcb.kicad_version():
+        pytest.skip("KiCad is not installed: the netlist read-back needs kicad-cli")
+    assert kicad_sch.check(b, path) == []

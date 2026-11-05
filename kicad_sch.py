@@ -238,8 +238,9 @@ class _Part:
     """one symbol instance (a unit of a part) with every pin's stub, label or ground laid out round its origin; a
     two-pin part stands upright, ground at its foot (else its anode, else pin 1, on top)"""
 
-    def __init__(self, ref: str, c: dict, lib: str, sym: dict, unit: int, pn: Dict[Tuple[str, str], str]):
-        self.ref, self.c, self.lib, self.unit = ref, c, lib, unit
+    def __init__(self, ref: str, c: dict, lib: str, sym: dict, unit: int, pn: Dict[Tuple[str, str], str],
+                 pad: float = 0.0):
+        self.ref, self.c, self.lib, self.unit, self.pad = ref, c, lib, unit, pad
         self.pins = [p for p in sym["pins"] if p["unit"] in (0, unit)]
         self.value = str(c.get("value") or sym.get("value") or "")
         net = {p["num"]: pn.get((ref, p["num"])) for p in self.pins}
@@ -286,7 +287,7 @@ class _Part:
             if n == "GND":
                 gnd.setdefault((dx, dy), []).append(e)
                 continue
-            w = len(n) * CH + 0.6
+            w = len(n) * CH + 0.6 + pad
             if dx == 0 and not two:                      # (an IC's top / bottom row: upright, clear of its neighbours)
                 self.items.append(("label", e, 90 if dy < 0 else 270, n))
                 soft.append((e[0] - 1.9, e[1] - w, e[0] + 0.3, e[1]) if dy < 0 else (e[0] - 0.3, e[1], e[0] + 1.9, e[1] + w))
@@ -295,7 +296,7 @@ class _Part:
                 soft.append((e[0] - w, e[1] - 1.9, e[0], e[1] + 0.3) if dx < 0 else (e[0], e[1] - 1.9, e[0] + w, e[1] + 0.3))
         for (dx, dy), es in gnd.items():                 # (one ground symbol per side, the stubs joined)
             if dx and not two:                           # (a side of a box: out past the side's labels first)
-                reach = max([len(it[3]) * CH + 0.6 for it in self.items
+                reach = max([len(it[3]) * CH + 0.6 + pad for it in self.items
                              if it[0] == "label" and it[2] == (180 if dx < 0 else 0)] + [0.0])
                 ext = math.ceil((reach + 2.6) / G) * G if reach else 0.0      # (the symbol's half width clear too)
                 if ext:
@@ -487,7 +488,7 @@ def _rail(grp):
         if k == 0:                                       # (the rail's one label, outward to the left; one ground)
             n = top[3]
             q.items += [("label", et, 180, n), ("gnd", ef, 0)]
-            w = len(n) * CH + 0.6
+            w = len(n) * CH + 0.6 + q.pad
             q.soft += [(et[0] - w, et[1] - 1.9, et[0], et[1] + 0.3), (ef[0] - 2.2, ef[1], ef[0] + 2.2, ef[1] + 5.2)]
         if k < len(grp) - 1:                             # (on to the next part)
             q.items += [("wire", et, (et[0] + pitch, et[1])), ("wire", ef, (ef[0] + pitch, ef[1]))]
@@ -500,8 +501,9 @@ def _rail(grp):
         q.box = (q.box[0], q.box[1], max(q.box[2], pitch + nxt.box[0] - 0.01), q.box[3])
 
 
-def layout(board):
-    """[(title, frame, [_Part])], the paper and the title block's room"""
+def _blocks(board, pad: float = 0.0):
+    """[[title, extent, [_Part]]]: each functional block laid out round its own origin (``pad``: the extra width of a
+    label, a global label's arrow)"""
     pn = board.pad_net()
     syms: Dict[str, dict] = {}
     out = []
@@ -519,7 +521,7 @@ def layout(board):
                     sym = _BOX[lib][1]
             syms[lib] = sym
             units = sorted({p["unit"] for p in sym["pins"]} - {0}) or [1]
-            ps += [_Part(r, board.comps[r], lib, sym, u, pn) for u in units]
+            ps += [_Part(r, board.comps[r], lib, sym, u, pn, pad) for u in units]
         # the IC on the left, its parts in rows to its right, about as tall as it
         head = ps[0] if ps and len(ps[0].pins) > 3 else None
         rest = ps[1:] if head else ps
@@ -541,34 +543,92 @@ def layout(board):
         if head:
             head.place(0.0, 0.0)
         out.append([title, _union([p.room() for p in ps]), ps])
-    # the blocks in rows on the smallest sheet that holds them clear of the title block
+    return out
+
+
+START = (MARGIN, MARGIN + 6.0, 0.0)                      # (where the first block goes: x, y, the row's height)
+GPAD = 2.6                                               # (a global label's arrow, beside a local label's width)
+
+
+def _title_room(pw: float, ph: float):
+    return (pw - MARGIN - TITLE_BLOCK[0], ph - MARGIN - TITLE_BLOCK[1], pw, ph)
+
+
+def _size(blk):
+    return blk[1][2] - blk[1][0] + 2 * G, blk[1][3] - blk[1][1] + 2 * G + 5.0
+
+
+def _shelf(st, bw, bh, pw, ph, tb):
+    """the next place on a sheet filled in rows for a block bw x bh: (frame, the sheet's state after) or (None, st)"""
+    x, y, row = st
+    for _ in range(2):
+        if x > MARGIN and x + bw > pw - MARGIN:
+            x, y, row = MARGIN, y + row + 6.0, 0.0
+        frame = (x, y, x + bw, y + bh)
+        if _hit(frame, tb) and x > MARGIN:
+            x, y, row = MARGIN, y + row + 6.0, 0.0
+            continue
+        break
+    frame = (x, y, x + bw, y + bh)
+    if frame[2] > pw - MARGIN or frame[3] > ph - MARGIN or _hit(frame, tb):
+        return None, st
+    return frame, (x + bw + 6.0, y, max(row, bh))
+
+
+def _settle(blk, frame):
+    dx, dy = frame[0] + G - blk[1][0], frame[1] + G + 5.0 - blk[1][1]
+    for p in blk[2]:
+        p.at = (_snap(p.at[0] + dx), _snap(p.at[1] + dy))
+    blk[1] = frame
+
+
+def layout(board, pad: float = 0.0):
+    """[(title, frame, [_Part])], the paper and the title block's room: every block on the smallest sheet that holds
+    them, in rows clear of the title block"""
+    out = _blocks(board, pad)
     for name, pw, ph in PAPER:
-        tb = (pw - MARGIN - TITLE_BLOCK[0], ph - MARGIN - TITLE_BLOCK[1], pw, ph)
-        x, y, row, ok, placed = MARGIN, MARGIN + 6.0, 0.0, True, []
+        tb, st, placed = _title_room(pw, ph), START, []
         for blk in out:
-            bw, bh = blk[1][2] - blk[1][0] + 2 * G, blk[1][3] - blk[1][1] + 2 * G + 5.0
-            for _ in range(2):
-                if x > MARGIN and x + bw > pw - MARGIN:
-                    x, y, row = MARGIN, y + row + 6.0, 0.0
-                frame = (x, y, x + bw, y + bh)
-                if _hit(frame, tb) and x > MARGIN:
-                    x, y, row = MARGIN, y + row + 6.0, 0.0
-                    continue
+            f, st = _shelf(st, *_size(blk), pw, ph, tb)
+            if f is None:
                 break
-            frame = (x, y, x + bw, y + bh)
-            if frame[2] > pw - MARGIN or frame[3] > ph - MARGIN or _hit(frame, tb):
-                ok = False
-                break
-            placed.append(frame)
-            x, row = x + bw + 6.0, max(row, bh)
-        if ok:
+            placed.append(f)
+        else:
             break
-    for blk, frame in zip(out, placed):
-        dx, dy = frame[0] + G - blk[1][0], frame[1] + G + 5.0 - blk[1][1]
-        for p in blk[2]:
-            p.at = (_snap(p.at[0] + dx), _snap(p.at[1] + dy))
-        blk[1] = frame
+    for blk, f in zip(out, placed):
+        _settle(blk, f)
     return out, (name, pw, ph), tb
+
+
+def pages(board) -> list:
+    """the sheets as an engineer splits a large design: one sheet when it fits A3, else A3 pages filled block by block
+    (first fit; a block too big for A3 gets the smallest sheet that holds it), their nets joined by global labels.
+    [layout] as ``layout`` returns it, one per page"""
+    one = layout(board)
+    if one[1][0] in ("A4", "A3"):
+        return [one]
+    name, pw, ph = PAPER[1]
+    tb = _title_room(pw, ph)
+    pgs = []                                             # ([blocks], paper, title room, row state)
+    for blk in _blocks(board, GPAD):
+        bw, bh = _size(blk)
+        for pg in pgs:
+            if pg[1][0] == name:
+                f, st = _shelf(pg[3], bw, bh, pw, ph, tb)
+                if f:
+                    pg[3] = st
+                    break
+        else:
+            for paper in PAPER[1:]:
+                t_ = _title_room(*paper[1:])
+                f, st = _shelf(START, bw, bh, paper[1], paper[2], t_)
+                if f:
+                    break
+            pg = [[], paper, t_, st]
+            pgs.append(pg)
+        _settle(blk, f)
+        pg[0].append(blk)
+    return [(pg[0], pg[1], pg[2]) for pg in pgs]
 
 
 def overlaps(lay) -> List[str]:
@@ -602,80 +662,121 @@ def _font(size=1.27, bold=False):
 
 
 def write(board, out_dir: str, title: Optional[str] = None, rev: str = "A", company: str = "") -> str:
-    """``<out_dir>/<name>.kicad_sch`` (KiCad 9 format); returns its path. Raises ValueError if the layout overlaps"""
-    lay = layout(board)
-    bad = overlaps(lay)
-    if bad:
-        raise ValueError("; ".join(bad))
-    blks, (paper, _, _), _ = lay
+    """``<out_dir>/<name>.kicad_sch`` (KiCad 9 format); returns its path. A design larger than A3 is a cover sheet
+    (the title block, a box per page) over A3 pages ``<name>_<n>.kicad_sch``, its nets in global labels. Raises
+    ValueError if a page's layout overlaps"""
+    pgs = pages(board)
+    for lay in pgs:
+        bad = overlaps(lay)
+        if bad:
+            raise ValueError("; ".join(bad))
+    multi = len(pgs) > 1
     root = _uuid("sch", board.name)
-    libs = sorted({p.lib for _, _, ps in blks for p in ps} | ({"power:GND"} if "GND" in board.nets else set()))
-    sch = ["kicad_sch", ["version", 20250114], ["generator", _Q("eeschema")], ["generator_version", _Q("9.0")],
-           ["uuid", root], ["paper", _Q(paper)],
-           ["title_block", ["title", _Q(title or board.name)], ["date", _Q(datetime.date.today().isoformat())],
-            ["rev", _Q(rev)], ["company", _Q(company)], ["comment", 1, _Q("generated from the layout netlist")]],
-           ["lib_symbols"] + [_lib_symbol(n) for n in libs]]
     n_pwr = [0]
-
-    def inst(lib, at, rot, ref, value, uid, unit=1, props=(), pins=(), ref_at=None, val_at=None, hide_ref=False,
-             justify=None):
-        fa = (-rot) % 360                              # (a field turns with its symbol: turned back, it reads level)
-        if rot == 180:                                   # (turned half round, KiCad reads a field at 0 level and mirrors
-            fa = 0                                       # its justification: asked mirrored, it lands as meant)
-            justify = {"left": "right", "right": "left"}.get(justify, justify)
-        eff = lambda hide=False: ["effects", _font()] + ([["justify", justify]] if justify else []) + (
-            [["hide", "yes"]] if hide else [])
-        node = ["symbol", ["lib_id", _Q(lib)], ["at", at[0], at[1], rot], ["unit", unit],
-                ["exclude_from_sim", "no"], ["in_bom", "no" if hide_ref else "yes"], ["on_board", "no" if hide_ref else "yes"],
-                ["dnp", "no"], ["uuid", uid],
-                ["property", _Q("Reference"), _Q(ref), ["at", *(ref_at or at), fa], eff(hide_ref)],
-                ["property", _Q("Value"), _Q(value), ["at", *(val_at or at), fa], eff()]]
-        for k, v in props:
-            node.append(["property", _Q(k), _Q(v), ["at", at[0], at[1], 0], eff(True)])
-        node += [["pin", _Q(n), ["uuid", _uuid("pin", uid, n)]] for n in pins]
-        node.append(["instances", ["project", _Q(board.name), ["path", _Q("/" + root), ["reference", _Q(ref)],
-                                                                 ["unit", unit]]]])
-        return node
-
-    for ti, (tname, frame, ps) in enumerate(blks):
-        sch.append(["rectangle", ["start", frame[0], frame[1]], ["end", frame[2], frame[3]],
-                    ["stroke", ["width", 0.254], ["type", "dash"]], ["fill", ["type", "none"]], ["uuid", _uuid("blk", ti)]])
-        sch.append(["text", _Q(tname), ["exclude_from_sim", "no"], ["at", frame[0] + G, frame[1] + 4.2, 0],
-                    ["effects", _font(2.0, True), ["justify", "left", "bottom"]], ["uuid", _uuid("blkt", ti)]])
-        for p in ps:
-            X, Y = p.at
-            c = p.c
-            props = [("Footprint", c["fp"]), ("Datasheet", (c.get("symbol") or {}).get("datasheet") or "~")]
-            props += [(k, str(c[f])) for k, f in (("MPN", "mpn"), ("LCSC", "lcsc"), ("Note", "note")) if c.get(f)]
-            uid = _uuid("sym", p.ref, p.unit)
-            sch.append(inst(p.lib, (X, Y), p.rot, p.ref, p.value, uid, p.unit, props, [q["num"] for q in p.pins],
-                            (X + p.ref_at[0], Y + p.ref_at[1]), (X + p.val_at[0], Y + p.val_at[1]), justify=p.justify))
-            for it in p.items:
-                if it[0] == "nc":
-                    sch.append(["no_connect", ["at", X + it[1][0], Y + it[1][1]], ["uuid", _uuid("nc", p.ref, it[1])]])
-                elif it[0] == "wire":
-                    (a, b) = it[1], it[2]
-                    sch.append(["wire", ["pts", ["xy", X + a[0], Y + a[1]], ["xy", X + b[0], Y + b[1]]],
-                                ["stroke", ["width", 0.1524], ["type", "default"]], ["uuid", _uuid("w", p.ref, a, b)]])
-                elif it[0] == "junction":
-                    q = it[1]
-                    sch.append(["junction", ["at", X + q[0], Y + q[1]], ["diameter", 0], ["color", 0, 0, 0, 0],
-                                ["uuid", _uuid("j", p.ref, q)]])
-                elif it[0] == "gnd":
-                    n_pwr[0] += 1
-                    e, rot = it[1], it[2]
-                    off = {0: (0, 3.81), 90: (3.81, 0), 180: (0, -3.81), 270: (-3.81, 0)}[rot]
-                    sch.append(inst("power:GND", (X + e[0], Y + e[1]), rot, f"#PWR{n_pwr[0]:03d}", "GND",
-                                    _uuid("pwr", p.ref, e), pins=["1"], hide_ref=True,
-                                    val_at=(X + e[0] + off[0], Y + e[1] + off[1])))
-                else:
-                    e, rot, net = it[1], it[2], it[3]
-                    just = ["justify", "right" if rot in (180, 270) else "left", "bottom"]
-                    sch.append(["label", _Q(net), ["at", X + e[0], Y + e[1], rot], ["fields_autoplaced", "yes"],
-                                ["effects", _font(), just], ["uuid", _uuid("lbl", p.ref, e)]])
-    sch += [["sheet_instances", ["path", _Q("/"), ["page", _Q("1")]]], ["embedded_fonts", "no"]]
     os.makedirs(out_dir, exist_ok=True)
+
+    def head(paper, uid, blks, comment):
+        libs = sorted({p.lib for _, _, ps in blks for p in ps} | ({"power:GND"} if "GND" in board.nets and blks else set()))
+        return ["kicad_sch", ["version", 20250114], ["generator", _Q("eeschema")], ["generator_version", _Q("9.0")],
+                ["uuid", uid], ["paper", _Q(paper)],
+                ["title_block", ["title", _Q(title or board.name)], ["date", _Q(datetime.date.today().isoformat())],
+                 ["rev", _Q(rev)], ["company", _Q(company)], ["comment", 1, _Q(comment)]],
+                ["lib_symbols"] + [_lib_symbol(n) for n in libs]]
+
+    def body(sch, blks, path):
+        def inst(lib, at, rot, ref, value, uid, unit=1, props=(), pins=(), ref_at=None, val_at=None, hide_ref=False,
+                 justify=None):
+            fa = (-rot) % 360                          # (a field turns with its symbol: turned back, it reads level)
+            if rot == 180:                               # (turned half round, KiCad reads a field at 0 level and
+                fa = 0                                   # mirrors its justification: asked mirrored, it lands as meant)
+                justify = {"left": "right", "right": "left"}.get(justify, justify)
+            eff = lambda hide=False: ["effects", _font()] + ([["justify", justify]] if justify else []) + (
+                [["hide", "yes"]] if hide else [])
+            node = ["symbol", ["lib_id", _Q(lib)], ["at", at[0], at[1], rot], ["unit", unit],
+                    ["exclude_from_sim", "no"], ["in_bom", "no" if hide_ref else "yes"],
+                    ["on_board", "no" if hide_ref else "yes"], ["dnp", "no"], ["uuid", uid],
+                    ["property", _Q("Reference"), _Q(ref), ["at", *(ref_at or at), fa], eff(hide_ref)],
+                    ["property", _Q("Value"), _Q(value), ["at", *(val_at or at), fa], eff()]]
+            for k, v in props:
+                node.append(["property", _Q(k), _Q(v), ["at", at[0], at[1], 0], eff(True)])
+            node += [["pin", _Q(n), ["uuid", _uuid("pin", uid, n)]] for n in pins]
+            node.append(["instances", ["project", _Q(board.name), ["path", _Q(path), ["reference", _Q(ref)],
+                                                                     ["unit", unit]]]])
+            return node
+
+        for tname, frame, ps in blks:
+            ti = tname
+            sch.append(["rectangle", ["start", frame[0], frame[1]], ["end", frame[2], frame[3]],
+                        ["stroke", ["width", 0.254], ["type", "dash"]], ["fill", ["type", "none"]],
+                        ["uuid", _uuid("blk", ti)]])
+            sch.append(["text", _Q(tname), ["exclude_from_sim", "no"], ["at", frame[0] + G, frame[1] + 4.2, 0],
+                        ["effects", _font(2.0, True), ["justify", "left", "bottom"]], ["uuid", _uuid("blkt", ti)]])
+            for p in ps:
+                X, Y = p.at
+                c = p.c
+                props = [("Footprint", c["fp"]), ("Datasheet", (c.get("symbol") or {}).get("datasheet") or "~")]
+                props += [(k, str(c[f])) for k, f in (("MPN", "mpn"), ("LCSC", "lcsc"), ("Note", "note")) if c.get(f)]
+                uid = _uuid("sym", p.ref, p.unit)
+                sch.append(inst(p.lib, (X, Y), p.rot, p.ref, p.value, uid, p.unit, props, [q["num"] for q in p.pins],
+                                (X + p.ref_at[0], Y + p.ref_at[1]), (X + p.val_at[0], Y + p.val_at[1]), justify=p.justify))
+                for it in p.items:
+                    if it[0] == "nc":
+                        sch.append(["no_connect", ["at", X + it[1][0], Y + it[1][1]], ["uuid", _uuid("nc", p.ref, it[1])]])
+                    elif it[0] == "wire":
+                        (a, b) = it[1], it[2]
+                        sch.append(["wire", ["pts", ["xy", X + a[0], Y + a[1]], ["xy", X + b[0], Y + b[1]]],
+                                    ["stroke", ["width", 0.1524], ["type", "default"]], ["uuid", _uuid("w", p.ref, a, b)]])
+                    elif it[0] == "junction":
+                        q = it[1]
+                        sch.append(["junction", ["at", X + q[0], Y + q[1]], ["diameter", 0], ["color", 0, 0, 0, 0],
+                                    ["uuid", _uuid("j", p.ref, q)]])
+                    elif it[0] == "gnd":
+                        n_pwr[0] += 1
+                        e, rot = it[1], it[2]
+                        off = {0: (0, 3.81), 90: (3.81, 0), 180: (0, -3.81), 270: (-3.81, 0)}[rot]
+                        sch.append(inst("power:GND", (X + e[0], Y + e[1]), rot, f"#PWR{n_pwr[0]:03d}", "GND",
+                                        _uuid("pwr", p.ref, e), pins=["1"], hide_ref=True,
+                                        val_at=(X + e[0] + off[0], Y + e[1] + off[1])))
+                    elif multi:                          # (a net on several pages: one global label name joins them)
+                        e, rot, net = it[1], it[2], it[3]
+                        at = ["at", X + e[0], Y + e[1], rot]
+                        sch.append(["global_label", _Q(net), ["shape", "bidirectional"], at, ["fields_autoplaced", "yes"],
+                                    ["effects", _font(), ["justify", "right" if rot in (180, 270) else "left"]],
+                                    ["uuid", _uuid("glbl", p.ref, e)],
+                                    ["property", _Q("Intersheetrefs"), _Q("${INTERSHEET_REFS}"), at[:3] + [0],
+                                     ["effects", _font(), ["hide", "yes"]]]])
+                    else:
+                        e, rot, net = it[1], it[2], it[3]
+                        just = ["justify", "right" if rot in (180, 270) else "left", "bottom"]
+                        sch.append(["label", _Q(net), ["at", X + e[0], Y + e[1], rot], ["fields_autoplaced", "yes"],
+                                    ["effects", _font(), just], ["uuid", _uuid("lbl", p.ref, e)]])
+
     path = os.path.join(out_dir, f"{board.name}.kicad_sch")
+    if not multi:
+        blks, (paper, _, _), _ = pgs[0]
+        sch = head(paper, root, blks, "generated from the layout netlist")
+        body(sch, blks, "/" + root)
+    else:                                                # (the cover: the title block, a box per page)
+        sch = head("A4", root, [], f"generated from the layout netlist: {len(pgs)} pages")
+        for i, (blks, (paper, _, _), _) in enumerate(pgs):
+            sid, fname = _uuid("sheet", board.name, i), f"{board.name}_{i + 2}.kicad_sch"
+            name = f"{i + 2} {blks[0][0]}"                    # (the page and its first block: also its SVG's name)
+            x, y = 20.0 + (i % 2) * 135.0, 35.0 + (i // 2) * 40.0
+            sch.append(["sheet", ["at", x, y], ["size", 120.0, 25.4], ["exclude_from_sim", "no"], ["in_bom", "yes"],
+                        ["on_board", "yes"], ["dnp", "no"], ["fields_autoplaced", "yes"],
+                        ["stroke", ["width", 0.1524], ["type", "solid"]], ["fill", ["color", 0, 0, 0, 0.0]],
+                        ["uuid", sid],
+                        ["property", _Q("Sheetname"), _Q(name), ["at", x, y - 0.7, 0],
+                         ["effects", _font(), ["justify", "left", "bottom"]]],
+                        ["property", _Q("Sheetfile"), _Q(fname), ["at", x, y + 26.0, 0],
+                         ["effects", _font(), ["justify", "left", "top"]]],
+                        ["instances", ["project", _Q(board.name), ["path", _Q("/" + root), ["page", _Q(str(i + 2))]]]]])
+            sub = head(paper, _uuid("sheetfile", board.name, i), blks, f"page {i + 2} of {len(pgs) + 1}")
+            body(sub, blks, f"/{root}/{sid}")
+            sub.append(["embedded_fonts", "no"])
+            with open(os.path.join(out_dir, fname), "w") as f:
+                f.write(_sx_dump(sub) + "\n")
+    sch += [["sheet_instances", ["path", _Q("/"), ["page", _Q("1")]]], ["embedded_fonts", "no"]]
     with open(path, "w") as f:
         f.write(_sx_dump(sch) + "\n")
     return path

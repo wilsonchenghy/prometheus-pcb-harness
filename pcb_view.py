@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 import os
 import sys
 import threading
@@ -352,26 +353,33 @@ def _model(out: Path, script: str) -> dict:
 
 
 def _schematic(out: Path, script: str = "") -> dict:
-    """the board's KiCad schematic as KiCad draws it (``kicad-cli sch export svg``), for the page's schematic view;
-    cached as out/kicad/<name>.svg until the schematic changes"""
+    """the board's KiCad schematic as KiCad draws it (``kicad-cli sch export svg``): the sheet, or the cover and each
+    page of a larger design; cached as out/kicad/<name>[-<page>].svg until the schematic changes"""
     import subprocess
+    from urllib.parse import quote
     import pcb
-    schs = list((out / "kicad").glob("*.kicad_sch"))
+    schs = sorted((out / "kicad").glob("*.kicad_sch"), key=lambda f: len(f.name))   # (the root: pages are <name>_<n>)
     if not schs:
         return {"error": "no KiCad schematic in this folder yet"}
     if not pcb.kicad_version():
-        return {"error": "KiCad is not installed: the schematic view shows the net labels"}
+        return {"error": "KiCad is not installed: the schematic view needs it to draw the sheet"}
     svg = schs[0].with_suffix(".svg")
-    if not svg.exists() or svg.stat().st_mtime < schs[0].stat().st_mtime:
+    num = lambda f: int((re.match(r"\d+", f.stem[len(svg.stem) + 1:]) or re.match(r"", "")).group() or 0)
+    pages = lambda: sorted(svg.parent.glob(svg.stem + "-*.svg"), key=num)
+    if not svg.exists() or svg.stat().st_mtime < max(f.stat().st_mtime for f in schs):
+        for f in pages():                                # (a page gone from the design: its drawing too)
+            f.unlink()
         r = subprocess.run(["kicad-cli", "sch", "export", "svg", "-o", str(schs[0].parent), str(schs[0])],
                            capture_output=True, text=True, timeout=300)
         if r.returncode != 0 or not svg.exists():
             return {"error": "KiCad's schematic export failed: " + (r.stderr or r.stdout)[-300:]}
-    import re
-    with open(svg, "rb") as f:                           # (the sheet's size from its head: the page need not parse it)
-        vb = re.search(rb'viewBox="([\d.\s-]+)"', f.read(4096))
-    w, h = (float(v) for v in vb.group(1).split()[2:4]) if vb else (0.0, 0.0)
-    return {"svgs": ["/files/kicad/%s?t=%d" % (svg.name, int(svg.stat().st_mtime))], "sizes": [[w, h]]}
+    sheets = [svg] + (pages() if len(schs) > 1 else [])
+    sizes = []
+    for f in sheets:                                     # (each sheet's size from its head: the page need not parse it)
+        with open(f, "rb") as fh:
+            vb = re.search(rb'viewBox="([\d.\s-]+)"', fh.read(4096))
+        sizes.append([float(v) for v in vb.group(1).split()[2:4]] if vb else [0.0, 0.0])
+    return {"svgs": ["/files/kicad/%s?t=%d" % (quote(f.name), int(f.stat().st_mtime)) for f in sheets], "sizes": sizes}
 
 
 def make_handler(out_dir: str):
@@ -440,7 +448,8 @@ def make_handler(out_dir: str):
                     s = cache.script()
                     return self._json(_render3d(out, s) if s else {"error": "no run in this folder yet"})
                 if path.startswith("/files/"):
-                    f = (out / path[len("/files/"):]).resolve()
+                    from urllib.parse import unquote
+                    f = (out / unquote(path[len("/files/"):])).resolve()
                     if out not in f.parents or not f.is_file():
                         return self._send(404, b"not found", "text/plain")
                     ct = {".png": "image/png", ".html": "text/html", ".svg": "image/svg+xml",

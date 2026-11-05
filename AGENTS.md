@@ -97,7 +97,9 @@ placing pads by hand:
 
 Every run writes `out/kicad/<name>.kicad_sch`, the board's schematic on KiCad's own symbols, and (with KiCad) reads
 it back: a `schematic` finding means its netlist differs from the board's. Place ICs with `symbol=` so they are drawn
-with their real pin names; a part without one is drawn on a generic symbol or a box of its pads.
+with their real pin names; a part without one is drawn on a generic symbol or a box of its pads. A design larger than A3 is
+split into A3 pages under a cover sheet (`<name>.kicad_sch`, pages `<name>_<n>.kicad_sch`), its nets joined by global labels;
+decoupling capacitors on one rail are drawn as a bank (one rail label, one ground).
 
 ## Rules for the agent
 
