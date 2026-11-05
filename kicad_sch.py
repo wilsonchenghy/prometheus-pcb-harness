@@ -620,6 +620,9 @@ def write(board, out_dir: str, title: Optional[str] = None, rev: str = "A", comp
     def inst(lib, at, rot, ref, value, uid, unit=1, props=(), pins=(), ref_at=None, val_at=None, hide_ref=False,
              justify=None):
         fa = (-rot) % 360                              # (a field turns with its symbol: turned back, it reads level)
+        if rot == 180:                                   # (turned half round, KiCad reads a field at 0 level and mirrors
+            fa = 0                                       # its justification: asked mirrored, it lands as meant)
+            justify = {"left": "right", "right": "left"}.get(justify, justify)
         eff = lambda hide=False: ["effects", _font()] + ([["justify", justify]] if justify else []) + (
             [["hide", "yes"]] if hide else [])
         node = ["symbol", ["lib_id", _Q(lib)], ["at", at[0], at[1], rot], ["unit", unit],
