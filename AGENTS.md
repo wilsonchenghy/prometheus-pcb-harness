@@ -42,8 +42,8 @@ Write what the board must meet in a requirements file and pass `--spec req.json`
 `nets` (`{"VBAT": {"amps": 2}}`), `pairs` (`[["CANH", "CANL", 2.0]]`: matched in length), `near`
 (`[["C1", "U1", 3.0]]`: this part within that distance of that one, pad to pad), `edge` (connectors at the edge),
 `holes`, `assembly`, `max_parts`. The critic reviews the board against it, and against the usual review rules
-(decoupling by its pins, crystal by its chip, connectors at the edge, USB pairs, antenna keep-out, a board far
-larger than its parts when `size_mm` is not given), in
+(decoupling by its pins, crystal by its chip, connectors at the edge, USB pairs, antenna keep-out, and, when `size_mm`
+is not given, a board far larger than its parts: an error, shrink the outline to the size it names), in
 milliseconds; an `error` makes the run not clean. The placer honours `near` too: each part held near another is
 placed right after it and moved within its distance if it ends up further.
 

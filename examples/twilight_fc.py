@@ -306,6 +306,10 @@ BODIES = {  # parts KiCad has no 3D model of: drawn (pcb_bodies)
 
 
 def place_all(b, solids=True):
+    import importlib.util
+    if solids and importlib.util.find_spec("build123d") is None:     # (the drawn bodies are looks only: the board
+        print("build123d not installed: parts without a KiCad 3D model show as pads only", file=sys.stderr)   # runs)
+        solids = False
     for ref, fp, at, rot, value, mpn, note, model, kw in PARTS:
         body = BODIES[ref]() if solids and ref in BODIES else None
         mdl = model if isinstance(model, str) else (m3d(fp) if model else None)

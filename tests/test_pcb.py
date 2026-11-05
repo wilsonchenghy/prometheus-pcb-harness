@@ -1074,8 +1074,21 @@ def test_cli_stages(tmp_path):
     pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path / "a"), "--kicad-drc", "off", "--router", "harness"])
     r = json.load(open(tmp_path / "a" / "result.json"))
     assert r["stage"] == "all" and "gerbers" in r["files"] and r["parts"] == 8
-    size = [c for c in r["critic"] if c["kind"] == "size"]      # (8 small parts on 35 x 25 mm: too much board)
-    assert size and size[0]["severity"] == "warning"
+    assert not [c for c in r["critic"] if c["kind"] == "size"]   # (the blinker: 24 x 15 mm, no more than it needs)
+
+
+def test_critic_fails_a_board_far_larger_than_its_parts():
+    """no size_mm in the requirements: a board its parts barely cover is an error (the agent shrinks it), with the size
+    that would do; with size_mm given the enclosure decides and the check is the maximum only"""
+    import critic
+    from shapely.geometry import Polygon
+    sys.path.insert(0, str(Path(__file__).parent.parent / "bench"))
+    import blinker
+    b = blinker.build()
+    b.outline = Polygon([(0, 0), (60, 0), (60, 40), (0, 40)])
+    size = [n for n in critic.review(b) if n["kind"] == "size"]
+    assert size and size[0]["severity"] == "error" and "would do" in size[0]["text"]
+    assert not [n for n in critic.review(b, {"size_mm": [60, 40]}) if n["kind"] == "size"]
 
 
 def test_tune_pairs_lengthens_the_shorter_net():
