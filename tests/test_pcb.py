@@ -1409,3 +1409,24 @@ def test_compact_glb_merges_primitives_of_one_material(tmp_path):
     assert out["accessors"][m0["attributes"]["POSITION"]]["max"] == [2.0, 2.0, 1.0]
     pcb_view.compact_glb(p)                               # (twice: a no-op)
     assert p.read_bytes() == raw
+
+
+def test_schematic_draws_decoupling_as_a_bank_on_one_rail():
+    """capacitors between one rail and ground stand side by side on one pitch: one rail label, one ground symbol, the
+    tops and feet joined by wires (as an engineer draws them), not a label and a ground on each"""
+    import kicad_sch
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "bench" / "rp2040_board.py"))
+    lay = kicad_sch.layout(b)
+    banks = {}
+    for _, _, ps in lay[0]:
+        for p in ps:
+            if getattr(p, "pitch", 0):
+                banks.setdefault((p.lib, p.rail, p.at[1]), []).append(p)
+    big = max(banks.values(), key=len)
+    assert len(big) >= 3
+    assert sum(1 for p in big for it in p.items if it[0] == "label") == 1
+    assert sum(1 for p in big for it in p.items if it[0] == "gnd") == 1
+    xs = sorted(p.at[0] for p in big)
+    assert len({round(b_ - a, 3) for a, b_ in zip(xs, xs[1:])}) == 1          # (one pitch)
+    assert kicad_sch.overlaps(lay) == []
