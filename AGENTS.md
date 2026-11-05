@@ -117,14 +117,16 @@ placing pads by hand:
 ## A revision of a KiCad layout
 
 `prometheus import design.kicad_pcb rev2/` turns a finished KiCad board (KiCad 6 to 10, 2 or 4 layers) into
-`rev2/board.py`: every part at its place on the design's own footprints (`rev2/footprints/`), the nets, the zones as
-pours (higher-priority zones carved out), keep-outs, mounting holes, the outline and the silkscreen text. The routed
-copper is in `rev2/routes.json`. Run `prometheus rev2/board.py rev2/out/ --json` first, unchanged: it shows the
+`rev2/board.py`: every part at its place on the design's own footprints (`rev2/footprints/`) with its designator
+where the designer put it, the nets, the zones as pours (higher-priority zones carved out), keep-outs, mounting holes
+and slots, the outline with its cut-outs, the silkscreen text on both sides. The routed copper is in
+`rev2/routes.json`; the logos and the silkscreen and mask drawings (into the Gerbers too) and the project's own rules
+and DRC severities are in `rev2/artwork.json`. Run `prometheus rev2/board.py rev2/out/ --json` first, unchanged: it shows the
 design as it stands, and its findings are the existing board's, to talk through with the engineer before changing
 anything. Then make the change they ask for in `board.py` (move a part, add one, change a net's width) and run
 again: nets whose parts did not move keep their copper exactly, the nets of moved parts are routed again. The
-import prints what it left out (logos, drawings, cut-outs, other layers); keep the `.kicad_pro` beside the board, or
-its clearance is unknown.
+import prints what it left out (drawings on layers the board house does not make; boards over 4 layers are refused);
+keep the `.kicad_pro` beside the board, or its rules are unknown.
 
 ## Altium and older KiCad
 

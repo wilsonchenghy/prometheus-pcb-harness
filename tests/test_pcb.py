@@ -1554,3 +1554,39 @@ def test_kicad_layout_imports_as_a_board_script_and_a_revision_keeps_the_rest(tm
     assert not probs and d.check() == []
     key = lambda x, n: sorted((t["layer"], tuple(map(tuple, t["pts"]))) for t in x.tracks if t["net"] == n)
     assert key(d, "B") == key(c, "B") and key(d, "A") != key(c, "A")
+
+
+def test_import_carries_cutouts_slots_artwork_labels_and_rules(tmp_path):
+    """what a revision must not lose: a cut-out (edge in the Gerber, both KiCad rings), a slot drilled as a slot
+    (G85), a logo on the silkscreen and the mask, bottom text with its justify, each designator where it was put,
+    the project's own hole clearance"""
+    import pcb
+    import pcb_cli
+    import kicad_import
+    try:
+        pcb.footprint("Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12")
+    except Exception as e:
+        pytest.skip(f"KiCad footprints unavailable: {e}")
+    b = pcb.Board("art", [(0, 0), (40, 0), (40, 30), (0, 30)])
+    b.place("J1", "Connector_USB:USB_C_Receptacle_HRO_TYPE-C-31-M-12", (12.0, 22.0), 0, "USB")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (30.0, 8.0), 0, "1k", label=(30.0, 10.0, 0.0, 0.8))
+    b.cutout([(20, 5), (25, 5), (25, 10), (20, 10)])
+    b.graphics = [{"layer": "F.SilkS", "pts": [(32, 20), (36, 20), (36, 24), (32, 24)], "w": 0.0, "closed": True, "fill": True},
+                  {"layer": "B.Mask", "pts": [(5, 5), (8, 5), (8, 8)], "w": 0.0, "closed": True, "fill": True}]
+    b.silk_text = [("REV A\nTEST", (8.0, 12.0), 1.0, 90.0, "B", "left")]
+    b.hole_clear = 0.2
+    drills = pcb.export_gerbers(b, str(tmp_path / "g"))
+    assert "G85" in open(next(f for f in drills if f.endswith("PTH.drl") and "NPTH" not in f)).read()
+    edge = open(next(f for f in drills if "Edge_Cuts" in f)).read()
+    assert edge.count("D02*") == 2                                   # the outline and the cut-out
+    path = pcb.export_kicad(b, str(tmp_path / "k"), schematic=False)[0]
+    pro = json.load(open(path.replace(".kicad_pcb", ".kicad_pro")))
+    assert pro["board"]["design_settings"]["rules"]["min_hole_clearance"] == 0.2
+    kicad_import.write(path, str(tmp_path / "rev"))
+    c, _ = pcb_cli.load(str(tmp_path / "rev" / "board.py"))
+    assert len(c.outline.interiors) == 1 and abs(c.outline.area - b.outline.area) < 1e-3
+    assert sorted(g["layer"] for g in c.graphics) == ["B.Mask", "F.SilkS"]
+    assert c.silk_text == [("REV A\nTEST", (8.0, 12.0), 1.0, 90.0, "B", "left")]
+    assert all(abs(u - v) < 1e-3 for u, v in zip(c.comps["R1"]["label"], (30.0, 10.0, 0.0, 0.8)))
+    assert c.hole_clear == 0.2 and c.kicad_rules["rules"]["min_hole_clearance"] == 0.2
+    assert pcb.silkscreen(c, "F").intersects(__import__("shapely.geometry", fromlist=["Point"]).Point(34, 22))
