@@ -435,6 +435,31 @@ def _read_kicad_copper(path: str, board) -> Tuple[list, list]:
     return segs, vias
 
 
+def _drop_nets(dsn: str, nets) -> str:
+    """a Specctra design with ``nets`` out of its network (their pads and wires stay, as obstacles): FreeRouting
+    then leaves them alone, as ``export_dsn(skip_nets=...)`` does"""
+    i, end = dsn.index("(network"), dsn.find("(wiring") % (len(dsn) + 1)
+    out, k = [dsn[:i]], i
+    while True:
+        m = re.compile(r'\(net ("[^"]*"|\S+)').search(dsn, k, end)
+        if not m:
+            break
+        depth, j = 0, m.start()
+        while True:                                      # (the whole (net ...) block, nested pins included)
+            depth += {"(": 1, ")": -1}.get(dsn[j], 0)
+            j += 1
+            if depth == 0:
+                break
+        out.append(dsn[k:m.start()])
+        if m.group(1).strip('"') not in nets:
+            out.append(dsn[m.start():j])
+        k = j
+    rest = dsn[k:]
+    for n in nets:                                       # (and out of the net classes' lists)
+        rest = re.sub(rf'(\(class [^()]*?)\s{re.escape(n)}(?=[\s)])', r"\1", rest)
+    return "".join(out) + rest
+
+
 def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[str] = None, **kw) -> List[str]:
     """FreeRouting the way KiCad users run it: the board goes to KiCad (export_kicad), KiCad writes the Specctra
     design (its own pads, net classes and rules), FreeRouting routes it, KiCad imports the session, and the
@@ -457,6 +482,8 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     k = {"um": 1.0, "mm": 0.001, "mil": 1 / 25.4, "inch": 1 / 25400.0}.get(unit.group(1) if unit else "um", 1.0)
     txt = re.sub(r"\(clearance ([\d.]+)", lambda m: f"(clearance {float(m.group(1)) + FR_MARGIN * 1000 * k:.4f}",
                  txt)                                    # KiCad users do by hand), the real rule judged after
+    txt = _drop_nets(txt, {p["net"] for p in board.pours})   # (poured nets left to the harness, and the copper
+    txt = txt.replace("(type route)", "(type protect)")      #  already drawn kept as it is, as in ``route``)
     with open(dsn, "w") as f:
         f.write(txt)
     log = run(dsn, ses, passes=passes)
@@ -474,15 +501,16 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     on = {}                                              # (KiCad hands back a stub it already had split into
     for t in board.tracks:                               # pieces: those are not new copper)
         on.setdefault((t["net"], t["layer"], round(t["w"], 3)), []).append(LineString(t["pts"]).buffer(2e-3))
-    for net, L, pts, w in segs:
-        if net not in board.nets or (net, L, tuple(pts)) in have_t or math.dist(pts[0], pts[-1]) < 1e-3:
+    poured = {p["net"] for p in board.pours}            # (the poured nets are the harness's: nothing of theirs
+    for net, L, pts, w in segs:                          #  is taken back from FreeRouting's session)
+        if net not in board.nets or net in poured or (net, L, tuple(pts)) in have_t or math.dist(pts[0], pts[-1]) < 1e-3:
             continue
         seg = LineString(pts)
         if any(g.contains(seg) for g in on.get((net, L, round(w, 3)), [])):
             continue
         board.track(net, L, pts, round(w, 4))
     for net, at, drill, dia in vias:
-        if net in board.nets and (net, tuple(round(c, 3) for c in at)) not in have_v:
+        if net in board.nets and net not in poured and (net, tuple(round(c, 3) for c in at)) not in have_v:
             board.via(net, at, drill, dia)
     board.__dict__.pop("_cu_memo", None)
     if not finish:
@@ -525,8 +553,8 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
         for k, i in enumerate(order):
             num, L, g = pads[i]
             net = pn.get((ref, num))
-            if not net or net in poured or net not in board.nets:
-                continue
+            if not net or net not in board.nets:         # (a poured net's pin too: its way out to the pour is
+                continue                                  #  kept, not left to whatever FreeRouting leaves free)
             x0_, y0_, x1_, y1_ = g.bounds
             cx, cy = g.centroid.x, g.centroid.y
             dx, dy = cx - ox, cy - oy
@@ -539,6 +567,11 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
             else:
                 ey = y1_ if dy > 0 else y0_
                 pts = [(round(cx, 4), round(cy, 4)), (round(cx, 4), round(ey + (reach if dy > 0 else -reach), 4))]
+            if net in poured:                             # (into its pour, which carries the current: a pin
+                board.track(net, L, pts, width)           #  entry, as narrow as the pins allow)
+                board.tracks[-1]["neck"] = True
+                n += 1
+                continue
             need = max(width, board.net_width(net))       # as wide as the net needs, or as wide as fits between
             pitch = float(dd.min())                       # the neighbours (their stubs, or their full-width
             nbw = max([board.net_width(pn[(ref, pads[j][0])]) for j in np.nonzero(dd[i] < pitch * 1.2)[0]

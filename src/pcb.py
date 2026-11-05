@@ -1877,13 +1877,13 @@ def _route_board(board: Board, router: str = "auto", **kw) -> List[str]:
                 try:
                     board.router_used = "freerouting (through KiCad)"
                     probs = freerouting.route_kicad(board, **kw)
-                    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw))
+                    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw)) + nudge_vias(board)
                 except (RuntimeError, OSError) as e:      # (KiCad's import refused a session now and then: the
                     board.tracks, board.vias = t0, v0     # harness's own Specctra round trip instead)
                     board.__dict__.pop("_cu_memo", None)
                     board.router_note = f"KiCad round trip failed ({str(e).splitlines()[0][:120]}); direct"
-            board.router_used = "freerouting"
-            return freerouting.route(board, **kw)
+            board.router_used = "freerouting"            # (FreeRouting does not know the drill gap: its vias are
+            return freerouting.route(board, **kw) + nudge_vias(board)   # parted from the others after)
         if router == "freerouting":
             raise RuntimeError("FreeRouting not found (Java and the jar: see freerouting.find_jar)")
     board.router_used = "harness"
@@ -2678,10 +2678,11 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
 
 
 def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -> List[str]:
-    """vias of two nets whose drills are closer than ``gap`` (default: the board's ``hole_gap``; a house's rule,
-    e.g. 0.5 mm for JLCPCB, tightens it): the via with fewer tracks on it moves away from the other by the shortfall
-    (at most ``reach``), the ends of its tracks with it, when every clearance still holds where it lands. Returns
-    the pairs it could not part."""
+    """vias closer than ``gap`` (default: the board's ``hole_gap``; a house's rule, e.g. 0.5 mm for JLCPCB, tightens
+    it) to another via of another net or to a part's own drill (a pin's hole, an exposed pad's thermal via, a bare
+    hole), as a router that does not know the drill gap leaves them: the via (the one with fewer tracks on it, of
+    two vias) moves away by the shortfall (at most ``reach``), the ends of its tracks with it, when every clearance
+    still holds where it lands. Returns the pairs it could not part."""
     import math
     from shapely.geometry import LineString, Point
     from shapely.ops import unary_union
@@ -2696,8 +2697,12 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
     def short(a, b):
         d = math.hypot(a["at"][0] - b["at"][0], a["at"][1] - b["at"][1]) - a["drill"] / 2 - b["drill"] / 2
         return d < (gap if a["net"] != b["net"] else same) - 1e-6, d
+    pn = board.pad_net()                                 # (the parts' own drills: they do not move)
+    pinned = [{"net": pn.get(tuple(h["name"].split(" pad "))) if " pad " in h["name"] else None, "at": h["at"],
+               "drill": h["d"], "fixed": True} for h in board.drill_list() if not h["name"].startswith("via ")
+              and not h["slot"]]
     for _ in range(2):
-        bad = [(a, b) for i, a in enumerate(board.vias) for b in board.vias[i + 1:] if short(a, b)[0]]
+        bad = [(a, b) for i, a in enumerate(board.vias) for b in board.vias[i + 1:] + pinned if short(a, b)[0]]
         if not bad:
             break
         fixed = board.copper(pours=False)
@@ -2705,28 +2710,29 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
             if not short(a, b)[0]:
                 continue
             moved = False
-            for v, o in sorted(((a, b), (b, a)), key=lambda p: len(ends(p[0]))):
-                d = short(v, o)[1]
-                want = (gap if v["net"] != o["net"] else same) - d + 0.01
-                if want > reach:
-                    continue
-                dx, dy = v["at"][0] - o["at"][0], v["at"][1] - o["at"][1]
-                n = math.hypot(dx, dy) or 1.0
-                at = (round(v["at"][0] + dx / n * want, 4), round(v["at"][1] + dy / n * want, 4))
+            for v, o in sorted(((a, b),) if b.get("fixed") else ((a, b), (b, a)), key=lambda p: len(ends(p[0]))):
                 others = {L: unary_union([g for (nt, l), g in fixed.items() if l == L and nt != v["net"]] or [Point(0, 0).buffer(0)])
                           for L in board.layers}
-                ok = all(Point(at).buffer(v["dia"] / 2).distance(others[L]) >= board.clear - 1e-6 for L in board.layers)
-                for t, i in ends(v) if ok else []:
-                    pts = list(t["pts"]); pts[i] = at
-                    seg = LineString(pts[-2:] if i == -1 else pts[:2]).buffer(t["w"] / 2)
-                    ok = ok and seg.distance(others[t["layer"]]) >= board.clear - 1e-6
-                if ok:                                   # (and no other drill too near where it lands)
-                    for w in board.vias:
-                        if w is not v:
-                            g_ = gap if w["net"] != v["net"] else same
-                            ok = ok and math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - v["drill"] / 2 - w["drill"] / 2 >= g_ - 1e-6
-                    for x, y, dd in board.all_holes():
-                        ok = ok and math.hypot(at[0] - x, at[1] - y) - v["drill"] / 2 - dd / 2 >= gap - 1e-6
+
+                def lands(at):                           # every clearance and every drill gap holds there
+                    if not all(Point(at).buffer(v["dia"] / 2).distance(others[L]) >= board.clear - 1e-6
+                               for L in board.layers):
+                        return False
+                    for t, i in ends(v):
+                        pts = list(t["pts"]); pts[i] = at
+                        seg = LineString(pts[-2:] if i == -1 else pts[:2]).buffer(t["w"] / 2)
+                        if seg.distance(others[t["layer"]]) < board.clear - 1e-6:
+                            return False
+                    return all(math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - v["drill"] / 2 - w["drill"] / 2
+                               >= (gap if w["net"] != v["net"] else same) - 1e-6
+                               for w in board.vias + pinned if w is not v)
+                dx, dy = v["at"][0] - o["at"][0], v["at"][1] - o["at"][1]
+                a0 = math.atan2(dy, dx)                  # straight away first, then turning off it, nearest first
+                tries = [(round(v["at"][0] + r * math.cos(a0 + da), 4), round(v["at"][1] + r * math.sin(a0 + da), 4))
+                         for r in [reach * k / 8 for k in range(1, 9)]
+                         for da in [math.radians(t) for t in (0, 30, -30, 60, -60, 90, -90, 120, -120)]]
+                at = next((p_ for p_ in tries if lands(p_)), None)
+                ok = at is not None
                 if ok:
                     for t, i in ends(v):
                         t["pts"] = list(t["pts"]); t["pts"][i] = at
