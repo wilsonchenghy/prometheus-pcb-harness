@@ -3738,14 +3738,15 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
 def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], tx, ty, label="keep",
                      body_dir: Optional[str] = None) -> list:
     """one placed part as a board footprint: the library's own .kicad_mod (pads, silkscreen, courtyard, fab, model)
-    at the part's place, turned, flipped to the bottom for side B (mirrored in x, KiCad's left / right flip, as
-    ``Board.place`` does), its pads on their nets"""
+    at the part's place, turned, flipped to the bottom for side B the way KiCad flips (mirrored top to bottom and
+    turned 180: the same copper as ``Board.place``'s left / right mirror), its pads on their nets"""
     lib, name = c["fp"].split(":")
     footprint(c["fp"])                                       # fetched into the cache
     tree = _sx_parse(_fp_file(c["fp"]).read_text())
     back = c.get("side", "F") == "B"
     rot = c["rot"] % 360.0
-    pn = board.pad_net()
+    rot_k = (rot + 180.0) % 360.0 if back else rot      # (KiCad's flip: mirrored top to bottom and turned 180, the
+    pn = board.pad_net()                                 #  same copper as the harness's left / right mirror)
     flipL = lambda s: _Q(("B." + s[2:]) if s.startswith("F.") else ("F." + s[2:]) if s.startswith("B.") else s)
 
     def walk(node, owner):
@@ -3761,11 +3762,11 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
                 x, y = float(v[1]), float(v[2])
                 a = float(v[3]) if len(v) > 3 else 0.0
                 if back:
-                    x, a = -x, -a
-                at = ["at", x, y, (rot + a) % 360.0]             # pad and text angles are absolute in a board
+                    y, a = -y, -a
+                at = ["at", x, y, (rot_k + a) % 360.0]           # pad and text angles are absolute in a board
                 out.append(at + [w for w in v[4:]])
             elif k in ("at", "start", "end", "mid", "center", "xy") and len(v) >= 3:
-                out.append([k, -float(v[1]) if back else v[1], v[2]] + v[3:])
+                out.append([k, v[1], -float(v[2]) if back else v[2]] + v[3:])
             elif k == "angle" and back:
                 out.append(["angle", -float(v[1])])
             elif k in ("layer", "layers") and back:
@@ -3797,7 +3798,7 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
             elif label != "keep":                             # the placed spot: board -> footprint frame
                 lx, ly, ang, size = label
                 dx, dy = lx - c["at"][0], ly - c["at"][1]
-                a = math.radians(-c["rot"])
+                a = math.radians(-rot_k)
                 px, py = dx * math.cos(a) - dy * math.sin(a), dx * math.sin(a) + dy * math.cos(a)
                 for w in v:
                     if isinstance(w, list) and w and w[0] == "at":
@@ -3831,7 +3832,7 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
             pads_on += 1
     # silkscreen strokes past the board edge (an edge connector's outline over the overhang) are dropped: the fab
     # would clip them anyway, and the board file stays clean for KiCad's DRC
-    ca, sa = math.cos(math.radians(c["rot"])), math.sin(math.radians(c["rot"]))
+    ca, sa = math.cos(math.radians(rot_k)), math.sin(math.radians(rot_k))
     on_board = board.outline.buffer(-0.15)
 
     def outside(g):
@@ -3848,12 +3849,12 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
                                 and any(isinstance(q, list) and q[0] == "layer" and "SilkS" in str(q[1]) for q in w)
                                 and outside(w))]
     i = next(i for i, w in enumerate(fp) if isinstance(w, list) and w[0] == "layer") + 1
-    fp[i:i] = [["uuid", _uuid(board.name, ref)], ["at", tx(c["at"][0]), ty(c["at"][1]), rot]]
+    fp[i:i] = [["uuid", _uuid(board.name, ref)], ["at", tx(c["at"][0]), ty(c["at"][1]), rot_k]]
     extra = [("MPN", c["mpn"]), ("Note", c["note"])]
     fab = _Q("B.Fab" if back else "F.Fab")
     for k_, val in extra:
         if val:
-            fp.append(["property", _Q(k_), _Q(val), ["at", 0, 0, rot], ["layer", fab], ["hide", "yes"],
+            fp.append(["property", _Q(k_), _Q(val), ["at", 0, 0, rot_k], ["layer", fab], ["hide", "yes"],
                        ["uuid", _uuid(board.name, ref, k_)], ["effects", ["font", ["size", 1, 1], ["thickness", 0.15]]]])
     old = [w for w in fp if isinstance(w, list) and w and w[0] == "model"]
     if c.get("model") is not None or c.get("body") is not None:     # (neither given: the footprint's own model stays,

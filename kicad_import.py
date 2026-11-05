@@ -1,0 +1,359 @@
+"""A KiCad layout (``.kicad_pcb``, KiCad 6 to 10) as a board script, for a revision of a board designed elsewhere.
+
+    prometheus import design.kicad_pcb myboard/       # myboard/board.py, routes.json, footprints/
+
+``board.py`` is an ordinary board script: every part at its place on the design's own footprints (written to
+``footprints/``, as the board file carries them), every net, the zones as pours, the outline, the silkscreen text.
+The routed copper is in ``routes.json``: ``routes()`` puts it back, all of it while the parts stay where they were;
+once parts move, the nets they touch are routed again and the rest keep their copper (``pcb.reuse_routes``).
+"""
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+from pathlib import Path
+from typing import Dict, List
+
+import pcb
+from pcb import _Q, _find, _sx_dump, _sx_parse
+
+CU = {"F.Cu": "F", "B.Cu": "B", "In1.Cu": "1", "In2.Cu": "2"}
+MPN_KEYS = ("mpn", "manufacturer_part_number", "part number", "manufacturer part number", "mfr part", "mfr. part #")
+LCSC_KEYS = ("lcsc", "lcsc part", "lcsc part #", "jlcpcb", "jlcpcb part #", "jlc")
+_DROP = {"uuid", "tstamp", "path", "sheetname", "sheetfile", "units", "locked", "net", "at"}
+
+
+def _arc(p0, pm, p1, step: float = 0.02):
+    """points along the circle through p0, pm, p1 (KiCad's start / mid / end), from p0 to p1"""
+    (ax, ay), (bx, by), (cx, cy) = p0, pm, p1
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-12:
+        return [p0, p1]
+    ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+    uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+    r = math.hypot(ax - ux, ay - uy)
+    a0, am, a1 = (math.atan2(y - uy, x - ux) for x, y in (p0, pm, p1))
+    sweep = (a1 - a0) % (2 * math.pi)
+    if (am - a0) % (2 * math.pi) > sweep:                # (the mid point says which way round)
+        sweep -= 2 * math.pi
+    n = max(2, int(abs(sweep) * r / step) + 1)
+    return [(ux + r * math.cos(a0 + sweep * k / n), uy + r * math.sin(a0 + sweep * k / n)) for k in range(n + 1)]
+
+
+def _xy(node, key):
+    f = _find(node, key)
+    return (float(f[0][1]), float(f[0][2])) if f else None
+
+
+def _pts(node):
+    """a pts list's points, arcs walked"""
+    out = []
+    for q in _find(node, "pts")[0][1:] if _find(node, "pts") else []:
+        if q[0] == "xy":
+            out.append((float(q[1]), float(q[2])))
+        elif q[0] == "arc":
+            out += _arc(_xy(q, "start"), _xy(q, "mid"), _xy(q, "end"))[0 if not out else 1:]
+    return out
+
+
+def _library_footprint(fp, rot: float, back: bool):
+    """a placed footprint back in its library frame: the inverse of ``pcb._kicad_footprint`` (pad and text angles
+    made relative again, a bottom part's flip and layers undone, the board's own items dropped). ``rot``: the angle
+    KiCad gives it (a bottom part's: the harness's plus 180)"""
+    flip = lambda s: _Q(("B." + s[2:]) if s.startswith("F.") else ("F." + s[2:]) if s.startswith("B.") else s)
+
+    def walk(node, owner):
+        out = [node[0]]
+        for v in node[1:]:
+            if not isinstance(v, list) or not v:
+                out.append(v)
+            elif v[0] == "model":
+                out.append(v)
+            elif v[0] in ("uuid", "tstamp", "net"):
+                continue
+            elif v[0] == "at" and owner in ("pad", "property", "fp_text"):
+                y, a = float(v[2]), float(v[3]) if len(v) > 3 and v[3] != "unlocked" else 0.0   # (absolute)
+                a = (rot - a) if back else (a - rot)
+                out.append(["at", float(v[1]), -y if back else y, round(a % 360.0, 6)])
+            elif v[0] in ("at", "start", "end", "mid", "center", "xy") and len(v) >= 3:
+                out.append([v[0], float(v[1]), -float(v[2]) if back else float(v[2])] + v[3:])
+            elif v[0] == "angle" and back:
+                out.append(["angle", -float(v[1])])
+            elif v[0] in ("layer", "layers") and back:
+                out.append([v[0]] + [flip(s) if isinstance(s, str) else s for s in v[1:]])
+            elif v[0] == "justify" and back and owner == "effects":
+                out.append([w for w in v if w != "mirror"])
+            else:
+                out.append(walk(v, v[0]))
+        return out
+    body = [v for v in fp[2:] if not (isinstance(v, list) and v and v[0] in _DROP)]
+    return walk(["footprint", _Q(fp[1].split(":")[-1])] + body, "footprint")
+
+
+def read(path: str, fp_dir: str):
+    """(Board, routes, notes): the layout in ``path`` as a Board, its routed copper as ``pcb.reuse_routes`` takes it,
+    and what could not be carried over. The design's footprints are written into ``fp_dir``"""
+    tree = _sx_parse(Path(path).read_text(encoding="utf-8"))
+    notes: List[str] = []
+    numbered = {str(n[1]): str(n[2]) for n in _find(tree, "net") if len(n) > 2}
+
+    def net_of(node):                                    # (KiCad 10: (net "GND"); before: (net 3 "GND") or (net 3))
+        nn = _find(node, "net_name")
+        if nn:
+            return str(nn[0][1])
+        n = _find(node, "net")
+        if not n:
+            return ""
+        return str(n[0][2]) if len(n[0]) > 2 else (str(n[0][1]) if isinstance(n[0][1], _Q) else numbered.get(str(n[0][1]), ""))
+    cu_layers = [str(r[1]) for lay in _find(tree, "layers") for r in lay[1:] if str(r[1]).endswith(".Cu")]
+    if len(cu_layers) not in (2, 4):
+        raise ValueError(f"{path}: {len(cu_layers)} copper layers; Prometheus takes 2 or 4")
+    # the outline: Edge.Cuts' lines, arcs, rectangles, circles and polygons, joined
+    from shapely.geometry import LineString, Polygon
+    from shapely.ops import polygonize, unary_union
+    segs = []
+    for g in tree:
+        if not (isinstance(g, list) and g and str(g[0]).startswith("gr_") and _find(g, "layer")
+                and _find(g, "layer")[0][1] == "Edge.Cuts"):
+            continue
+        k = g[0]
+        if k == "gr_line":
+            segs.append([_xy(g, "start"), _xy(g, "end")])
+        elif k == "gr_arc":
+            segs.append(_arc(_xy(g, "start"), _xy(g, "mid"), _xy(g, "end")))
+        elif k == "gr_rect":
+            (x0, y0), (x1, y1) = _xy(g, "start"), _xy(g, "end")
+            segs.append([(x0, y0), (x1, y0), (x1, y1), (x0, y1), (x0, y0)])
+        elif k == "gr_circle":
+            (cx, cy), (ex, ey) = _xy(g, "center"), _xy(g, "end")
+            r = math.hypot(ex - cx, ey - cy)
+            segs.append([(cx + r * math.cos(a / 64 * 2 * math.pi), cy + r * math.sin(a / 64 * 2 * math.pi))
+                         for a in range(65)])
+        elif k == "gr_poly":
+            p = _pts(g)
+            segs.append(p + p[:1])
+    lines = [LineString([(round(x, 3), round(y, 3)) for x, y in s]) for s in segs if len(s) > 1]
+    polys = sorted(polygonize(unary_union(lines)), key=lambda p: -p.area) if lines else []
+    if not polys:
+        raise ValueError(f"{path}: no closed board outline on Edge.Cuts")
+    edge = polys[0]
+    if any(edge.contains(p.representative_point()) for p in polys[1:]):
+        notes.append("the outline's cut-outs were left out: the board is its outer edge")
+    X0, _, _, Y1 = edge.bounds
+    tx = lambda x, y: (round(float(x) - X0, 6), round(Y1 - float(y), 6))     # (KiCad's page, y down -> board mm, y up)
+    outline = [tx(x, y) for x, y in list(edge.exterior.coords)[:-1]]
+    # the board's rules: the project's default clearance and edge gap, the stackup's copper
+    pro = Path(path).with_suffix(".kicad_pro")
+    clear, edge_gap, hole_gap = 0.2, None, None
+    if pro.exists():
+        pj = json.loads(pro.read_text())
+        cls = (pj.get("net_settings") or {}).get("classes") or []
+        d = next((c for c in cls if c.get("name") == "Default"), cls[0] if cls else {})
+        clear = float(d.get("clearance", clear))
+        rules = ((pj.get("board") or {}).get("design_settings") or {}).get("rules") or {}
+        edge_gap, hole_gap = rules.get("min_copper_edge_clearance"), rules.get("min_hole_to_hole")
+    else:
+        notes.append(f"no {pro.name} beside it: its rules unknown, clearance {clear} mm taken (set Board(clearance=...))")
+    thick = float(_find(_find(tree, "general")[0], "thickness")[0][1]) if _find(tree, "general") else 1.6
+    oz = 1.0
+    for s in (st for su in _find(tree, "setup") for st in _find(su, "stackup")):
+        t_ = [float(_find(l_, "thickness")[0][1]) for l_ in _find(s, "layer") if l_[1] == "F.Cu" and _find(l_, "thickness")]
+        if t_:
+            oz = max(0.5, round(t_[0] / pcb.OZ_MM * 2) / 2)
+    b = pcb.Board(Path(path).stem, outline, thickness=thick, copper_oz=oz, clearance=clear, layers=len(cu_layers),
+                  corner_r=0)
+    if edge_gap is not None:
+        b.edge = float(edge_gap)
+    if hole_gap is not None:
+        b.hole_gap = float(hole_gap)
+    # the parts, each on the footprint the board carries
+    fp_root = Path(fp_dir)
+    if str(fp_root) not in map(str, pcb.FP_DIRS):
+        pcb.FP_DIRS.insert(0, fp_root)
+    pins: Dict[str, list] = {}
+    seen, written = set(), set()
+    for fp in _find(tree, "footprint"):
+        props = {str(p[1]): str(p[2]) for p in _find(fp, "property") if len(p) > 2}
+        props.update({("Reference" if t[1] == "reference" else "Value"): str(t[2]) for t in _find(fp, "fp_text")
+                      if len(t) > 2 and t[1] in ("reference", "value")})
+        pads = [p for p in _find(fp, "pad") if str(p[1])]
+        drills = [p for p in _find(fp, "pad") if _find(p, "drill")]
+        if not pads and drills and not any("oval" in _find(p, "drill")[0] for p in drills):   # (a mounting hole: a
+                                                         # board hole at each drill; a slot stays a footprint)
+            at = _find(fp, "at")[0]
+            a = math.radians(float(at[3]) if len(at) > 3 else 0.0)
+            for p in drills:
+                lx, ly = _xy(p, "at")
+                d = float(next(v for v in _find(p, "drill")[0][1:] if v != "oval"))
+                b.hole(tx(float(at[1]) + lx * math.cos(a) + ly * math.sin(a),
+                          float(at[2]) - lx * math.sin(a) + ly * math.cos(a)), d)
+            continue
+        if not pads and not drills:
+            notes.append(f"{props.get('Reference', fp[1])} ({fp[1]}): no pads (a logo or a drawing): left out")
+            continue
+        ref = props.get("Reference", "")
+        if not ref or "*" in ref or ref in seen:
+            stem = re.sub(r"[^A-Za-z]", "", ref) or "X"
+            ref = next(f"{stem}{i}" for i in range(1, 10000) if f"{stem}{i}" not in seen)
+        seen.add(ref)
+        name = str(fp[1]) if ":" in str(fp[1]) else f"Imported:{fp[1]}"
+        lib, nm = name.split(":", 1)
+        nm = re.sub(r"[/\\]", "_", nm)
+        name = f"{lib}:{nm}"
+        at = _find(fp, "at")[0]
+        rot = float(at[3]) if len(at) > 3 else 0.0
+        back = str(_find(fp, "layer")[0][1]) == "B.Cu"
+        if name not in written:                          # (the first one placed is the library's copy)
+            f_ = fp_root / f"{lib}.pretty" / f"{nm}.kicad_mod"
+            f_.parent.mkdir(parents=True, exist_ok=True)
+            f_.write_text(_sx_dump(_library_footprint(fp, rot, back)) + "\n")
+            pcb._FP.pop(name, None)
+            written.add(name)
+        low = {k.lower(): v for k, v in props.items() if v}
+        mpn = next((low[k] for k in MPN_KEYS if k in low), "")
+        lcsc = next((low[k] for k in LCSC_KEYS if k in low), "")
+        x, y = tx(at[1], at[2])
+        b.place(ref, name, (x, y), round((rot - 180.0 if back else rot) % 360.0, 6), props.get("Value", ""), mpn, side="B" if back else "F", lcsc=lcsc)
+        for p in pads:
+            n = net_of(p)
+            if n:
+                pins.setdefault(n, []).append((ref, str(p[1])))
+    for n, ps in pins.items():
+        b.net(n, list(dict.fromkeys(ps)))
+    # copper: tracks, arcs and vias of the nets on pads; zones as pours, rule areas as keep-outs
+    tracks, vias, lost = [], [], 0
+    for g in tree:
+        if not isinstance(g, list) or not g or g[0] not in ("segment", "arc", "via"):
+            continue
+        n = net_of(g)
+        if n not in b.nets:
+            lost += 1
+            continue
+        if g[0] == "via":
+            if len(g) > 1 and g[1] in ("blind", "micro"):
+                notes.append(f"a {g[1]} via on {n} is taken as a through via")
+            vias.append({"net": n, "at": tx(*_xy(g, "at")), "drill": float(_find(g, "drill")[0][1]),
+                         "dia": float(_find(g, "size")[0][1])})
+            continue
+        L = CU.get(str(_find(g, "layer")[0][1]))
+        if L is None:
+            lost += 1
+            continue
+        pts = [_xy(g, "start"), _xy(g, "end")] if g[0] == "segment" else _arc(_xy(g, "start"), _xy(g, "mid"), _xy(g, "end"))
+        tracks.append({"net": n, "layer": L, "pts": [tx(*p) for p in pts], "w": float(_find(g, "width")[0][1]),
+                       "amps": None})
+    if lost:
+        notes.append(f"{lost} tracks and vias on no part's net (or on more than 4 layers) left out")
+    zones = []
+    for z in _find(tree, "zone"):
+        lays = [str(s) for k in ("layer", "layers") for f in _find(z, k) for s in f[1:]]
+        lays = [L for s in lays for L in (b.layers if s in ("*.Cu", "F&B.Cu") else [CU.get(s)]) if L in b.layers]
+        polys = [[tx(*p) for p in _pts(pg)] for pg in _find(z, "polygon")]
+        if not polys or not lays:
+            continue
+        if _find(z, "keepout"):
+            b.keepout(polys[0], "".join(lays), str(_find(z, "name")[0][1]) if _find(z, "name") else "")
+            continue
+        n = net_of(z)
+        if n in b.nets:
+            pr = int(_find(z, "priority")[0][1]) if _find(z, "priority") else 0
+            zones += [(pr, n, L, polys) for L in lays]
+    for pr, n, L, polys in zones:                        # (a zone under a higher-priority one of another net is
+        over = [[(round(x, 4), round(y, 4)) for x, y in Polygon(q[0]).buffer(b.clear + 0.002, 8).exterior.coords[:-1]]
+                for p2, n2, L2, q in zones                #  filled round it, its clearance apart, as KiCad fills it)
+                if L2 == L and n2 != n and p2 > pr and Polygon(q[0]).intersects(Polygon(polys[0]))]
+        b.pour(n, L, polys[0], holes=(polys[1:] + over) or None)
+    b.silk_text = []
+    for t in _find(tree, "gr_text"):
+        if _find(t, "layer") and _find(t, "layer")[0][1] == "F.SilkS" and _find(t, "at"):
+            a = _find(t, "at")[0]
+            size = next((float(s[1]) for e in _find(t, "effects") for f in _find(e, "font") for s in _find(f, "size")), 1.0)
+            b.silk_text.append((str(t[1]), tx(a[1], a[2]), size, float(a[3]) if len(a) > 3 else 0.0))
+    other = sum(1 for g in tree if isinstance(g, list) and g and str(g[0]).startswith("gr_") and g[0] != "gr_text"
+                and _find(g, "layer") and _find(g, "layer")[0][1] != "Edge.Cuts")
+    if other:
+        notes.append(f"{other} board drawings (lines, shapes on silkscreen or other layers) left out")
+    return b, {"placement": pcb.placement(b), "tracks": tracks, "vias": vias}, notes
+
+
+def routes(board, path: str) -> List[str]:
+    """the routed copper saved by ``prometheus import``, back on ``board``: all of it while every part is where it
+    was; once parts have moved, the nets they touch are routed again (the rest keep theirs). Routing problems"""
+    old = json.loads(Path(path).read_text())
+    old["placement"] = {r: tuple(tuple(v) if isinstance(v, list) else v for v in p) for r, p in old["placement"].items()}
+    for t in old["tracks"]:
+        t["pts"] = [tuple(p) for p in t["pts"]]
+    for v in old["vias"]:
+        v["at"] = tuple(v["at"])
+    if pcb.placement(board) == old["placement"]:
+        board.tracks += old["tracks"]
+        board.vias += old["vias"]
+        return []
+    redo = sorted(n for n in pcb.reuse_routes(board, old) if n in board.nets)
+    keep, pcb._NO_LATEST = pcb._NO_LATEST, True         # (this copper, not another board's of the same name)
+    try:
+        return pcb.route_jobs(board, [(n, board.net_width(n), None) for n in redo]) if redo else []
+    finally:
+        pcb._NO_LATEST = keep
+
+
+def write(path: str, out_dir: str) -> dict:
+    """``out_dir``/board.py, routes.json and footprints/ from the layout in ``path``; what was written and the notes"""
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    b, rt, notes = read(path, str(out / "footprints"))
+    (out / "routes.json").write_text(json.dumps(rt))
+    r = lambda v: round(v, 6)
+    L = [f'"""{b.name}: imported from {Path(path).name} (prometheus import).',
+         "",
+         "A board script like any other: move a part, change a net, add a part, then `prometheus board.py out/`.",
+         "The routed copper is in routes.json: nets whose parts have not moved keep it, the rest are routed again.",
+         '"""', "import os", "", "import kicad_import", "import pcb", "",
+         f"b = pcb.Board({b.name!r}, {[(r(x), r(y)) for x, y in b.outline.exterior.coords[:-1]]!r},",
+         f"              thickness={b.t}, copper_oz={b.oz}, clearance={b.clear}, layers={len(b.layers)}, corner_r=0)"]
+    if b.edge != pcb.EDGE:
+        L.append(f"b.edge = {b.edge}")
+    if b.hole_gap != pcb.HOLE_GAP:
+        L.append(f"b.hole_gap = {b.hole_gap}")
+    L.append("")
+    for ref, c in b.comps.items():
+        kw = "".join(f", {k}={v!r}" for k, v in (("mpn", c["mpn"]), ("lcsc", c["lcsc"])) if v)
+        kw += ', side="B"' if c["side"] == "B" else ""
+        L.append(f"b.place({ref!r}, {c['fp']!r}, ({r(c['at'][0])}, {r(c['at'][1])}), {r(c['rot'])}, {c['value']!r}{kw})")
+    L.append("")
+    for n, d in b.nets.items():
+        L.append(f"b.net({n!r}, {d['pins']!r})")
+    if b.pours or getattr(b, "keepouts", None) or b.silk_text or b.holes:
+        L.append("")
+    for x, y, d in b.holes:
+        L.append(f"b.hole(({r(x)}, {r(y)}), {d})")
+    for p in b.pours:
+        L.append(f"b.pour({p['net']!r}, {p['layer']!r}, {p['poly']!r}" + (f", holes={p['holes']!r})" if p["holes"] else ")"))
+    for k in getattr(b, "keepouts", []):
+        L.append(f"b.keepout({k['poly']!r}, {k['layers']!r}, {k['why']!r})")
+    if b.silk_text:
+        L.append(f"b.silk_text = {b.silk_text!r}")
+    L += ["", 'PCB_ROUTE_PROBLEMS = kicad_import.routes(b, os.path.join(os.path.dirname(os.path.abspath(__file__)), '
+          '"routes.json"))', ""]
+    (out / "board.py").write_text("\n".join(L))
+    return {"script": str(out / "board.py"), "parts": len(b.comps), "nets": len(b.nets), "tracks": len(rt["tracks"]),
+            "vias": len(rt["vias"]), "pours": len(b.pours), "notes": notes}
+
+
+def main(argv) -> int:
+    if not argv or not argv[0].endswith(".kicad_pcb"):
+        print("usage: prometheus import design.kicad_pcb [folder]   (default folder: the design's name)")
+        return 2
+    try:
+        got = write(argv[0], argv[1] if len(argv) > 1 else Path(argv[0]).stem)
+    except ValueError as e:
+        print(f"error: {e}")
+        return 2
+    print(f"{got['script']}: {got['parts']} parts, {got['nets']} nets, {got['tracks']} tracks, {got['vias']} vias, "
+          f"{got['pours']} pours")
+    for n in got["notes"]:
+        print(f"  note: {n}")
+    print(f"next: prometheus {got['script']} {Path(got['script']).parent / 'out'}/")
+    return 0
