@@ -1,8 +1,8 @@
 """BNO085 IMU breakout: USB-C 5 V in, AP2112K 3.3 V LDO, BNO085 in I2C mode (PS0 = PS1 = 0, SA0 low -> 0x4A),
 32.768 kHz crystal, 6-pin 2.54 mm header (3V3, GND, SDA, SCL, INT, RST) to the host MCU. 2 layers, GND on both.
 
-ASSUMED (check against the CEVA BNO08X datasheet, pin list): the BNO085 pad numbers in PIN below. KiCad has no
-BNO085 symbol, so the chip sits on the BNO055's LGA-28 footprint (same package) wired by pad number.
+The BNO085's pad numbers are checked against its symbol, Prometheus:BNO085 (src/pcb_symbols), read from CEVA's
+BNO08X datasheet (figure 1-6, pins 1-28); it sits on KiCad's LGA-28 5.2 x 3.8 mm footprint.
 
     prometheus examples/imu_bno085/imu_bno085.py out/ --spec examples/imu_bno085/req.json
 """
@@ -12,7 +12,7 @@ R04, C04 = "Resistor_SMD:R_0402_1005Metric", "Capacitor_SMD:C_0402_1005Metric"
 W, H = 18.0, 22.0
 OUT = [(0.0, 0.0), (W, 0.0), (W, H), (0.0, H)]
 
-# BNO08x LGA-28 pad numbers (ASSUMED, from the datasheet's pin list)
+# BNO08x LGA-28 pad numbers (CEVA BNO08X datasheet, figure 1-6)
 PIN = {"GND": ["2", "25"], "VDD": "3", "BOOTN": "4", "PS1": "5", "PS0": "6", "CAP": "9", "CLKSEL0": "10",
        "NRST": "11", "H_INTN": "14", "SA0": "17", "H_CSN": "18", "SCL": "19", "SDA": "20", "XOUT32": "26",
        "XIN32": "27", "VDDIO": "28"}
@@ -29,11 +29,12 @@ def build():
     b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (W / 2, 3.2), 0, "USB-C",
             "GCT USB4105-GF-A", overhang=True, symbol="Connector:USB_C_Receptacle_USB2.0_16P")
     b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical", (2.65, H - 1.9), 90, "I2C",
-            "2.54 mm header 1x06")
+            "XFCN PZ254V-11-06P", lcsc="C492405")
     b.place("U1", "Package_LGA:LGA-28_5.2x3.8mm_P0.5mm", (11.5, 13.6), 180, "BNO085", "CEVA BNO085", symbol="Prometheus:BNO085")
     b.place("U2", "Package_TO_SOT_SMD:SOT-23-5", (3.6, 12.0), 0, "AP2112K-3.3", "Diodes AP2112K-3.3TRG1",
             symbol="Regulator_Linear:AP2112K-3.3")
-    b.place("Y1", "Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm", (14.3, 9.7), 0, "32.768k", "Epson FC-135 32.768KA")
+    b.place("Y1", "Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm", (14.3, 9.7), 0, "32.768k", "Epson Q13FC13500004 (FC-135, 12.5 pF)",
+            lcsc="C32346")
     for ref, fp, val, note in (("C1", C04, "1u", "LDO in"), ("C2", C04, "1u", "LDO out"),
                                ("C3", C04, "100n", "VDD"), ("C4", C04, "100n", "VDDIO"), ("C5", C04, "100n", "CAP"),
                                ("C6", C04, "22p", "XIN32"), ("C7", C04, "22p", "XOUT32"),
