@@ -1296,6 +1296,39 @@ def test_drop_loops_takes_away_a_second_run_of_a_net():
     assert [t["net"] for t in b.tracks] == ["A", "B"] and len(b.islands("A")) == 1 and b.check() == []
 
 
+def test_live_edit_moves_a_part_reroutes_its_nets_and_undoes(tmp_path):
+    """the viewer's /api/move: the part moves, only its nets are routed again (the rest keep their copper), the
+    run's state and moves.json record it; a part off the board or a flip is refused; /api/undo puts it back"""
+    import pcb
+    import pcb_cli
+    import pcb_view
+    script = tmp_path / "b.py"
+    script.write_text("import pcb\nb = pcb.Board('live', [(0, 0), (30, 0), (30, 20), (0, 20)])\n"
+                      "b.place('R1', 'Resistor_SMD:R_0603_1608Metric', (8, 10), 0, '1k')\n"
+                      "b.place('R2', 'Resistor_SMD:R_0603_1608Metric', (22, 10), 0, '1k')\n"
+                      "b.place('R3', 'Resistor_SMD:R_0603_1608Metric', (15, 4), 0, '1k')\n"
+                      "b.net('A', [('R1', '2'), ('R2', '1')])\nb.net('B', [('R2', '2'), ('R3', '2')])\nPCB = b\n")
+    b, _ = pcb_cli.load(str(script))
+    pcb.route_jobs(b, [(n, b.net_width(n), None) for n in b.nets])
+    assert b.check() == []
+    out = tmp_path / "out"
+    out.mkdir()
+    pcb_cli.save_state(b, str(out), pcb_cli.design_key(b))
+    (out / "result.json").write_text(json.dumps({"script": str(script)}))
+    cache = pcb_view._Cache(str(out))
+    a_before = sorted(tuple(map(tuple, t["pts"])) for t in b.tracks if t["net"] == "A")
+    got = cache.move("R3", (16.0, 5.0))
+    assert got["ok"] and got["rerouted"] == ["B"] and got["check"] == [] and got["unrouted"] == []
+    assert sorted(tuple(map(tuple, t["pts"])) for t in cache.live.tracks if t["net"] == "A") == a_before
+    assert json.loads((out / "moves.json").read_text())[0]["at"] == [16.0, 5.0]
+    c, _ = pcb_cli.load(str(script))
+    assert pcb_cli.load_state(c, str(out), pcb_cli.design_key(c)) and c.comps["R3"]["at"] == (16.0, 5.0)
+    assert not cache.move("R3", (-5, 5))["ok"] and not cache.move("R3", (16, 5), side="B")["ok"]
+    assert not cache.move("R9", (5, 5))["ok"]
+    back = cache.undo_move()
+    assert back["ok"] and cache.live.comps["R3"]["at"] == (15, 4) and json.loads((out / "moves.json").read_text()) == []
+
+
 def test_nudge_vias_parts_two_nets_drills():
     """two nets' vias 0.45 mm apart (drill wall to wall) under a 0.5 mm rule: the one with the fewer tracks moves away
     by the shortfall, its track's end with it, and nothing else changes"""
