@@ -1257,6 +1257,27 @@ def test_nudge_vias_parts_two_nets_drills():
     assert 0.5 <= gapnow < 0.53 and b.tracks[0]["pts"][0] == v["at"]
 
 
+def test_neck_vias_moves_a_via_off_its_own_pad_and_joins_it_by_a_track():
+    """a GND via whose ring touches its own 0603 pad (solder would wick down it) moves a neck away, a track from the
+    pad to it; a via-in-pad (the ring all on the pad) stays"""
+    import pcb
+    from shapely.geometry import Point
+    b = pcb.Board("neck", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.place("C1", "Capacitor_SMD:C_0603_1608Metric", (10, 10), 0, "100n")
+    b.place("C2", "Capacitor_SMD:C_1206_3216Metric", (10, 4), 0, "10u")
+    b.net("GND", [("C1", "2"), ("C2", "2")])
+    b.net("V", [("C1", "1"), ("C2", "1")])
+    pad = next(g for r, n, L, g, d in b.pad_shapes() if (r, n) == ("C1", "2"))
+    big = next(g for r, n, L, g, d in b.pad_shapes() if (r, n) == ("C2", "2"))
+    b.via("GND", (pad.bounds[2] + 0.2, 10.0), 0.3, 0.6)            # (ring over the pad's edge)
+    b.via("GND", big.centroid.coords[0], 0.2, 0.4)                  # (a via-in-pad on the 1206's pad)
+    before = len(b.islands("GND"))
+    assert pcb.neck_vias(b) == []
+    v, vip = b.vias
+    assert Point(v["at"]).buffer(0.3).distance(pad) >= 0.2 - 1e-6 and vip["at"] == big.centroid.coords[0]
+    assert b.tracks[-1]["net"] == "GND" and b.tracks[-1]["pts"][-1] == v["at"] and len(b.islands("GND")) == before
+
+
 def test_tidy_takes_away_a_via_that_joins_nothing():
     """a via with a track on one layer only joins nothing and goes; a via joining two layers' tracks stays; tracks
     meeting in a dead via still meet"""
