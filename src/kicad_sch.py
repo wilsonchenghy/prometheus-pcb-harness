@@ -461,7 +461,7 @@ def blocks(board) -> List[Tuple[str, List[str]]]:
     # a capacitor from a supply to ground goes with the chip that has a power pin on that supply, the nearest of them
     # on the board: a regulator's input and output capacitors with the regulator, a chip's decoupling with that chip
     power: Dict[str, List[str]] = {}
-    for r in ics:
+    for r in refs:                                       # (every part with a power pin: an LED's own capacitor is its)
         types = {q["num"]: q["type"] for q in (board.comps[r].get("symbol") or {}).get("pins", [])}
         for (rr, p), n in pn.items():
             if rr == r and n != "GND" and types.get(p) in ("power_in", "power_out") and r not in power.get(n, []):
@@ -478,7 +478,7 @@ def blocks(board) -> List[Tuple[str, List[str]]]:
                     any(re.match(r"L\d", o) and rail in pins_of.get(o, []) for o in groups[g]):
                 continue                                 # (an inductor's output capacitor stays in its power stage)
             best = min(ics_on, key=lambda o: math.dist(at(r)[:2], at(o)[:2]))
-            if best != g and best in groups:
+            if best != g and best in groups and is_ic(best):
                 groups[g].remove(r)
                 groups[best].append(r)
     out = []
@@ -492,7 +492,17 @@ def blocks(board) -> List[Tuple[str, List[str]]]:
             title = own[0] if own else ", ".join(rs[:3])
         out.append((title, rs))
     out.sort(key=lambda t: -len(t[1]))
-    return out
+    # a group too large for one sheet (an LED chain of 64) is drawn as numbered blocks, in its order: their nets
+    # join by label as any blocks' do
+    split = []
+    for title, rs in out:
+        n = -(-len(rs) // BLOCK_MAX)
+        split += [(title if n == 1 else f"{title} {k + 1}/{n}", rs[k * BLOCK_MAX:(k + 1) * BLOCK_MAX]) for k in range(n)]
+    return split
+
+
+ROW_MAX = 330.0                                          # (a block's rows, at most: inside an A3 sheet's margins)
+BLOCK_MAX = 30                                           # (parts in one block, at most: about what an A3 sheet holds)
 
 
 BANK = 8                                                 # (parts on one rail, at most: a longer bank wraps)
@@ -639,7 +649,8 @@ def _blocks(board, pad: float = 0.0):
         head = ps[0] if ps and len(ps[0].pins) > 3 else None
         rest = ps[1:] if head else ps
         area = sum(p.w * p.h for p in rest)
-        width = max([p.w for p in rest] + [((area / max(head.h, 40.0)) if head else (area * 1.6) ** 0.5) * 1.15])
+        width = max([p.w for p in rest] + [min(((area / max(head.h, 40.0)) if head else (area * 1.6) ** 0.5) * 1.15,
+                                               ROW_MAX)])        # (a small IC with many parts: rows, not one long line)
         x0 = head.w + 4.0 if head else 0.0
         x, y, bottom = x0, 0.0, 0.0
         for grp in _banks(rest):                         # (rows by each part's room as snapped to the grid)

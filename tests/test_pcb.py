@@ -1923,3 +1923,25 @@ def test_a_regulators_input_and_output_capacitors_are_drawn_with_it():
     ldo = next(v for t, v in grp.items() if "(U2)" in t)
     imu = next(v for t, v in grp.items() if "(U1)" in t)
     assert {"C1", "C2"} <= ldo and {"C3", "C4"} <= imu
+
+
+def test_a_long_led_chain_off_a_small_chip_is_drawn_on_a3_pages():
+    """a group too large for one sheet (a 32-LED chain off a 5-pin buffer) is drawn as numbered blocks in rows a
+    sheet holds, not one line metres long: every block fits A3, nothing overlaps"""
+    import kicad_sch
+    import pcb
+    b = pcb.Board("chain", [(0, 0), (120, 0), (120, 80), (0, 80)])
+    b.place("U1", "Package_TO_SOT_SMD:SOT-23-5", (5, 5), 0, "74AHCT1G125", symbol="74xGxx:74AHCT1G125")
+    leds = [f"D{k + 1}" for k in range(32)]
+    for k, r in enumerate(leds):
+        b.place(r, "LED_SMD:LED_WS2812B_PLCC4_5.0x5.0mm_P3.2mm", (10 + (k % 8) * 12, 20 + (k // 8) * 12), 0, "WS2812B",
+                symbol="LED:WS2812B")
+    b.net("DIN", [("U1", "4"), ("D1", "DIN")])
+    for a, c in zip(leds, leds[1:]):
+        b.net(f"D_{a}", [(a, "DOUT"), (c, "DIN")])
+    b.net("5V", [("U1", "5")] + [(r, "VDD") for r in leds])
+    b.net("GND", [("U1", "3"), ("U1", "1")] + [(r, "VSS") for r in leds])
+    titles = [t for t, _ in kicad_sch.blocks(b)]
+    assert any(t.endswith("1/2") for t in titles)
+    pgs = kicad_sch.pages(b)
+    assert all(p[1][0] in ("A4", "A3") for p in pgs) and all(kicad_sch.overlaps(p) == [] for p in pgs)
