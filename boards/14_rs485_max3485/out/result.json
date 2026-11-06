@@ -1,0 +1,173 @@
+{
+ "board": "rs485_max3485",
+ "script": "/home/user/prometheus-pcb-harness/boards/14_rs485_max3485/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 11,
+ "nets": 8,
+ "layers": 2,
+ "seconds": 2.1,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.034,
+  "check": 0.06,
+  "export": 1.45
+ },
+ "placement": {
+  "J1": [
+   26.8,
+   4.5,
+   90,
+   "F"
+  ],
+  "J2": [
+   2.5,
+   16.08,
+   0,
+   "F"
+  ],
+  "U1": [
+   13.0,
+   11.0,
+   0,
+   "F"
+  ],
+  "D1": [
+   18.85,
+   3.55,
+   270,
+   "F"
+  ],
+  "JP1": [
+   12.75,
+   3.1,
+   0,
+   "F"
+  ],
+  "C1": [
+   15.6,
+   15.2,
+   90,
+   "F"
+  ],
+  "R1": [
+   13.2,
+   6.3,
+   180,
+   "F"
+  ],
+  "R2": [
+   18.5,
+   13.95,
+   270,
+   "F"
+  ],
+  "R3": [
+   19.05,
+   9.75,
+   90,
+   "F"
+  ],
+  "R4": [
+   6.75,
+   8.4,
+   0,
+   "F"
+  ],
+  "R5": [
+   6.0,
+   13.55,
+   270,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via B at (18.00, 4.50) is 0.00 mm from D1.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "D1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VCC at (15.50, 13.00) is 0.00 mm from U1.8 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VCC at (6.00, 14.25) is 0.00 mm from R5.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R5"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 11 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "JP1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C91154",
+  "D1": "C2985651",
+  "C1": "C14663",
+  "R1": "C17437",
+  "R2": "C23228",
+  "R3": "C23228",
+  "R4": "C25804",
+  "R5": "C25804"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/14_rs485_max3485/out/kicad8.zip"
+ }
+}

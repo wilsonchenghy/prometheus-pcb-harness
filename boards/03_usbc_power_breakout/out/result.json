@@ -1,0 +1,130 @@
+{
+ "board": "usbc_power_breakout",
+ "script": "/home/user/prometheus-pcb-harness/boards/03_usbc_power_breakout/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 10,
+ "nets": 6,
+ "layers": 2,
+ "seconds": 2.0,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.032,
+  "check": 0.05,
+  "export": 1.41
+ },
+ "placement": {
+  "J1": [
+   3.2,
+   11.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   32.0,
+   6.0,
+   90,
+   "F"
+  ],
+  "J3": [
+   30.0,
+   19.4,
+   270,
+   "F"
+  ],
+  "F1": [
+   14.0,
+   10.0,
+   0,
+   "F"
+  ],
+  "D1": [
+   20.0,
+   6.5,
+   90,
+   "F"
+  ],
+  "C1": [
+   20.0,
+   13.5,
+   90,
+   "F"
+  ],
+  "R1": [
+   6.75,
+   18.8,
+   90,
+   "F"
+  ],
+  "R2": [
+   6.05,
+   3.7,
+   180,
+   "F"
+  ],
+  "R3": [
+   17.6,
+   18.15,
+   180,
+   "F"
+  ],
+  "D2": [
+   17.55,
+   20.75,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 10 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "D2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C7509570",
+  "J3": "C2691448",
+  "F1": "C210837",
+  "D1": "C113974",
+  "C1": "C5672",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C21190"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/03_usbc_power_breakout/out/kicad8.zip"
+ }
+}

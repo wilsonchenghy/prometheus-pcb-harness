@@ -1,0 +1,175 @@
+{
+ "board": "lm317_adjustable",
+ "script": "/home/user/prometheus-pcb-harness/boards/04_lm317_adjustable/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 15,
+ "nets": 6,
+ "layers": 2,
+ "seconds": 3.0,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.146,
+  "check": 0.08,
+  "export": 2.14
+ },
+ "placement": {
+  "J1": [
+   15.0,
+   20.0,
+   0,
+   "F"
+  ],
+  "J2": [
+   50.7,
+   17.5,
+   90,
+   "F"
+  ],
+  "U1": [
+   30.0,
+   22.0,
+   0,
+   "F"
+  ],
+  "D1": [
+   21.35,
+   28.65,
+   180,
+   "F"
+  ],
+  "D2": [
+   42.0,
+   24.2,
+   270,
+   "F"
+  ],
+  "D3": [
+   32.85,
+   9.85,
+   180,
+   "F"
+  ],
+  "RV1": [
+   25.6,
+   4.4,
+   0,
+   "F"
+  ],
+  "R1": [
+   32.6,
+   13.95,
+   180,
+   "F"
+  ],
+  "R2": [
+   25.0,
+   34.25,
+   180,
+   "F"
+  ],
+  "C1": [
+   41.9,
+   29.05,
+   90,
+   "F"
+  ],
+  "C2": [
+   34.7,
+   27.5,
+   90,
+   "F"
+  ],
+  "C3": [
+   24.5,
+   22.0,
+   180,
+   "F"
+  ],
+  "C4": [
+   41.9,
+   11.3,
+   270,
+   "F"
+  ],
+  "C5": [
+   32.667,
+   18.0,
+   0,
+   "F"
+  ],
+  "D4": [
+   11.25,
+   34.8,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "7 of 15 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "R2",
+    "C1",
+    "C2",
+    "C3",
+    "C4",
+    "C5",
+    "D4"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3096082",
+  "J2": "C7509570",
+  "U1": "C3014307",
+  "D1": "C2476",
+  "D2": "C3038772",
+  "D3": "C3038772",
+  "RV1": "C49190458",
+  "R1": "C3537012"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "R1",
+   "what": "VOUT = VREF (1 + R2 / R1) + IADJ R2",
+   "value": "220",
+   "url": "https://www.ti.com/lit/ds/symlink/lm317.pdf",
+   "page": 16,
+   "quote": "VO = VREF (1 + R2 / R1) + (IADJ \u00d7 R2)",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/04_lm317_adjustable/out/kicad8.zip"
+ }
+}

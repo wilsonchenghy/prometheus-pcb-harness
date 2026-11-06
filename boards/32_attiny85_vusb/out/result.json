@@ -1,0 +1,279 @@
+{
+ "board": "attiny85_vusb",
+ "script": "/home/user/prometheus-pcb-harness/boards/32_attiny85_vusb/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 19,
+ "nets": 15,
+ "layers": 2,
+ "seconds": 2.8,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.032,
+  "check": 0.12,
+  "export": 2.0
+ },
+ "placement": {
+  "J1": [
+   3.2,
+   13.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   29.4,
+   23.4,
+   0,
+   "F"
+  ],
+  "J3": [
+   8.0,
+   2.6,
+   270,
+   "F"
+  ],
+  "U1": [
+   17.0,
+   14.5,
+   0,
+   "F"
+  ],
+  "U2": [
+   24.5,
+   4.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   9.8,
+   18.6,
+   90,
+   "F"
+  ],
+  "R2": [
+   10.55,
+   14.3,
+   90,
+   "F"
+  ],
+  "R3": [
+   24.2,
+   13.05,
+   0,
+   "F"
+  ],
+  "R4": [
+   6.1,
+   20.1,
+   180,
+   "F"
+  ],
+  "R5": [
+   11.5,
+   4.4,
+   270,
+   "F"
+  ],
+  "R6": [
+   20.35,
+   23.2,
+   90,
+   "F"
+  ],
+  "C1": [
+   23.2,
+   16.4,
+   90,
+   "F"
+  ],
+  "C2": [
+   19.4,
+   18.9,
+   180,
+   "F"
+  ],
+  "C3": [
+   18.85,
+   9.25,
+   180,
+   "F"
+  ],
+  "C4": [
+   15.6,
+   1.733,
+   180,
+   "F"
+  ],
+  "D1": [
+   8.05,
+   22.95,
+   180,
+   "F"
+  ],
+  "D2": [
+   25.0,
+   21.55,
+   90,
+   "F"
+  ],
+  "D3": [
+   12.5,
+   8.65,
+   180,
+   "F"
+  ],
+  "D4": [
+   17.85,
+   23.35,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (18.80, 9.97) is 0.16 mm from C3.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "C3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (15.55, 2.46) is 0.16 mm from C4.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "C4"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (6.00, 20.82) is 0.19 mm from R4.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R4"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via P1 at (20.25, 22.25) is 0.00 mm from R6.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R6"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via P3 at (25.25, 14.00) is 0.18 mm from R3.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via P4 at (13.50, 13.75) is 0.00 mm from U1.3 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via P4 at (10.00, 18.75) is 0.00 mm from R1.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 5V at (22.75, 12.50) is 0.01 mm from R3.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 19 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "D1",
+    "D2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C492405",
+  "J3": "C2937625",
+  "R1": "C27592",
+  "R2": "C27592",
+  "R3": "C22843",
+  "R4": "C23186",
+  "R5": "C23186",
+  "R6": "C21190",
+  "C1": "C14663",
+  "C2": "C15850",
+  "C3": "C1615",
+  "C4": "C14663",
+  "D3": "C2480",
+  "D4": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/32_attiny85_vusb/out/kicad8.zip"
+ }
+}

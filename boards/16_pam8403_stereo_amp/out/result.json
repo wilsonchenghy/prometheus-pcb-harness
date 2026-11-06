@@ -1,0 +1,227 @@
+{
+ "board": "pam8403_stereo_amp",
+ "script": "/home/user/prometheus-pcb-harness/boards/16_pam8403_stereo_amp/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 20,
+ "nets": 18,
+ "layers": 2,
+ "seconds": 3.2,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.127,
+  "check": 0.07,
+  "export": 2.53
+ },
+ "placement": {
+  "J1": [
+   46.8,
+   8.0,
+   90,
+   "F"
+  ],
+  "J2": [
+   3.1,
+   20.0,
+   270,
+   "F"
+  ],
+  "RV1": [
+   12.0,
+   35.0,
+   270,
+   "F"
+  ],
+  "U1": [
+   25.0,
+   17.0,
+   270,
+   "F"
+  ],
+  "J3": [
+   43.0,
+   37.2,
+   0,
+   "F"
+  ],
+  "J4": [
+   34.0,
+   37.2,
+   0,
+   "F"
+  ],
+  "SW1": [
+   24.0,
+   2.6,
+   180,
+   "F"
+  ],
+  "C1": [
+   16.2,
+   22.55,
+   270,
+   "F"
+  ],
+  "C2": [
+   15.55,
+   17.05,
+   0,
+   "F"
+  ],
+  "C3": [
+   23.1,
+   22.3,
+   90,
+   "F"
+  ],
+  "C4": [
+   20.5,
+   22.3,
+   90,
+   "F"
+  ],
+  "C5": [
+   25.6,
+   22.5,
+   90,
+   "F"
+  ],
+  "C6": [
+   38.35,
+   15.45,
+   0,
+   "F"
+  ],
+  "C8": [
+   25.6,
+   11.5,
+   90,
+   "F"
+  ],
+  "R1": [
+   37.6,
+   6.95,
+   180,
+   "F"
+  ],
+  "R2": [
+   37.25,
+   9.75,
+   180,
+   "F"
+  ],
+  "R3": [
+   36.95,
+   19.15,
+   90,
+   "F"
+  ],
+  "R4": [
+   24.75,
+   7.85,
+   180,
+   "F"
+  ],
+  "R5": [
+   28.6,
+   10.75,
+   90,
+   "F"
+  ],
+  "D1": [
+   39.5,
+   19.2,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "3 of 20 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "J3",
+    "J4",
+    "D1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C20182914",
+  "RV1": "C444934",
+  "SW1": "C221841",
+  "C1": "C1623",
+  "C2": "C1623",
+  "C3": "C15849",
+  "C4": "C15849",
+  "C5": "C15850",
+  "C6": "C12891",
+  "C8": "C15850",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C21190",
+  "R4": "C25804",
+  "R5": "C25804"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "C3",
+   "what": "VDD decoupling",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+   "page": 8,
+   "quote": "placing it as close as possible to the device VDD terminal",
+   "found": null
+  },
+  {
+   "ref": "C6",
+   "what": "bulk",
+   "value": "22u",
+   "url": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+   "page": 8,
+   "quote": "or greater is recommended",
+   "found": null
+  },
+  {
+   "ref": "C4",
+   "what": "VREF bypass",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+   "page": 8,
+   "quote": "is recommended for the best THD and noise performance",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/16_pam8403_stereo_amp/out/kicad8.zip"
+ }
+}

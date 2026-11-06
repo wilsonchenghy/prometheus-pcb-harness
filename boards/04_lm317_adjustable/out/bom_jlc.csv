@@ -1,0 +1,14 @@
+Comment,Designator,Footprint,LCSC Part #
+100u 35V,C1,CP_Radial_D8.0mm_P3.50mm,
+100n 50V,"C2,C5",C_Disc_D5.0mm_W2.5mm_P5.00mm,
+10u 25V,C3,CP_Radial_D5.0mm_P2.00mm,
+47u 25V,C4,CP_Radial_D6.3mm_P2.50mm,
+1N5822,D1,D_DO-201AD_P5.08mm_Vertical_AnodeUp,C2476
+1N4002,"D2,D3",D_DO-41_SOD81_P7.62mm_Horizontal,C3038772
+red,D4,LED_D3.0mm,
+DC 15-30V,J1,BarrelJack_Horizontal,C3096082
+VOUT,J2,"TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal",C7509570
+220 1%,R1,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,C3537012
+4.7k,R2,R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal,
+2k,RV1,Potentiometer_Bourns_3296W_Vertical,C49190458
+LM317,U1,TO-220-3_Vertical,C3014307

@@ -1,0 +1,452 @@
+{
+ "board": "stm32f103_bluepill",
+ "script": "/home/user/prometheus-pcb-harness/boards/19_stm32f103_bluepill/board.py",
+ "stage": "all",
+ "clean": false,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 35,
+ "nets": 47,
+ "layers": 2,
+ "seconds": 393.3,
+ "timings": {
+  "place+route": 386.26,
+  "critic": 0.054,
+  "check": 0.63,
+  "export": 4.9
+ },
+ "placement": {
+  "U1": [
+   30.0,
+   13.0,
+   180,
+   "F"
+  ],
+  "J1": [
+   3.2,
+   13.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   4.5,
+   2.2,
+   90,
+   "F"
+  ],
+  "J3": [
+   4.5,
+   23.8,
+   90,
+   "F"
+  ],
+  "J4": [
+   13.0,
+   19.6,
+   90,
+   "F"
+  ],
+  "JP1": [
+   50.5,
+   17.0,
+   0,
+   "F"
+  ],
+  "SW1": [
+   45.5,
+   19.8,
+   0,
+   "F"
+  ],
+  "U2": [
+   13.6,
+   13.15,
+   180,
+   "F"
+  ],
+  "Y1": [
+   40.5,
+   12.5,
+   0,
+   "F"
+  ],
+  "Y2": [
+   40.0,
+   7.0,
+   0,
+   "F"
+  ],
+  "FB1": [
+   41.4,
+   15.6,
+   180,
+   "F"
+  ],
+  "C1": [
+   23.4,
+   9.6,
+   90,
+   "F"
+  ],
+  "C2": [
+   33.6,
+   6.4,
+   0,
+   "F"
+  ],
+  "C3": [
+   26.4,
+   19.6,
+   0,
+   "F"
+  ],
+  "C4": [
+   36.7,
+   9.6,
+   90,
+   "F"
+  ],
+  "C5": [
+   36.7,
+   15.6,
+   90,
+   "F"
+  ],
+  "C6": [
+   38.6,
+   16.4,
+   90,
+   "F"
+  ],
+  "C7": [
+   21.4,
+   15.0,
+   180,
+   "F"
+  ],
+  "C8": [
+   40.05,
+   9.4,
+   0,
+   "F"
+  ],
+  "C9": [
+   44.6,
+   13.35,
+   0,
+   "F"
+  ],
+  "C10": [
+   44.0,
+   7.0,
+   0,
+   "F"
+  ],
+  "C11": [
+   36.5,
+   5.95,
+   270,
+   "F"
+  ],
+  "C12": [
+   34.8,
+   19.5,
+   0,
+   "F"
+  ],
+  "C13": [
+   14.75,
+   7.75,
+   270,
+   "F"
+  ],
+  "C14": [
+   9.95,
+   13.15,
+   90,
+   "F"
+  ],
+  "R1": [
+   10.0,
+   16.2,
+   0,
+   "F"
+  ],
+  "R2": [
+   10.65,
+   8.05,
+   270,
+   "F"
+  ],
+  "R3": [
+   57.8,
+   3.45,
+   180,
+   "F"
+  ],
+  "R4": [
+   58.3,
+   18.4,
+   90,
+   "F"
+  ],
+  "R5": [
+   29.9,
+   19.5,
+   0,
+   "F"
+  ],
+  "R6": [
+   46.367,
+   16.033,
+   180,
+   "F"
+  ],
+  "R7": [
+   19.067,
+   6.5,
+   0,
+   "F"
+  ],
+  "R8": [
+   51.567,
+   6.5,
+   180,
+   "F"
+  ],
+  "D1": [
+   22.533,
+   6.5,
+   0,
+   "F"
+  ],
+  "D2": [
+   58.75,
+   7.45,
+   90,
+   "F"
+  ]
+ },
+ "findings": [
+  {
+   "stage": "routing",
+   "kind": "unreached",
+   "text": "route GND: could not reach U1.47 (blocked; move parts or widen a channel)",
+   "pins": [
+    "U1.47"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
+  },
+  {
+   "stage": "routing",
+   "kind": "unreached",
+   "text": "route GND: could not reach U2.2 (blocked; move parts or widen a channel)",
+   "pins": [
+    "U2.2"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
+  },
+  {
+   "stage": "routing",
+   "kind": "unreached",
+   "text": "route GND: could not reach C4.2 (blocked; move parts or widen a channel)",
+   "pins": [
+    "C4.2"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
+  },
+  {
+   "stage": "routing",
+   "kind": "unreached",
+   "text": "route GND: could not reach U1.47 (blocked; move parts or widen a channel)",
+   "pins": [
+    "U1.47"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
+  },
+  {
+   "stage": "routing",
+   "kind": "unreached",
+   "text": "route GND: could not reach U2.2 (blocked; move parts or widen a channel)",
+   "pins": [
+    "U2.2"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
+  },
+  {
+   "stage": "routing",
+   "kind": "unreached",
+   "text": "route GND: could not reach C4.2 (blocked; move parts or widen a channel)",
+   "pins": [
+    "C4.2"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
+  },
+  {
+   "stage": "routing",
+   "kind": "other",
+   "text": "pair D+ / D-: tracks 73.83 and 21.04 mm long, 52.79 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
+   "pins": [],
+   "hint": "read the text",
+   "why": ""
+  },
+  {
+   "stage": "routing",
+   "kind": "split",
+   "text": "net GND is split in 4: U1.47 | U2.2 | C4.2",
+   "pins": [
+    "C4.2",
+    "U1.47",
+    "U2.2"
+   ],
+   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
+   "why": "A net in pieces is an open circuit between them."
+  },
+  {
+   "stage": "design",
+   "kind": "split",
+   "text": "net GND is split in 4: U1.47 | U2.2 | C4.2",
+   "pins": [
+    "C4.2",
+    "U1.47",
+    "U2.2"
+   ],
+   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
+   "why": "A net in pieces is an open circuit between them."
+  },
+  {
+   "stage": "design",
+   "kind": "other",
+   "text": "pair D+ / D-: tracks 73.83 and 21.04 mm long, 52.79 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
+   "pins": [],
+   "hint": "read the text",
+   "why": ""
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
+   "pins": [],
+   "hint": "read the text",
+   "why": ""
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
+   "pins": [],
+   "hint": "read the text",
+   "why": ""
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
+   "pins": [],
+   "hint": "read the text",
+   "why": ""
+  }
+ ],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 35 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "Y2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  },
+  {
+   "severity": "info",
+   "kind": "lcsc suggested",
+   "text": "Y2: no LCSC number; JLCPCB has C32346 (Q13FC13500004, by '32.768kHz 3215'): add lcsc= if it is the right part",
+   "refs": [
+    "Y2"
+   ],
+   "hint": "lcsc=\"C32346\"",
+   "why": "A part found by its value and package, not its exact part number, can be a near miss (another load capacitance, another height): only you can say it is the part you designed for."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C22465880",
+  "J3": "C22465880",
+  "J4": "C2691448",
+  "JP1": "C2937625",
+  "SW1": "C116501",
+  "FB1": "C80165",
+  "C1": "C14663",
+  "C2": "C14663",
+  "C3": "C14663",
+  "C4": "C14663",
+  "C5": "C57112",
+  "C6": "C15849",
+  "C7": "C1779",
+  "C8": "C1648",
+  "C9": "C1648",
+  "C10": "C1634",
+  "C11": "C1634",
+  "C12": "C14663",
+  "C13": "C15850",
+  "C14": "C15850",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C22843",
+  "R4": "C25804",
+  "R5": "C25804",
+  "R6": "C25804",
+  "R7": "C21190",
+  "R8": "C21190"
+ },
+ "lcsc_suggested": {
+  "Y2": {
+   "lcsc": "C32346",
+   "part": "Q13FC13500004",
+   "query": "32.768kHz 3215",
+   "stock": 484538,
+   "basic": true,
+   "why": "no match for its MPN; found by value and package"
+  }
+ },
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/19_stm32f103_bluepill/out/kicad8.zip"
+ }
+}
