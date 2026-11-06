@@ -6,7 +6,9 @@
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
-  "warnings": {}
+  "warnings": {
+   "track_dangling": 1
+  }
  },
  "router": "freerouting (through KiCad)",
  "skipped": [],
@@ -18,15 +20,15 @@
   "build123d": true,
   "schemdraw": true
  },
- "parts": 28,
- "nets": 24,
+ "parts": 29,
+ "nets": 25,
  "layers": 2,
- "seconds": 164.0,
+ "seconds": 80.5,
  "timings": {
-  "place+route": 159.05,
-  "critic": 0.022,
-  "check": 0.18,
-  "export": 3.96
+  "place+route": 75.48,
+  "critic": 0.04,
+  "check": 0.16,
+  "export": 3.98
  },
  "placement": {
   "J1": [
@@ -66,26 +68,26 @@
    "F"
   ],
   "Y1": [
-   35.45,
-   24.15,
+   35.2,
+   23.75,
    180,
    "F"
   ],
   "F1": [
-   63.75,
-   26.25,
-   270,
+   56.5,
+   24.15,
+   0,
    "F"
   ],
   "R1": [
-   46.9,
-   39.85,
-   90,
+   46.95,
+   39.0,
+   0,
    "F"
   ],
   "R2": [
-   31.25,
-   38.2,
+   31.2,
+   38.0,
    270,
    "F"
   ],
@@ -96,33 +98,33 @@
    "F"
   ],
   "R4": [
-   46.35,
-   32.35,
+   30.6,
+   28.45,
    90,
    "F"
   ],
   "R5": [
-   51.3,
-   27.3,
+   50.2,
+   31.9,
    180,
    "F"
   ],
   "R6": [
-   50.85,
-   23.8,
-   270,
+   46.6,
+   33.1,
+   90,
    "F"
   ],
   "R7": [
-   37.15,
-   19.5,
-   180,
+   31.15,
+   31.75,
+   0,
    "F"
   ],
   "R8": [
-   56.25,
-   27.35,
-   0,
+   53.6,
+   32.85,
+   90,
    "F"
   ],
   "C1": [
@@ -144,15 +146,15 @@
    "F"
   ],
   "C4": [
-   62.55,
-   31.55,
-   180,
+   51.35,
+   25.4,
+   90,
    "F"
   ],
   "C5": [
-   49.1,
-   33.35,
-   90,
+   27.4,
+   28.75,
+   270,
    "F"
   ],
   "C6": [
@@ -168,176 +170,74 @@
    "F"
   ],
   "C10": [
-   63.4,
-   19.6,
-   270,
+   6.15,
+   18.65,
+   180,
    "F"
   ],
   "C11": [
-   25.65,
-   18.65,
+   61.8,
+   25.4,
    90,
    "F"
   ],
   "C12": [
-   44.5,
-   18.15,
+   6.2,
+   22.3,
    180,
    "F"
   ],
   "C13": [
-   50.4,
-   18.1,
-   0,
+   24.55,
+   18.3,
+   90,
    "F"
   ],
   "D1": [
-   57.8,
-   23.85,
-   90,
+   54.2,
+   36.1,
+   180,
+   "F"
+  ],
+  "FB1": [
+   50.05,
+   34.45,
+   180,
    "F"
   ]
  },
  "findings": [
   {
    "stage": "routing",
-   "kind": "split",
-   "text": "net VBUS is split in 2: C3.1 | J1.A4, J1.A9, J1.B4, J1.B9, U1.20, F1.1",
-   "pins": [
-    "C3.1",
-    "F1.1",
-    "J1.A4",
-    "J1.A9",
-    "J1.B4",
-    "J1.B9",
-    "U1.20"
-   ],
-   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
-   "why": "A net in pieces is an open circuit between them."
-  },
-  {
-   "stage": "routing",
    "kind": "clearance",
-   "text": "F.Cu: GND and VBM 0.17 mm apart (clearance 0.2) at (40.9, 33.2)",
+   "text": "F.Cu: GND and VDD5 0.19 mm apart (clearance 0.2) at (40.1, 33.8)",
    "pins": [],
    "hint": "copper of two nets too close: move or re-route, or check the clearance",
    "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
    "at": [
-    40.9,
-    33.2
-   ]
-  },
-  {
-   "stage": "routing",
-   "kind": "clearance",
-   "text": "F.Cu: GND and VBUS 0.18 mm apart (clearance 0.2) at (40.2, 33.2)",
-   "pins": [],
-   "hint": "copper of two nets too close: move or re-route, or check the clearance",
-   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
-   "at": [
-    40.2,
-    33.2
-   ]
-  },
-  {
-   "stage": "routing",
-   "kind": "dangling",
-   "text": "track VBUS (F.Cu) ends at (39.95, 34.25) on nothing of its net (dangling, or only touching a pad's edge: KiCad reads it unconnected)",
-   "pins": [],
-   "hint": "remove the stub or end it on copper of its net",
-   "why": "A track or via that leads nowhere does nothing but add an antenna and take room.",
-   "at": [
-    39.95,
-    34.25
-   ]
-  },
-  {
-   "stage": "design",
-   "kind": "split",
-   "text": "net VBUS is split in 2: C3.1 | J1.A4, J1.A9, J1.B4, J1.B9, U1.20, F1.1",
-   "pins": [
-    "C3.1",
-    "F1.1",
-    "J1.A4",
-    "J1.A9",
-    "J1.B4",
-    "J1.B9",
-    "U1.20"
-   ],
-   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
-   "why": "A net in pieces is an open circuit between them."
-  },
-  {
-   "stage": "design",
-   "kind": "clearance",
-   "text": "F.Cu: GND and VBM 0.17 mm apart (clearance 0.2) at (40.9, 33.2)",
-   "pins": [],
-   "hint": "copper of two nets too close: move or re-route, or check the clearance",
-   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
-   "at": [
-    40.9,
-    33.2
+    40.1,
+    33.8
    ]
   },
   {
    "stage": "design",
    "kind": "clearance",
-   "text": "F.Cu: GND and VBUS 0.18 mm apart (clearance 0.2) at (40.2, 33.2)",
+   "text": "F.Cu: GND and VDD5 0.19 mm apart (clearance 0.2) at (40.1, 33.8)",
    "pins": [],
    "hint": "copper of two nets too close: move or re-route, or check the clearance",
    "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
    "at": [
-    40.2,
-    33.2
-   ]
-  },
-  {
-   "stage": "design",
-   "kind": "dangling",
-   "text": "track VBUS (F.Cu) ends at (39.95, 34.25) on nothing of its net (dangling, or only touching a pad's edge: KiCad reads it unconnected)",
-   "pins": [],
-   "hint": "remove the stub or end it on copper of its net",
-   "why": "A track or via that leads nowhere does nothing but add an antenna and take room.",
-   "at": [
-    39.95,
-    34.25
+    40.1,
+    33.8
    ]
   },
   {
    "stage": "kicad",
    "kind": "other",
-   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1751 mm) (Track [VBUS] on F.Cu, length 0.5800 mm; Track [GND] on F.Cu, length 1.1000 mm)",
+   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1875 mm) (Track [GND] on F.Cu, length 0.2500 mm; Track [VDD5] on F.Cu, length 1.6500 mm)",
    "pins": [
     "W0.52mm"
    ],
-   "hint": "read the text",
-   "why": ""
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1751 mm) (Track [GND] on F.Cu, length 1.1000 mm; Track [VBUS] on F.Cu, length 1.0619 mm)",
-   "pins": [
-    "W0.52mm"
-   ],
-   "hint": "read the text",
-   "why": ""
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1750 mm) (Track [GND] on F.Cu, length 1.1000 mm; Pad 18 [VBM] of U1 on F.Cu)",
-   "pins": [
-    "W0.52mm"
-   ],
-   "hint": "read the text",
-   "why": ""
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "unconnected_items: Missing connection between items (Track [VBUS] on F.Cu, length 0.6230 mm; Track [VBUS] on F.Cu, length 0.5800 mm)",
-   "pins": [],
    "hint": "read the text",
    "why": ""
   }
@@ -346,7 +246,7 @@
   {
    "severity": "info",
    "kind": "assembly",
-   "text": "6 of 28 parts have no LCSC number (JLCPCB assembly)",
+   "text": "6 of 29 parts have no LCSC number (JLCPCB assembly)",
    "refs": [
     "J2",
     "J3",
@@ -381,7 +281,8 @@
   "C10": "C76659",
   "C11": "C76659",
   "C12": "C76659",
-  "C13": "C76659"
+  "C13": "C76659",
+  "FB1": "C85833"
  },
  "lcsc_suggested": {},
  "evidence": [

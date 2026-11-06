@@ -1,13 +1,13 @@
 """4-port USB 2.0 hub: a Terminus FE1.1s (SSOP-28, single-TT, high speed) between a USB-C upstream port and four
 USB-A downstream ports (Molex 67643), bus powered (BUSJ low), the downstream VBUS through one 2 A resettable fuse
 with 47 uF per port, a 12 MHz crystal (the FE1.1s has the load capacitance inside), REXT 2.7k 1 %, its 5 V -> 3.3 V
-and 3.3 V -> 1.8 V regulators' 10 uF caps, a reset RC, a power LED. Difficulty 4/5. 2 layers, 78 x 46 mm, JLCPCB.
+and 3.3 V -> 1.8 V regulators' 10 uF caps, its VDD5 fed from VBUS through a 600 ohm ferrite (FB1), a reset RC, a power LED. Difficulty 4/5. 2 layers, 78 x 46 mm, JLCPCB.
 
 From the FE1.1s datasheet (Rev 1.0, pin description p.5): REXT 2.7k 1 % to VSS, 10 uF on VD33_O and on VD18_O,
 VD33_O feeds VD33 and VD18_O feeds VD18, BUSJ 0 = bus powered, OVCJ active low (pulled up: no over-current
 sensing), PWRJ (ganged power enable) unused, TESTJ has its own pull-up. VBUSM (upstream VBUS monitor) through a
 10k / 20k divider (assumed: keeps it at 3.3 V logic; the datasheet does not give its level). The USB pairs are
-length-matched (req.json pairs), not impedance controlled: a 1.6 mm 2-layer board cannot give 90 ohm with
+length-matched within 1.25 mm (50 mil, the usual USB 2.0 high-speed layout guidance; req.json pairs), not impedance controlled: a 1.6 mm 2-layer board cannot give 90 ohm with
 practical widths, so keep the board's runs short; for a strict design, use 4 layers.
 A bus-powered hub can only share the upstream port's 0.5-0.9 A (3 A from a Type-C source advertising it).
 """
@@ -48,6 +48,8 @@ def build():
             tuple((f"C{10 + i}", C12, "47u", f"port {i + 1} VBUS") for i in range(4)):
         b.place(ref, fp, *FIXED.get(ref, (None, 0)), val, note=note)
     b.place("D1", "LED_SMD:LED_0603_1608Metric", None, 0, "green")
+    b.place("FB1", "Inductor_SMD:L_0603_1608Metric", None, 0, "600R@100MHz", "Murata BLM18KG601SN1D",
+            note="VDD5 filter: the hub's own supply off VBUS")
     b.cite("R3", "REXT", "2.7k 1%", 5, "resister should be connected to VSS", url=DS)
     b.cite("C1", "VD33_O cap", "10u", 5, "decoupling capacitor is required", url=DS)
     for x, y in ((3.5, H - 3.5), (W - 3.5, H - 3.5)):
@@ -55,7 +57,9 @@ def build():
 
     u = lambda n: ("U1", n)
     b.net("VBUS", [("J1", p) for p in ("A4", "A9", "B4", "B9")] +
-          [("F1", "1"), u("VDD5"), ("C3", "1"), ("C4", "1"), ("R5", "1"), ("R8", "1")], amps=2.0, volts=5.0)
+          [("F1", "1"), ("FB1", "1"), ("C4", "1"), ("R5", "1"), ("R8", "1")], amps=2.0, volts=5.0)
+    b.net("VDD5", [("FB1", "2"), u("VDD5"), ("C3", "1")], amps=0.2, volts=5.0)   # (the chip's own supply, tens
+    #                                                     of mA: the 2 A stays on the connector-fuse-ports path)
     b.net("VBUSD", [("F1", "2")] + [(f"J{i + 2}", "VBUS") for i in range(4)] + [(f"C{10 + i}", "1") for i in range(4)],
           amps=2.0, volts=5.0)
     b.net("GND", [("J1", p) for p in ("A1", "A12", "B1", "B12", "SH")] +
@@ -69,11 +73,11 @@ def build():
     b.net("CC2", [("J1", "B5"), ("R2", "1")])
     b.net("UDP", [("J1", "A6"), ("J1", "B6"), u("DPU")])
     b.net("UDM", [("J1", "A7"), ("J1", "B7"), u("DMU")])
-    b.pair("UDP", "UDM", max_skew=0.5)
+    b.pair("UDP", "UDM", max_skew=1.25)
     for i in range(4):
         b.net(f"DP{i + 1}", [u(f"DP{i + 1}"), (f"J{i + 2}", "D+")])
         b.net(f"DM{i + 1}", [u(f"DM{i + 1}"), (f"J{i + 2}", "D-")])
-        b.pair(f"DP{i + 1}", f"DM{i + 1}", max_skew=0.5)
+        b.pair(f"DP{i + 1}", f"DM{i + 1}", max_skew=1.25)
     b.net("XIN", [u("XIN"), ("Y1", "1")])
     b.net("XOUT", [u("XOUT"), ("Y1", "3")])
     b.net("REXT", [u("REXT"), ("R3", "1")])
@@ -89,7 +93,12 @@ def build():
     for pin, dx in (("A9", -2.2), ("A4", 2.2)):
         x, y = b.pad("J1", pin)
         b.track("VBUS", "F", [(x, y), (x, y - 1.2), (x + dx, y - 3.0)], 0.52)
-        b.via("VBUS", (x + dx, y - 3.0), 0.4, 0.8)        # (the router takes it on from here, either layer)
+        b.via("VBUS", (x + dx, y - 3.0), 0.4, 0.8)        # (the router takes it on from here, either layer:
+        b.via("VBUS", (x + dx * 1.45, y - 3.0), 0.4, 0.8)  #  two 0.4 mm vias, ~2.7 A, for the 2 A; the second
+        b.track("VBUS", "F", [(x + dx, y - 3.0), (x + dx * 1.45, y - 3.0)], 0.8)   #  outward, clear of C7,
+        b.track("VBUS", "B", [(x + dx, y - 3.0), (x + dx * 1.45, y - 3.0)], 0.8)   #  joined on both layers)
+    b.track("VDD5", "F", [b.pad("U1", "20"), b.pad("C3", "1")], 0.2)   # (the chip's 5 V pin straight up into its
+    #                                                                     decoupling cap: 0.9 mm, by hand)
     tabs = [g.centroid for r, n, L, g, d in b.pad_shapes() if r == "J1" and n == "SH" and L == "F"]
     for pin in ("A1", "A12"):
         x, y = b.pad("J1", pin)

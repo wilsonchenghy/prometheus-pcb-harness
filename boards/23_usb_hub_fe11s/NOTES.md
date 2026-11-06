@@ -1,20 +1,25 @@
-# 23 FE1.1s 4-port USB hub: not clean yet
+# 23 FE1.1s 4-port USB hub: one clearance slip left
 
-Last full run (FreeRouting through KiCad, KiCad 9 DRC): `clean: false`.
+Last full run (FreeRouting through KiCad, KiCad 9 DRC): `clean: false`, with **one** finding, which the harness and
+KiCad's DRC both report:
 
-What remains (result.json; KiCad's DRC agrees with the harness):
-- **Clearance slips (0.17-0.18 mm, rule 0.2) around the chip's pins 18-20** (VBUSM / GND / VDD5). Those pins carry
-  the 2 A VBUS and GND, at 0.635 mm pitch: the rails' 0.51 mm copper does not fit beside the neighbouring pins.
-- **VBUS left split** at C3 (the VDD5 decoupling cap).
-- Pair skews on one downstream port.
+- A **GND track 0.1875 mm from the VDD5 track** at (40.1, 33.8), rule 0.2 mm, beside the chip's pins 19 and 20.
+  The router's full-width (0.52 mm, 2 A) ground track starts at a grid point just past the pin row. No grid cell
+  there was clear at that width, so the router took the nearest one anyway.
 
-Why: a bus-powered 4-port hub carries 2 A of VBUS and GND across a 2-layer board and past a fine-pitch SSOP.
+What this board's runs fixed, in the harness:
+- the fan-out stub direction at the ends of an SSOP row;
+- a stub out of a fine-pitch pin no wider than the pin;
+- courtyard shapes;
+- neck_vias track widths and track ends;
+- merging two vias of one net drilled into each other.
 
-What to change (next pass):
-- Give the chip's VDD5 pin its own low-current net (VDD5, through a 0 ohm or ferrite from VBUS), as 13 does for
-  its sense pin. The 2 A then stays on the connector-fuse-ports path and never has to reach the SSOP pin.
-- Make GND a pour on both layers and drop the chip's GND pins with short necks.
-- For a strict high-speed design (90 ohm pairs), move to 4 layers.
+What was changed in the design:
+- The chip's VDD5 now has its own net behind a ferrite (FB1), so the 2 A never reaches the SSOP.
+- VDD5 is drawn by hand straight into its cap.
+- Each hand-drawn VBUS feed ends in two 0.4 mm vias.
+- The USB pairs are matched within 1.25 mm (50 mil).
 
-The harness fixes this board's runs turned up are in the branch's history: the fan-out direction at SSOP row ends,
-courtyard shapes, neck_vias widths and track ends, and merging same-net vias.
+To finish:
+- Give GND a top-layer pour around U1, so its pins drop into copper instead of routed ties.
+- Or nudge U1 by half a grid step so the router has a clear cell past pins 19 and 20.

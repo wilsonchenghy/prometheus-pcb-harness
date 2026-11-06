@@ -3443,12 +3443,22 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
 
     fanned = getattr(board, "_fan", set())
 
+    def stub_w(pin):                                     # a way out of a fine-pitch pad no wider than the pad: a
+        mrr = pads[pin][0].minimum_rotated_rectangle.exterior.coords    # full-width track along it runs into the
+        return min(width, min(math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2])))   # next pins (a pin entry)
+
+    def stub_track(pin, L, pts):
+        w_ = stub_w(pin)
+        board.track(net, L, pts, w_, amps)
+        if w_ < width - 1e-6:
+            board.tracks[-1]["neck"] = True
+
     def stub_of(pin):
         e = _escape(board, *pin) if "~" not in pin[1] else None
         if e is None:
             return None
         if pin not in fanned:
-            board.track(net, pads[pin][1], [e[0], e[1]], width, amps)
+            stub_track(pin, pads[pin][1], [e[0], e[1]])
         return e[1]
     if not only and getattr(board, "pour_root", True) and any(tree[L] for L in LT):   # the net has a pour: the pour is the root, and every pad,
         todo = [p_ for p_ in pins]                       # the first too, is joined to it (a first pad taken as
@@ -3560,8 +3570,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         if Ls[path[0][2]] != L_pin and not own_tht.contains(Point(float(xs[ci]), float(ys[cj]))):
             board.via(net, (round(float(xs[ci]), 4), round(float(ys[cj]), 4)), *via)   # (the escape via)
         if e:
-            board.track(net, L_pin, ([e[1]] if pin in fanned else [e[0], e[1]]) + [(float(xs[ci]), float(ys[cj]))],
-                        width, amps)
+            stub_track(pin, L_pin, ([e[1]] if pin in fanned else [e[0], e[1]]) + [(float(xs[ci]), float(ys[cj]))])
         else:
             board.track(net, L_pin, [(sx, sy), (float(xs[ci]), float(ys[cj]))], width, amps)
         seg = []

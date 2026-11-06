@@ -2537,3 +2537,23 @@ def test_an_escape_stub_the_script_draws_is_cut_back_not_dropped():
     assert len(stub) == 1 and abs(stub[0]["pts"][-1][0] - (x1 + 3.0)) < 0.2
     assert not any("dangling" in p for p in b.check())
     assert pcb_cli._keeps_script_copper(script, b.tracks, b.vias)
+
+
+def test_a_wide_nets_way_out_of_a_fine_pitch_pin_is_no_wider_than_the_pin():
+    """the built-in router's stub out of a fine-pitch pad, for a net whose current wants a track wider than the pad,
+    is drawn as wide as the pad (a pin entry), not at the full width that runs into the neighbouring pins"""
+    import pcb
+    b = pcb.Board("sw", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("U1", "Package_SO:SSOP-28_3.9x9.9mm_P0.635mm", (12.0, 10.0), 90, "")
+    b.place("R1", "Resistor_SMD:R_1206_3216Metric", (12.0, 2.0), 0, "")
+    b.place("R2", "Resistor_SMD:R_1206_3216Metric", (24.0, 16.0), 0, "")
+    b.net("P", [("U1", "5"), ("R1", "1")], amps=2.0)                  # (needs ~0.51 mm; the pin is 0.4 mm wide)
+    b.net("Q", [("U1", "4"), ("R2", "1")])
+    b.net("S", [("U1", "6"), ("R2", "2")])
+    pcb.route(b, "P", width=b.net_width("P"))
+    pcb.route(b, "Q", width=0.2)
+    pcb.route(b, "S", width=0.2)
+    x, y = b.pad("U1", "5")
+    out = [t for t in b.tracks if t["net"] == "P" and any(math.dist(p, (x, y)) < 1e-3 for p in t["pts"])]
+    assert out and max(t["w"] for t in out) <= 0.4 + 1e-6
+    assert not [p for p in b.check() if "apart" in p or "short" in p]
