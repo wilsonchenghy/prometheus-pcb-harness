@@ -1589,3 +1589,26 @@ def test_import_carries_cutouts_slots_artwork_labels_and_rules(tmp_path):
     assert all(abs(u - v) < 1e-3 for u, v in zip(c.comps["R1"]["label"], (30.0, 10.0, 0.0, 0.8)))
     assert c.hole_clear == 0.2 and c.kicad_rules["rules"]["min_hole_clearance"] == 0.2
     assert pcb.silkscreen(c, "F").intersects(__import__("shapely.geometry", fromlist=["Point"]).Point(34, 22))
+
+
+def test_update_notice_says_when_github_is_ahead(tmp_path, monkeypatch, capsys):
+    """a run says (once a day, on stderr) when GitHub has a newer harness than the one installed, and stays quiet
+    when it is the same or when GitHub cannot be reached"""
+    import pcb_cli
+    import vendor_parts
+    monkeypatch.setattr(vendor_parts, "CACHE", tmp_path)
+    monkeypatch.setattr(pcb_cli, "installed", lambda: ("clone", tmp_path, "a" * 40))
+    monkeypatch.setattr(pcb_cli, "latest", lambda: "b" * 40)
+    pcb_cli.update_notice()
+    assert "prometheus update" in capsys.readouterr().err
+    (tmp_path / "update_check.json").unlink()
+    monkeypatch.setattr(pcb_cli, "latest", lambda: "a" * 40)
+    pcb_cli.update_notice()
+    assert capsys.readouterr().err == ""
+    (tmp_path / "update_check.json").unlink()
+
+    def offline():
+        raise OSError("no network")
+    monkeypatch.setattr(pcb_cli, "latest", offline)
+    pcb_cli.update_notice()
+    assert capsys.readouterr().err == ""

@@ -25,7 +25,8 @@ hands. Unless they ask you to just build it, work with them:
 
 ## The loop
 
-0. **Check the machine once**: `prometheus doctor`. Missing KiCad, Java or FreeRouting? `prometheus setup` adds
+0. **Update, then check the machine**: `prometheus update` at the start of each session (the harness is fixed and
+   improved often; every run also says when GitHub has a newer one), then `prometheus doctor`. Missing KiCad, Java or FreeRouting? `prometheus setup` adds
    FreeRouting (no root); for the rest show the user `docs/setup.md` and install only with their approval. Each is
    needed to route: without KiCad or Java a run stops and names what is missing (`--router harness`, the built-in
    router, is the explicit choice for a simple board where they cannot be installed; see `docs/setup.md`).
