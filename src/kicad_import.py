@@ -401,16 +401,14 @@ def put(f, x, y, rot, side):
     f.SetOrientationDegrees(rot)
 
 for r in j["removed"]:
-    b.Remove(fps.pop(r))
+    b.Delete(fps.pop(r))                                  # (Remove leaves it to Python, which then breaks the bindings)
 for r, (x, y, rot, side) in j["moved"].items():
     put(fps[r], x, y, rot, side)
-for r, a in j["added"].items():
-    f = pcbnew.FootprintLoad(a["lib"], a["name"])
-    f.SetReference(r)
-    f.SetValue(a["value"])
-    b.Add(f)
+for r, a in j["added"].items():                          # (already in the file: written in as text, see revise)
+    f = fps[r]
+    if r in j["paths"]:
+        f.SetPath(pcbnew.KIID_PATH(j["paths"][r]))                # (its symbol on the schematic: the link)
     put(f, *a["at"])
-    fps[r] = f
 for n in j["nets"]:
     if b.FindNet(n) is None:
         b.Add(pcbnew.NETINFO_ITEM(b, n))
@@ -442,7 +440,8 @@ def revise(board, out_dir: str) -> dict:
     moved, the ones added or taken away so, each pad on its net, and the copper of every net whose copper changed
     replaced by the board's; every other net's tracks, arcs and vias, the zones (refilled), the rules, the net
     classes, the drawings and each footprint's link to the schematic left as the designer had them. The schematic
-    is copied unchanged. Returns what changed"""
+    is revised to match (``revise_schematic``) and read back by KiCad against the board. Returns what changed, and
+    in "schematic" what the schematic still differs in (or could not be done there)"""
     import shutil
     import subprocess
     import tempfile
@@ -451,14 +450,7 @@ def revise(board, out_dir: str) -> dict:
     flat = lambda p: [p[1][0], p[1][1], (p[2] + 180.0 if p[3] == "B" else p[2]) % 360.0, p[3]]   # (KiCad's angle)
     same_fp = lambda r: r in was and now[r][0] == was[r][0]   # (a part on another footprint: taken away, added anew)
     moved = {r: flat(now[r]) for r in now if same_fp(r) and now[r] != was[r]}
-    added = {}
-    for r in now:
-        if not same_fp(r):
-            lib, name = board.comps[r]["fp"].split(":", 1)
-            d = next((d / f"{lib}.pretty" for d in pcb.FP_DIRS if (d / f"{lib}.pretty" / f"{name}.kicad_mod").exists()), None)
-            if d is None:
-                raise ValueError(f"{r}: footprint {board.comps[r]['fp']} not found to add to the design")
-            added[r] = {"lib": str(d), "name": name, "value": board.comps[r]["value"], "at": flat(now[r])}
+    added = {r: {"at": flat(now[r])} for r in now if not same_fp(r)}
     key_t = lambda t: (t["layer"], tuple((round(x, 4), round(y, 4)) for x, y in t["pts"]), round(t["w"], 4))
     key_v = lambda v: ((round(v["at"][0], 4), round(v["at"][1], 4)), round(v["dia"], 4))
     nets = set(board.nets) | {t["net"] for t in ks["tracks"]}
@@ -468,21 +460,50 @@ def revise(board, out_dir: str) -> dict:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     src = Path(ks["file"])
-    job = {"src": str(src), "out": str(out / src.name), "frame": ks["frame"], "moved": moved, "added": added,
-           "removed": sorted(r for r in was if r not in now or not same_fp(r)), "nets": sorted(board.nets),
+    removed = sorted(r for r in was if r not in now or not same_fp(r))
+    for sub in src.parent.glob("*.kicad_sch"):          # (the sheets as the designer drew them: the top one revised)
+        if sub != src.with_suffix(".kicad_sch"):
+            shutil.copy(sub, out / sub.name)
+    sch = {"uuids": {}, "notes": []}
+    if src.with_suffix(".kicad_sch").exists():
+        sch = revise_schematic(board, str(src.with_suffix(".kicad_sch")), str(out / src.with_suffix(".kicad_sch").name),
+                               sorted(added), removed)
+    base = src
+    if added:                                            # (the added parts' footprints, from the harness's own board,
+        mine = Path(pcb.export_kicad(board, tempfile.mkdtemp(), schematic=False)[0]).read_text()   # written into a
+        nodes = [mine[b0:e0] for b0, e0, h in _spans(mine)[0] if h == "footprint"]                  # copy of the design
+        text = src.read_text(encoding="utf-8")         #  as text, their pads off every net: one board for KiCad to
+        _, close = _spans(text)                         #  load, as a second one in its Python breaks its bindings)
+        put = []
+        for r in sorted(added):
+            node = next(n for n in nodes if re.search(r'\(property "Reference" "' + re.escape(r) + '"', n))
+            put.append(re.sub(r'\s*\(net (?:\d+ )?"[^"]*"\)|\s*\(net \d+\)', "", node))
+        base = out / f".{src.stem}.with_added.kicad_pcb"
+        base.write_text(text[:close] + "\n\t" + "\n\t".join(put) + "\n" + text[close:], encoding="utf-8")
+    job = {"src": str(base), "out": str(out / src.name), "frame": ks["frame"], "moved": moved, "added": added,
+           "removed": removed, "nets": sorted(board.nets), "paths": {r: "/" + u for r, u in sch["uuids"].items()},
            "pads": {f"{r}\t{n}": net for (r, n), net in board.pad_net().items()}, "redo": redo,
            "tracks": [t for t in board.tracks if t["net"] in redo], "vias": [v for v in board.vias if v["net"] in redo]}
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
         json.dump(job, f)
     r = subprocess.run([pcb._pcbnew_python(), "-c", _REVISE, f.name], capture_output=True, text=True, timeout=300)
     os.unlink(f.name)
+    if base != src:
+        base.unlink()
     if r.returncode != 0:
-        raise RuntimeError("KiCad could not write the revision: " + (r.stderr or r.stdout)[-400:])
-    for ext in (".kicad_pro", ".kicad_sch", ".kicad_prl"):
+        raise RuntimeError("KiCad could not write the revision: " + (r.stderr or r.stdout)[-1500:])
+    for ext in (".kicad_pro", ".kicad_prl"):
         if src.with_suffix(ext).exists():
             shutil.copy(src.with_suffix(ext), out / src.with_suffix(ext).name)
-    return {"file": job["out"], "moved": sorted(moved), "added": sorted(added), "removed": job["removed"],
-            "rerouted": redo, "kept": len(nets) - len(redo)}
+    got = {"file": job["out"], "moved": sorted(moved), "added": sorted(added), "removed": job["removed"],
+           "rerouted": redo, "kept": len(nets) - len(redo), "schematic": sch["notes"]}
+    if src.with_suffix(".kicad_sch").exists():          # (KiCad's own netlist of the revised sheets: the board's?)
+        import kicad_sch
+        try:
+            got["schematic"] += kicad_sch.check(board, str(out / src.with_suffix(".kicad_sch").name))
+        except RuntimeError as e:
+            got["schematic"].append(str(e)[:200])
+    return got
 
 
 def write(path: str, out_dir: str) -> dict:
@@ -496,6 +517,9 @@ def write(path: str, out_dir: str) -> dict:
     for ext in (".kicad_pcb", ".kicad_pro", ".kicad_sch", ".kicad_prl"):
         if Path(path).with_suffix(ext).exists():
             shutil.copy(Path(path).with_suffix(ext), out / "source" / f"{out.name}{ext}")
+    for sub in Path(path).parent.glob("*.kicad_sch"):    # (its other sheets, by their own names: the top one names them)
+        if sub != Path(path).with_suffix(".kicad_sch"):
+            shutil.copy(sub, out / "source" / sub.name)
     (out / "artwork.json").write_text(json.dumps({"graphics": b.graphics, "kicad_rules": b.kicad_rules}))
     r = lambda v: round(v, 6)
     L = [f'"""{b.name}: imported from {Path(path).name} (prometheus import).',
@@ -555,3 +579,198 @@ def main(argv) -> int:
         print(f"  note: {n}")
     print(f"next: prometheus {got['script']} {Path(got['script']).parent / 'out'}/")
     return 0
+
+
+# ---- the designer's schematic, revised: parts added and taken away, their nets labelled ------------------------
+def _spans(text: str, start: int = 0):
+    """the top-level items of the s-expression list opening at ``start``: [(begin, end, head)]"""
+    out, depth, i, q = [], 0, start, False
+    while i < len(text):
+        ch = text[i]
+        if q:
+            if ch == "\\":
+                i += 1
+            elif ch == '"':
+                q = False
+        elif ch == '"':
+            q = True
+        elif ch == "(":
+            depth += 1
+            if depth == 2:
+                b0 = i
+                m = re.match(r"\(([^\s()]+)", text[i:])
+                head = m.group(1) if m else ""
+        elif ch == ")":
+            depth -= 1
+            if depth == 1:
+                out.append((b0, i + 1, head))
+            elif depth == 0:
+                return out, i
+        i += 1
+    raise ValueError("the schematic's parentheses do not close")
+
+
+def _pin_ends(lib_node) -> Dict[str, list]:
+    """a library symbol's pins: {number: [(x, y, unit)]}, symbol coordinates (y up), each pin's connection point"""
+    name = str(lib_node[1]).split(":")[-1]
+    out: Dict[str, list] = {}
+    for sub in lib_node:
+        if not (isinstance(sub, list) and sub[:1] == ["symbol"]):
+            continue
+        m = re.match(re.escape(name) + r"_(\d+)_\d+$", str(sub[1]).split(":")[-1])
+        unit = int(m.group(1)) if m else 0
+        for p in _find(sub, "pin"):
+            at = _find(p, "at")[0]
+            out.setdefault(str(_find(p, "number")[0][1]), []).append(
+                (float(at[1]), float(at[2]), unit, float(at[3]) if len(at) > 3 else 0.0))
+    return out
+
+
+def _on_sheet(inst, px: float, py: float):
+    """a pin's connection point on the sheet (mm, y down) for a placed symbol: its mirror, then its turn"""
+    from kicad_sch import _rot
+    at = _find(inst, "at")[0]
+    mir = _find(inst, "mirror")
+    if mir and str(mir[0][1]) == "x":
+        py = -py
+    elif mir and str(mir[0][1]) == "y":
+        px = -px
+    rx, ry = _rot(px, py, int(round(float(at[3]) if len(at) > 3 else 0)) % 360)
+    return round(float(at[1]) + rx, 4), round(float(at[2]) - ry, 4)
+
+
+def revise_schematic(board, src: str, out: str, added: List[str], removed: List[str]) -> dict:
+    """``src`` (the designer's top sheet) written to ``out`` with the parts ``added`` drawn on it (each pin with a
+    label naming its net, and a net with no name of its own on the sheet labelled at one of its pins there too, so
+    the two join) and the parts ``removed`` taken off it; everything else left as it is, text for text. Returns
+    {"uuids": {ref: its symbol's uuid, for its footprint's link}, "notes": [what it could not do]}"""
+    import uuid as _uu
+    import kicad_sch
+    text = Path(src).read_text(encoding="utf-8")
+    items, close = _spans(text)
+    tree = _sx_parse(text)
+    libs = {str(s[1]): s for lb in _find(tree, "lib_symbols") for s in lb[1:] if isinstance(s, list)}
+    insts = [s for s in tree if isinstance(s, list) and s[:1] == ["symbol"] and _find(s, "lib_id")]
+    ref_of = lambda s: next((str(p[2]) for p in _find(s, "property") if p[1] == "Reference"), "")
+    root = str(_find(tree, "uuid")[0][1])
+    project = next((str(pr[1]) for s in insts for i in _find(s, "instances") for pr in _find(i, "project")), board.name)
+    notes: List[str] = []
+    # where each net's pins already are on this sheet, and the names the sheet already gives nets
+    pn = board.pad_net()
+    at_pin: Dict[str, tuple] = {}
+    for s in insts:
+        r, lib = ref_of(s), libs.get(str(_find(s, "lib_id")[0][1]))
+        if not lib or r in removed:
+            continue
+        unit = int(_find(s, "unit")[0][1]) if _find(s, "unit") else 1
+        for num, ends in _pin_ends(lib).items():
+            for x, y, u, _ in ends:
+                n = pn.get((r, num))
+                if n and u in (0, unit) and n not in at_pin:
+                    at_pin[n] = _on_sheet(s, x, y)
+    glob = {str(x[1]) for x in tree if isinstance(x, list) and x[:1] == ["global_label"]}
+    named = glob | {str(x[1]) for x in tree if isinstance(x, list) and x[:1] == ["label"]} | \
+        {str(p[2]) for s in insts if str(_find(s, "lib_id")[0][1]).startswith("power:")
+         for p in _find(s, "property") if p[1] == "Value"}
+
+    def label(name: str, xy) -> str:                     # (the kind the sheet names it with: a local label, unless
+        if name in glob:                                 #  it is a global one there)
+            return (f'\t(global_label "{name}" (shape bidirectional) (at {xy[0]} {xy[1]} 0) (fields_autoplaced yes) '
+                    f'(effects (font (size 1.27 1.27)) (justify left)) (uuid "{_uu.uuid4()}"))\n')
+        return (f'\t(label "{name}" (at {xy[0]} {xy[1]} 0) (fields_autoplaced yes) '
+                f'(effects (font (size 1.27 1.27)) (justify left bottom)) (uuid "{_uu.uuid4()}"))\n')
+    new, new_libs, uuids, anchored = [], [], {}, set()
+    xs = [float(_find(s, "at")[0][1]) for s in insts] or [25.4]
+    x0, y0 = round((max(xs) + 25.4) / 1.27) * 1.27, 25.4
+    for i, r in enumerate(added):
+        c = board.comps[r]
+        lib_id = kicad_sch.symbol_for(r, c)
+        if lib_id not in libs:
+            libs[lib_id] = kicad_sch._lib_symbol(lib_id)
+            new_libs.append("\t\t" + _sx_dump(libs[lib_id]) + "\n")
+        ends = _pin_ends(libs[lib_id])
+        if any(e_[2] > 1 for e in ends.values() for e_ in e):
+            notes.append(f"{r}: {lib_id} has several units: draw it on the schematic by hand")
+            continue
+        X, Y, uid = round(x0, 2), round(y0 + i * 15.24, 2), str(_uu.uuid4())
+        uuids[r] = uid
+        props = "".join(f' (property "{k}" "{v}" (at {X} {Y} 0) (effects (font (size 1.27 1.27)) (hide yes)))'
+                        for k, v in (("Footprint", c["fp"]), ("Datasheet", "~")))
+        pins = "".join(f' (pin "{n}" (uuid "{_uu.uuid4()}"))' for n in ends)
+        new.append(f'\t(symbol (lib_id "{lib_id}") (at {X} {Y} 0) (unit 1) (exclude_from_sim no) (in_bom yes) '
+                   f'(on_board yes) (dnp no) (uuid "{uid}") (property "Reference" "{r}" (at {round(X + 2.54, 2)} {round(Y - 1.27, 2)} 0) '
+                   f'(effects (font (size 1.27 1.27)) (justify left))) (property "Value" "{c["value"]}" '
+                   f'(at {round(X + 2.54, 2)} {round(Y + 1.27, 2)} 0) (effects (font (size 1.27 1.27)) (justify left)))'
+                   f'{props}{pins} (instances (project "{project}" '
+                   f'(path "/{root}" (reference "{r}") (unit 1)))))\n')
+        for num, e in ends.items():
+            n = pn.get((r, num))
+            if not n:
+                continue
+            x, y, _, a = e[0]                            # (a short wire out from the pin, its net's label at the end)
+            dx, dy = -round(math.cos(math.radians(a))), round(math.sin(math.radians(a)))   # (outward, sheet y down)
+            p0 = (round(X + x, 4), round(Y - y, 4))
+            p1 = (round(p0[0] + 2.54 * dx, 4), round(p0[1] + 2.54 * dy, 4))
+            new.append(f'\t(wire (pts (xy {p0[0]} {p0[1]}) (xy {p1[0]} {p1[1]})) (stroke (width 0) (type default)) '
+                       f'(uuid "{_uu.uuid4()}"))\n')
+            new.append(label(n, p1))
+            if n not in named and n not in anchored:
+                if n in at_pin:
+                    new.append(label(n, at_pin[n]))
+                    anchored.add(n)
+                elif any(m != r and m in board.comps and m not in added for m, _ in board.nets[n]["pins"]):
+                    notes.append(f"{r}.{num}: net {n} has no pin on the top sheet to join it to: wire it by hand")
+    drop = {(b0, e0) for b0, e0, h in items if h == "symbol"
+            for s in [_sx_parse(text[b0:e0])] if ref_of(s) in removed}
+    # the wires that led only to a part taken away, followed back to where they meet something else
+    key = lambda xy: (round(float(xy[0]), 2), round(float(xy[1]), 2))
+    held = {}                                            # (point -> what else is there: pins kept, labels, junctions)
+    dead = set()
+    for s in insts:
+        lib = libs.get(str(_find(s, "lib_id")[0][1]))
+        if not lib:
+            continue
+        unit = int(_find(s, "unit")[0][1]) if _find(s, "unit") else 1
+        pts = {key(_on_sheet(s, x, y)) for e in _pin_ends(lib).values() for x, y, u, *_ in e if u in (0, unit)}
+        (dead.update if ref_of(s) in removed else lambda q: [held.__setitem__(k, 1) for k in q])(pts)
+    for x in tree:
+        if isinstance(x, list) and x[:1] in (["label"], ["global_label"], ["hierarchical_label"], ["junction"]):
+            held[key(_find(x, "at")[0][1:3])] = 1
+    wires = [(b0, e0, [key(q[1:3]) for q in _find(_sx_parse(text[b0:e0]), "pts")[0][1:]])
+             for b0, e0, h in items if h == "wire"]
+    gone_w = set()
+    while True:
+        ends = {}
+        for b0, e0, pp in wires:
+            if (b0, e0) not in gone_w:
+                for q in (pp[0], pp[-1]):
+                    ends[q] = ends.get(q, 0) + 1
+        hit = [(b0, e0, pp) for b0, e0, pp in wires if (b0, e0) not in gone_w
+               and any(q in dead and q not in held and ends[q] == 1 for q in (pp[0], pp[-1]))]
+        if not hit:
+            break
+        for b0, e0, pp in hit:
+            gone_w.add((b0, e0))
+            dead.update(q for q in (pp[0], pp[-1]) if q not in held)
+    drop |= gone_w
+    gone = {ref_of(_sx_parse(text[b0:e0])) for b0, e0 in drop}
+    notes += [f"{r}: not on the top sheet: take it off its own sheet by hand" for r in removed if r not in gone]
+    lib_end = next((e0 for b0, e0, h in items if h == "lib_symbols"), None)
+    tail = next((b0 for b0, e0, h in items if h in ("sheet_instances", "embedded_fonts")), close)
+    pieces, pos = [], 0
+    for b0, e0 in sorted(drop):
+        pieces.append(text[pos:b0])
+        pos = e0
+    rest = text[pos:]
+    body = "".join(pieces) + rest
+    shift = lambda k: k - sum(e0 - b0 for b0, e0 in drop if e0 <= k)
+    if new_libs and lib_end is not None:
+        k = shift(lib_end) - 1                           # (inside lib_symbols, before its closing parenthesis)
+        body = body[:k] + "\n" + "".join(new_libs) + "\t" + body[k:]
+        extra = len("\n" + "".join(new_libs) + "\t")
+    else:
+        extra = 0
+    k = shift(tail) + extra
+    body = body[:k] + "".join(new) + body[k:]
+    Path(out).write_text(body, encoding="utf-8")
+    return {"uuids": uuids, "notes": notes}
