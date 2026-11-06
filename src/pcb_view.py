@@ -255,6 +255,99 @@ class _Cache:
     def __init__(self, out_dir: str):
         self.out = Path(out_dir)
         self.key, self.data, self.lock = None, None, threading.Lock()
+        self.live, self.undo = None, []                  # (the board a live edit moves parts on, and what it was)
+
+    def _board(self):
+        """the run's board, built once for live edits (the script, the run's placement and copper)"""
+        import pcb_cli
+        if self.live is None:
+            b, _ = pcb_cli.load(self.script())
+            self.live_key = pcb_cli.design_key(b)        # (the design's, as the script builds it: what a later run
+            pcb_cli.load_state(b, str(self.out), self.live_key)   # checks the saved state against, moves or not)
+            self.live = b
+        return self.live
+
+    def _after(self, b, t0: float, redo, probs) -> dict:
+        """a live edit kept: the run's state saved (later stages start from it), the page's board, what is left"""
+        import pcb_cli
+        pcb_cli.save_state(b, str(self.out), self.live_key)
+        self.data, self.key = board_data(b), _board_key(self.out, self.script())
+        return {"ok": True, "board": self.data, "rerouted": sorted(redo), "unrouted": probs, "check": b.check(),
+                "seconds": round(time.perf_counter() - t0, 2)}
+
+    def move(self, ref: str, at, rot=None, side=None) -> dict:
+        """a part moved on the page: its nets routed again (the harness's own router, only those: what keeps a drag
+        quick; FreeRouting is ``route``), every other net's copper kept"""
+        import pcb
+        from shapely.geometry import Point
+        with self.lock:
+            b = self._board()
+            c = b.comps.get(ref)
+            if c is None:
+                return {"ok": False, "error": f"no part {ref} on the board"}
+            if side not in (None, c.get("side", "F")):
+                return {"ok": False, "error": f"{ref}: a part changes side in board.py (side=), not by dragging"}
+            at = (round(float(at[0]), 3), round(float(at[1]), 3))
+            if not b.outline.contains(Point(at)):
+                return {"ok": False, "error": f"{ref}: ({at[0]}, {at[1]}) is off the board"}
+            t0 = time.perf_counter()
+            old = {"placement": pcb.placement(b), "tracks": [dict(t, pts=list(t["pts"])) for t in b.tracks],
+                   "vias": [dict(v) for v in b.vias]}
+            self.undo.append((ref, c["at"], c["rot"], old["tracks"], old["vias"]))
+            c["at"], c["rot"] = at, float(c["rot"] if rot is None else rot) % 360.0
+            b.tracks, b.vias = [], []
+            b.__dict__.pop("_cu_memo", None)
+            redo = [n for n in pcb.reuse_routes(b, old) if n in b.nets]
+            probs = pcb.route_jobs(b, [(n, b.net_width(n), None) for n in sorted(redo)]) if redo else []
+            got = self._after(b, t0, redo, probs)
+            got["line"] = f"{ref}: at=({at[0]}, {at[1]}), rot={c['rot']:g}"   # (for board.py: the page does not edit it)
+            moves = self.out / "moves.json"
+            log = json.loads(moves.read_text()) if moves.exists() else []
+            log.append({"ref": ref, "at": list(at), "rot": c["rot"], "side": c.get("side", "F"), "line": got["line"]})
+            moves.write_text(json.dumps(log, indent=1))
+            return got
+
+    def undo_move(self) -> dict:
+        with self.lock:
+            if not self.undo:
+                return {"ok": False, "error": "nothing to undo"}
+            b = self._board()
+            t0 = time.perf_counter()
+            ref, at, rot, tracks, vias = self.undo.pop()
+            b.comps[ref]["at"], b.comps[ref]["rot"], b.tracks, b.vias = at, rot, tracks, vias
+            b.__dict__.pop("_cu_memo", None)
+            moves = self.out / "moves.json"
+            if moves.exists():
+                moves.write_text(json.dumps(json.loads(moves.read_text())[:-1], indent=1))
+            return self._after(b, t0, [], [])
+
+    def route_rest(self) -> dict:
+        """the board routed again properly once live edits left nets unrouted: all of it, as a run routes it
+        (FreeRouting through KiCad when installed; routing round copper kept from before leaves shorts), kept only
+        when it leaves fewer problems than there are"""
+        import pcb
+        import freerouting
+        with self.lock:
+            b = self._board()
+            t0 = time.perf_counter()
+            torn = sorted(n for n in b.nets if len(b.islands(n)) > 1)
+            before = b.check()
+            if not torn and not before:
+                return self._after(b, t0, [], [])
+            keep = [dict(t, pts=list(t["pts"])) for t in b.tracks], [dict(v) for v in b.vias]
+            b.tracks, b.vias = [], []
+            b.__dict__.pop("_cu_memo", None)
+            probs = pcb.place_and_route(b, move=[], router="freerouting" if freerouting.kicad_available()
+                                        and freerouting.available() else "harness")   # (a run's tries; no part moves)
+            short = lambda ps: sum(1 for p_ in ps if " short " in p_ or "apart (clearance" in p_)
+            after = b.check()
+            if short(after) > short(before) or len(probs) + len(after) >= len(before):   # (no better: as it was)
+                b.tracks, b.vias = keep
+                b.__dict__.pop("_cu_memo", None)
+                got = self._after(b, t0, [], [])
+                got["unrouted"] = probs or ["routing it again did not leave fewer problems: move the part again"]
+                return got
+            return self._after(b, t0, torn, probs)
 
     def script(self) -> Optional[str]:
         for f in ("result.json", "progress.json"):
@@ -515,6 +608,23 @@ def make_handler(out_dir: str):
 
         def _json(self, d, code=200):
             self._send(code, json.dumps(d).encode())
+
+        def do_POST(self):                               # (a live edit: /api/move, /api/undo, /api/route)
+            path = self.path.split("?")[0]
+            try:
+                n = int(self.headers.get("Content-Length") or 0)
+                body = json.loads(self.rfile.read(n) or b"{}")
+                if path == "/api/move":
+                    got = cache.move(str(body["ref"]), body["at"], body.get("rot"), body.get("side"))
+                elif path == "/api/undo":
+                    got = cache.undo_move()
+                elif path == "/api/route":
+                    got = cache.route_rest()
+                else:
+                    return self._json({"ok": False, "error": "no such action"}, 404)
+                return self._json(got, 200 if got["ok"] else 400)
+            except (KeyError, ValueError, TypeError) as e:
+                return self._json({"ok": False, "error": f"{type(e).__name__}: {e}"}, 400)
 
         def do_GET(self):
             path = self.path.split("?")[0]
