@@ -275,44 +275,113 @@ def report(board, out_dir: str, rules="jlcpcb-2", boards: int = 5) -> str:
     import io
     os.makedirs(out_dir, exist_ok=True)
     png = os.path.join(out_dir, "layers.png")
-    board.plot(png, scale=14.0)
+    board.plot(png, scale=28.0)                       # (2x: sharp on a high-DPI screen)
     img = base64.b64encode(open(png, "rb").read()).decode()
     chk, fchk = board.check(), fab_check(board, rules)
     x0, y0, x1, y1 = board.outline.bounds
     ls = lines(board, boards)
     esc = html.escape
-
-    def plist(ps):
-        if not ps:
-            return '<p class="ok">clean</p>'
-        return "<ul>" + "".join(f"<li>{esc(p)}</li>" for p in ps) + "</ul>"
-    rows = "".join(f"<tr><td>{esc(', '.join(l_['refs']))}</td><td>{esc(' '.join(x for x in (l_['maker'], l_['pn']) if x) or l_['query'])}</td>"
-                   f"<td>{esc(l_['value'])}</td><td>{esc(l_['footprint'])}</td><td class=n>{l_['order']}</td></tr>" for l_ in ls)
     rules = rules if rules is not None else (getattr(board, "rules", None) or "jlcpcb-2")
     r = RULES[rules] if isinstance(rules, str) else rules
+
+    def card(title, ps):
+        state = ('<span class="pill ok"><i class="dot"></i>clean</span>' if not ps else
+                 f'<span class="pill bad"><i class="dot"></i>{len(ps)} to fix</span>')
+        body = "" if not ps else "<ul>" + "".join(f"<li>{esc(p)}</li>" for p in ps) + "</ul>"
+        return f'<section class="sec"><h3><span>{esc(title)}</span>{state}</h3>{body}</section>'
+    issues = len(chk) + len(fchk)
+    verdict = ('<div class="v ok">Ready to order</div>' if not issues else
+               f'<div class="v bad">{issues} issue{"s" if issues > 1 else ""} to fix</div>')
+    facts = [("Size", f"{x1 - x0:.1f} x {y1 - y0:.1f} mm"), ("Layers", f"{len(board.layers)}"), ("Thickness", f"{board.t} mm"),
+             ("Copper", f"{board.oz} oz"), ("Parts", f"{len(board.comps)}"), ("Nets", f"{len(board.nets)}"),
+             ("Tracks", f"{len(board.tracks)}"), ("Vias", f"{len(board.vias)}")]
+    kv = "".join(f"<span>{k}</span><b>{esc(v)}</b>" for k, v in facts)
+    # (the order files beside this page, linked when they are there: open them here instead of hunting the folder)
+    order_files = [(n, w) for n, w in (("gerbers.zip", "Gerbers, for the board house"), ("bom_jlc.csv", "BOM, for assembly"),
+                                       ("cpl.csv", "pick-and-place, for assembly"), ("cart/buy.html", "the parts, per shop"))
+                   if os.path.exists(os.path.join(out_dir, n))]
+    files = "".join(f'<a class="file" href="{n}"><span class="ic">{n.rsplit(".", 1)[-1].upper()}</span>'
+                    f'<span>{n}<small>{w}</small></span></a>' for n, w in order_files)
+
+    def lcsc_cell(l_):
+        if not l_.get("lcsc"):
+            return '<span class="bad">none</span>'
+        u = SHOPS["LCSC"].format(q=quote_plus(l_["lcsc"]))
+        return f'<a href="{esc(u)}" target="_blank" rel="noopener">{esc(l_["lcsc"])}</a>'
+    rows = "".join(f"<tr><td class=m>{esc(', '.join(l_['refs']))}</td>"
+                   f"<td>{esc(' '.join(x for x in (l_['maker'], l_['pn']) if x) or l_['query'])}</td>"
+                   f"<td class=m>{esc(l_['value'])}</td><td class=fp>{esc(l_['footprint'])}</td>"
+                   f"<td class=m>{lcsc_cell(l_)}</td><td class='m n'>{l_['order']}</td></tr>" for l_ in ls)
+    no_lcsc = sum(1 for l_ in ls if not l_.get("lcsc"))
+    lcsc_pill = ('<span class="pill ok"><i class="dot"></i>every line has an LCSC number</span>' if not no_lcsc else
+                 f'<span class="pill bad"><i class="dot"></i>{no_lcsc} without an LCSC number</span>')
+    # the viewer's look (pcb_viewer_assets/index.html): Plex and Rajdhani, white panels, hairlines, square corners
     doc = f"""<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{esc(board.name)} review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=Rajdhani:wght@700&display=swap" rel="stylesheet">
 <style>
-:root {{ --bg:#fff; --fg:#1b1d21; --mute:#5f6670; --line:#e3e6ea; --ok:#1a7f37; --bad:#b42318; }}
-@media (prefers-color-scheme: dark) {{ :root {{ --bg:#16181c; --fg:#e8eaed; --mute:#9aa1aa; --line:#2b2f36; --ok:#4cc26a; --bad:#f07167; }} }}
-body {{ background:var(--bg); color:var(--fg); font:14px/1.45 system-ui, sans-serif; margin:0; padding:24px 16px; }}
-main {{ max-width:1000px; margin:0 auto; }} h1 {{ font-size:22px; margin:0 0 4px; }} h2 {{ font-size:16px; margin:24px 0 8px; }}
-.mute {{ color:var(--mute); }} img {{ max-width:100%; border-radius:6px; }} .ok {{ color:var(--ok); font-weight:600; }}
-ul {{ color:var(--bad); padding-left:18px; }} .wrap {{ overflow-x:auto; }} table {{ border-collapse:collapse; width:100%; }}
-th, td {{ text-align:left; padding:5px 8px; border-bottom:1px solid var(--line); }} th {{ color:var(--mute); }}
-.n {{ text-align:right; font-variant-numeric:tabular-nums; }}
-</style></head><body><main>
-<h1>{esc(board.name)}</h1>
-<p class="mute">{x1 - x0:.1f} x {y1 - y0:.1f} mm, {len(board.layers)} layers, {board.t} mm, {board.oz} oz outer copper,
-{len(board.comps)} parts, {len(board.nets)} nets, {len(board.tracks)} tracks, {len(board.vias)} vias.</p>
-<img alt="copper, top and bottom" src="data:image/png;base64,{img}">
-<h2>Design check</h2>{plist(chk)}
-<h2>House check: {esc(r.get('note', str(rules)))}</h2>{plist(fchk)}
-<h2>Parts for {boards} boards</h2>
-<div class="wrap"><table><thead><tr><th>Refs</th><th>Part</th><th>Value</th><th>Footprint</th><th class=n>Order</th></tr></thead>
-<tbody>{rows}</tbody></table></div>
-<p class="mute">The cart (cart/buy.html) has a search link per line at each shop; fab.order() writes it with the Gerbers.</p>
+:root {{ --bg:#f4f6f8; --panel:#fff; --line:#d3dae1; --line2:#e3e8ed; --hover:#f4f6f8; --tint:#eef3fa; --text:#18212b;
+  --text2:#5a6774; --text3:#8a95a1; --ink:#18212b; --blue:#1f5fa8; --green:#237a4b; --red:#b3261e;
+  --sans:"IBM Plex Sans", -apple-system, "Segoe UI", sans-serif; --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --disp:"Rajdhani", "IBM Plex Sans", sans-serif; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; background:var(--bg); color:var(--text); font:400 13px/1.45 var(--sans); -webkit-font-smoothing:antialiased; }}
+a {{ color:var(--blue); text-decoration:none; }} a:hover {{ text-decoration:underline; }}
+.top {{ display:flex; align-items:center; gap:14px; padding:0 20px; height:56px; background:#fff; border-bottom:1px solid var(--line); }}
+.wm {{ font:700 22px/1 var(--disp); letter-spacing:1.4px; text-transform:uppercase; }}
+.crumb {{ font:400 12px var(--mono); color:var(--text3); }} .crumb b {{ color:var(--text); font-weight:500; letter-spacing:.12em; text-transform:uppercase; }}
+main {{ max-width:1180px; margin:0 auto; padding:20px 16px 48px; }}
+.grid {{ display:grid; grid-template-columns:minmax(0, 1fr) 360px; gap:16px; align-items:stretch; }}
+@media (max-width:820px) {{ .grid {{ grid-template-columns:minmax(0, 1fr); }} }}
+.panel {{ background:var(--panel); border:1px solid var(--line); }}
+.canvas {{ padding:18px; border-radius:16px; border:1px solid #e5e7eb; box-shadow:0 30px 80px -30px rgba(17,24,39,.45);
+  background:radial-gradient(circle at 1px 1px, rgba(24,33,43,.06) 1px, transparent 1.2px) 0 0 / 22px 22px,
+  radial-gradient(90% 80% at 50% 40%, #f1f2f3, #dcdee1); }}
+.canvas {{ display:flex; align-items:center; justify-content:center; min-height:420px; }}
+.canvas img {{ display:block; width:auto; height:auto; max-width:100%; max-height:min(70vh, 600px); }}
+.verdict {{ padding:18px 18px 14px; border-bottom:1px solid var(--line2); }}
+.k, .sec h3, th {{ font:500 11px var(--mono); letter-spacing:.18em; text-transform:uppercase; color:var(--text2); }}
+.v {{ font:700 32px/1.02 var(--disp); margin-top:8px; text-transform:uppercase; }}
+.v.ok {{ background:linear-gradient(90deg, #b9852c, #dcae58); -webkit-background-clip:text; background-clip:text; color:transparent; }}
+.v.bad {{ color:var(--red); }}
+.sec {{ padding:16px; border-bottom:1px solid var(--line2); }} .sec:last-child {{ border-bottom:0; }}
+.sec h3 {{ margin:0; display:flex; justify-content:space-between; align-items:center; gap:8px; }}
+.sec ul {{ margin:10px 0 0; padding-left:18px; color:var(--red); }}
+.pill {{ display:inline-flex; align-items:center; gap:7px; padding:3px 9px; font:500 10.5px var(--mono); letter-spacing:.16em;
+  text-transform:uppercase; border:1px solid var(--line); background:#fff; white-space:nowrap; }}
+.dot {{ width:7px; height:7px; border-radius:50%; background:var(--text3); }}
+.pill.ok {{ color:var(--green); }} .pill.ok .dot {{ background:#2fa36b; }} .pill.bad {{ color:var(--red); }} .pill.bad .dot {{ background:#d6453b; }}
+.kv {{ display:grid; grid-template-columns:auto 1fr; margin-top:12px; border-top:1px solid var(--line2); }}
+.kv span, .kv b {{ padding:7px 0; border-bottom:1px solid var(--line2); }}
+.kv span {{ color:var(--text2); font:400 11px var(--mono); letter-spacing:.08em; text-transform:uppercase; }}
+.kv b {{ font-weight:500; text-align:right; }}
+.file {{ display:flex; align-items:center; gap:10px; padding:8px; color:var(--text); border-bottom:1px solid var(--line2); }}
+.file:last-child {{ border-bottom:0; }} .file:hover {{ background:var(--tint); color:var(--blue); text-decoration:none; }}
+.file .ic {{ width:38px; height:28px; display:flex; align-items:center; justify-content:center; font:600 8.5px var(--mono);
+  background:var(--hover); color:var(--text2); border:1px solid var(--line); flex:none; }}
+.file small {{ display:block; color:var(--text2); font-size:11px; }}
+.files {{ margin-top:10px; }}
+.parts {{ margin-top:16px; }} .parts .sec h3 {{ flex-wrap:wrap; }}
+.wrap {{ overflow-x:auto; }} table {{ border-collapse:collapse; width:100%; }}
+th, td {{ text-align:left; padding:8px 12px; border-bottom:1px solid var(--line2); vertical-align:top; }}
+th {{ font-size:10.5px; background:var(--hover); }} tr:last-child td {{ border-bottom:0; }} tbody tr:hover {{ background:var(--tint); }}
+td.m {{ font-family:var(--mono); font-size:12px; }} td.fp {{ color:var(--text2); font-size:12px; }} .n {{ text-align:right; }}
+.bad {{ color:var(--red); }}
+</style></head><body>
+<div class="top"><span class="wm">Prometheus</span><span class="crumb">review / <b>{esc(board.name)}</b></span></div>
+<main><div class="grid">
+<div class="canvas"><img alt="the board's copper, top and bottom" src="data:image/png;base64,{img}"></div>
+<div class="panel">
+<div class="verdict"><div class="k">Verdict</div>{verdict}<div class="kv">{kv}</div></div>
+{card("Design check", chk)}
+{card("House check: " + r.get("note", str(rules)), fchk)}
+<section class="sec"><h3><span>Order files</span></h3>{f'<div class="files">{files}</div>' if files else '<p>Written by fab.order() beside this page.</p>'}</section>
+</div></div>
+<div class="panel parts"><section class="sec"><h3><span>Parts for {boards} boards</span>{lcsc_pill}</h3></section>
+<div class="wrap"><table><thead><tr><th>Refs</th><th>Part</th><th>Value</th><th>Footprint</th><th>LCSC</th><th class=n>Order</th></tr></thead>
+<tbody>{rows}</tbody></table></div></div>
 </main></body></html>
 """
     path = os.path.join(out_dir, "report.html")
