@@ -249,6 +249,8 @@ def design_key(b) -> str:
     d = {"comps": {r: [c["fp"]] + ([] if c.get("unplaced") else [c["at"], c["rot"], c.get("side", "F")])
                    for r, c in sorted(b.comps.items())},
          "nets": b.nets, "pours": b.pours, "holes": b.holes, "outline": b.outline.wkt}
+    if b.tracks or b.vias:                               # the copper the script drew itself (a hand-drawn feed): a
+        d["copper"] = [b.tracks, b.vias]                 # change to it is another design (left out when there is
     return hashlib.sha1(json.dumps(d, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
@@ -448,12 +450,14 @@ def main(argv=None) -> int:
     if spec.get("near"):                                 # (the placer holds these parts within their distance)
         b.near = list(getattr(b, "near", [])) + [tuple(x) for x in spec["near"]]
     key = design_key(b)
-    if stage in ("critic", "check", "export") and not b.tracks and load_state(b, a.out, key):
+    script_cu = bool(b.tracks or b.vias)                 # (copper drawn by the script: the router finishes the rest)
+    loaded = stage in ("critic", "check", "export") and load_state(b, a.out, key)
+    if loaded:
         print(f"from the last run in {a.out}: {sum(1 for c in b.comps.values())} parts placed, "
               f"{len(b.tracks)} tracks, {len(b.vias)} vias ({b.router_used})")
     route_ok = stage in ("route", "all")
     timings = {}
-    store = _store(a.script) if route_ok and not b.tracks else None
+    store = _store(a.script) if route_ok else None
     from_store = bool(store) and load_store(b, store, key)
     if from_store:
         print(f"from {os.path.relpath(store)}: {len(b.tracks)} tracks, {len(b.vias)} vias (PCB_REROUTE=1 routes again)")
@@ -481,7 +485,8 @@ def main(argv=None) -> int:
              "--stage place or all places them"]
     if place and stage not in ("place", "critic"):         # (those stages print it with their results)
         print("placement:", *place, sep="\n  ")
-    if route_ok and probs is None and not b.tracks:
+    unjoined = lambda: any(len(d["pins"]) > 1 and len(b.islands(n)) > 1 for n, d in b.nets.items())
+    if route_ok and probs is None and not from_store and (not b.tracks or (script_cu and unjoined())):
         t = time.perf_counter()
         prog.stage("route")
         try:
@@ -570,9 +575,13 @@ def main(argv=None) -> int:
             major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
             if major >= 9:
                 prog.stage("kicad drc")
-                d = pcb.kicad_drc(kpaths[0])
-                kchk = d["errors"] + d["unconnected"]
-                kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+                try:
+                    d = pcb.kicad_drc(kpaths[0])
+                    kchk = d["errors"] + d["unconnected"]
+                    kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+                except RuntimeError as e:                # (the exported board does not open in KiCad: a finding,
+                    kchk = [f"the exported board does not open in KiCad {ver}: {e}"]     # never a clean run)
+                    kicad = {"run": False, "version": ver, "error": str(e)}
                 sch = [k for k in kpaths if k.endswith(".kicad_sch")]
                 if sch:                                  # (the schematic, read back by KiCad: its nets are the board's)
                     import kicad_sch

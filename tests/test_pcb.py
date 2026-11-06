@@ -2072,3 +2072,99 @@ def test_the_board_switcher_lists_remembered_boards_and_opens_only_those(tmp_pat
     got = pcb_view.boards(a.resolve())
     assert [g["name"] for g in got] == ["beta", "alpha"] or {g["name"] for g in got} == {"alpha", "beta"}
     assert next(g for g in got if g["name"] == "alpha")["current"] and len(got) == 2
+
+
+def test_a_pad_on_a_bare_hole_is_a_finding():
+    """a mounting hole drilled through a part's pad cuts it (KiCad's hole clearance): the design check says so, and
+    the placement check flags the hole inside the part's courtyard before any routing"""
+    import pcb
+    b = pcb.Board("h", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (10.0, 10.0), 0, "")
+    b.hole((11.9, 10.0), d=3.2)                          # (its wall 0.3 mm into pin 1's 1.7 mm pad, drills 0.6 apart)
+    assert any("J1 pad 1" in p and "bare hole" in p for p in b.check())
+    assert any("mounting hole" in p and "J1" in p for p in b.check_placement())
+    c = pcb.Board("h2", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    c.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (10.0, 10.0), 0, "")
+    c.hole((20.0, 10.0), d=3.2)
+    assert not any("bare hole" in p for p in c.check()) and not any("mounting hole" in p for p in c.check_placement())
+
+
+def test_a_via_keeps_the_hole_gap_from_a_slot_by_its_shape(monkeypatch):
+    """the router's vias keep the hole gap from a USB-C shell's slot by the slot's shape (it is longer than it is
+    wide: a circle at its centre let a ground via in 0.16 mm from it, boards/03 as it was first routed)"""
+    import runpy
+    import pcb
+    monkeypatch.setenv("PCB_REROUTE", "1")
+    monkeypatch.setenv("PCB_WORKERS", "1")
+    here = Path(__file__).parent.parent
+    b = runpy.run_path(str(here / "boards" / "03_usbc_power_breakout" / "board.py"))["build"]()
+    pcb.place_and_route(b, router="harness")
+    assert not any("drills" in p for p in b.check())
+
+
+def test_export_drops_kicad10_footprint_items(tmp_path):
+    """KiCad's library now gives some footprints KiCad 10's (point ...) anchors and ${KICAD10_3DMODEL_DIR} models:
+    the exported board is KiCad 9's format, which cannot read a point, so they are left out and the model path
+    written as KiCad 9 finds it"""
+    import pcb
+    b = pcb.Board("p", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("D1", "LED_THT:LED_D3.0mm", (8.0, 6.0), 0, "red")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (14.0, 6.0), 0, "1k")
+    b.net("A", [("D1", "2"), ("R1", "1")])
+    pcb.export_kicad(b, str(tmp_path / "k"))
+    txt = next((tmp_path / "k").glob("*.kicad_pcb")).read_text()
+    assert "(point" not in txt and "KICAD10_3DMODEL_DIR" not in txt
+    import shutil
+    if shutil.which("kicad-cli"):                         # (and KiCad opens it: its DRC writes a report)
+        d = pcb.kicad_drc(str(next((tmp_path / "k").glob("*.kicad_pcb"))))
+        assert "errors" in d
+
+
+def test_kicad_drc_says_when_kicad_cannot_read_the_board(tmp_path):
+    """a board file KiCad cannot open is a clear error, not a missing report file"""
+    import shutil
+    import pcb
+    if not shutil.which("kicad-cli"):
+        pytest.skip("no kicad-cli")
+    bad = tmp_path / "bad.kicad_pcb"
+    bad.write_text("(kicad_pcb (version 20241229) (footprint \"x\" (layer \"F.Cu\") (point (at 0 0) (size 1))))")
+    with pytest.raises(RuntimeError, match="could not check"):
+        pcb.kicad_drc(str(bad))
+
+
+def test_cli_finishes_and_keeps_a_board_whose_script_draws_some_copper(tmp_path, capsys):
+    """a script that draws part of its copper (a hand-drawn power feed) with every part placed: the run routes the
+    rest (not 'routed by the script'), keeps it in routes/, and --stage check starts from the saved board; a change
+    to the hand-drawn copper is another design"""
+    import json
+    import pcb_cli
+    d = tmp_path / "bd"
+    (d / "routes").mkdir(parents=True)
+    src = '''from pcb import Board
+OUT = [(0, 0), (30, 0), (30, 20), (0, 20)]
+W = %s
+def build():
+    b = Board("hand", OUT, rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (6.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (24.0, 10.0), 0, "1k")
+    b.place("R3", "Resistor_SMD:R_0805_2012Metric", (15.0, 15.0), 0, "1k")
+    b.net("P", [("R1", "2"), ("R2", "1")], amps=1.0)
+    b.net("Q", [("R1", "1"), ("R3", "1")])
+    b.net("S", [("R2", "2"), ("R3", "2")])
+    x1, y1 = b.pad("R1", "2"); x2, y2 = b.pad("R2", "1")
+    b.track("P", "F", [(x1, y1), (x2, y2)], W)
+    return b
+'''
+    (d / "board.py").write_text(src % "0.6")
+    (d / "req.json").write_text('{"size_mm": [30, 20]}')
+    out = str(d / "out")
+    pcb_cli.main([str(d / "board.py"), out, "--spec", str(d / "req.json"), "--router", "harness", "--kicad-drc", "off",
+                  "--no-lcsc"])
+    r = json.load(open(d / "out" / "result.json"))
+    assert r["clean"] and r["router"] == "harness" and list((d / "routes").glob("hand_*.json.gz"))
+    capsys.readouterr()
+    pcb_cli.main([str(d / "board.py"), out, "--spec", str(d / "req.json"), "--stage", "check", "--kicad-drc", "off"])
+    assert "from the last run" in capsys.readouterr().out and json.load(open(d / "out" / "result.json"))["clean"]
+    (d / "board.py").write_text(src % "0.8")                # (the hand-drawn feed widened: not the saved board)
+    pcb_cli.main([str(d / "board.py"), out, "--stage", "check", "--kicad-drc", "off"])
+    assert "another version of the design" in capsys.readouterr().out

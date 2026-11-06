@@ -758,7 +758,7 @@ class Board:
                         continue
                     place = (c["at"][0], c["at"][1], c["rot"])
                     plated = bool(pad["layers"]) and pad.get("kind") != "np_thru_hole"
-                    d = dict(name=f"{ref} pad {num}" if plated else "hole", plated=plated, slot=None)
+                    d = dict(name=f"{ref} pad {num}" if plated else "hole", plated=plated, slot=None, ref=ref)
                     if pad.get("slot") and abs(pad["slot"][0] - pad["slot"][1]) > 1e-6:
                         g = _pad_poly({**pad, "shape": "oval", "size": pad["slot"], "prims": []}, place)
                         q = list(g.minimum_rotated_rectangle.exterior.coords)
@@ -1659,6 +1659,19 @@ class Board:
                     gap = shp[int(i)].distance(hg)
                     probs.append(f"{'track' if 'pts' in it else 'via'} {it['net']} {max(gap, 0):.2f} mm from the bare "
                                  f"hole at ({x:.1f}, {y:.1f}) (keep {hc:.2f} mm)")
+        if bare:                                              # and so does every pad: a mounting hole on a part's
+            from shapely.strtree import STRtree as _STp           # pad cuts it (a footprint's own pegs beside its own
+            pth = _STp([g for *_, g, _ in pads])                  # pads are the maker's design, not checked here)
+            hit = set()
+            for h in bare:
+                (x, y), hg = h["at"], h["geom"]
+                for i in pth.query(hg, predicate="dwithin", distance=hc - 1e-6):
+                    ref, num, L, g, _ = pads[int(i)]
+                    if ref == h.get("ref") or (ref, num, (x, y)) in hit:
+                        continue
+                    hit.add((ref, num, (x, y)))
+                    probs.append(f"{ref} pad {num or '(mount)'} {max(g.distance(hg), 0):.2f} mm from the bare hole at "
+                                 f"({x:.1f}, {y:.1f}) (keep {hc:.2f} mm)")
         inner = self.outline.buffer(-self.edge)               # copper keeps the edge gap from the routed edge
         for ref, num, L, g, _ in pads:
             if not inner.contains(g):
@@ -1717,6 +1730,13 @@ class Board:
                     continue                                 # top and bottom parts may overlap in plan
                 if cy[refs[i]].intersection(cy[refs[j]]).area > 0.05:
                     probs.append(f"courtyards of {refs[i]} and {refs[j]} overlap")
+        if tree is not None:                                 # a mounting hole is drilled through whatever is there
+            from shapely.geometry import Point as _Ph
+            for x, y, d in self.holes:
+                hg = _Ph(x, y).buffer(d / 2, 16)
+                for j in sorted(int(j) for j in tree.query(hg)):
+                    if cy[refs[j]].intersection(hg).area > 0.05:
+                        probs.append(f"the mounting hole at ({x:.1f}, {y:.1f}) is inside the courtyard of {refs[j]}")
         if any(c.get("symbol") for c in self.comps.values()):  # (every symbol pin has a pad, every pad a pin)
             import parts
             probs += parts.pin_check(self)
@@ -3583,6 +3603,9 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
     for n, d in board.nets.items():                      # (a net that lost or gained a moved part's pin)
         if any(r in moved for r, _ in d["pins"]):
             bad.add(n)
+    bad |= {t["net"] for t in board.tracks if not t.get("fan")} | {v["net"] for v in board.vias}
+    #       (a net the script draws copper for itself is finished from that copper, not given its old routing
+    #        back: the earlier copper may run beside the hand-drawn one, a second path of the same net)
     have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) for t in board.tracks}
     have_v = {(v["net"], tuple(v["at"])) for v in board.vias}
     have_v_list = list(board.vias)
@@ -3987,7 +4010,9 @@ _KICAD_LAYERS = [(0, "F.Cu", "signal"), (2, "B.Cu", "signal"), (9, "F.Adhes", "u
                  (33, "B.Fab", "user")]
 # library-file tokens a footprint inside a board does not carry (KiCad 10's library is newer than the board format)
 _FP_DROP = {"version", "generator", "generator_version", "tedit", "embedded_fonts", "embedded_files",
-            "duplicate_pad_numbers_are_jumpers", "jumper_pad_groups", "component_classes"}
+            "duplicate_pad_numbers_are_jumpers", "jumper_pad_groups", "component_classes",
+            "point"}                                     # (KiCad 10's anchor points: KiCad 9 cannot read a board
+                                                         #  that has one, and they carry no copper)
 
 
 def place_refs(board: "Board", sizes: Sequence[float] = (0.8,), gap: float = 0.25) -> Dict[str, Optional[Tuple]]:
@@ -4080,8 +4105,9 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
                 out.append(v)
                 continue
             k = v[0]
-            if k == "model":
-                out.append(v)
+            if k == "model":                             # (the library's model path, as the KiCad 9 file this
+                out.append([k, _Q(re.sub(r"^\$\{KICAD\d+_3DMODEL_DIR\}/", "${KICAD9_3DMODEL_DIR}/", str(v[1])))]
+                           + v[2:] if len(v) > 1 else v)     # is finds it: a newer library names KICAD10's)
             elif k == "at" and owner in ("pad", "property", "fp_text"):
                 x, y = float(v[1]), float(v[2])
                 a = float(v[3]) if len(v) > 3 else 0.0
@@ -4431,8 +4457,11 @@ def kicad_drc(pcb_path: str, refill: bool = False) -> Dict[str, list]:
                         "pcbnew.ZONE_FILLER(b).Fill(b.Zones())\nb.Save(sys.argv[1])", path],
                        check=True, capture_output=True, timeout=1800)
     out = os.path.join(tmp, "drc.json")
-    subprocess.run(["kicad-cli", "pcb", "drc", "--severity-all", "--format", "json", "-o", out, path],
-                   capture_output=True, timeout=1800)
+    r = subprocess.run(["kicad-cli", "pcb", "drc", "--severity-all", "--format", "json", "-o", out, path],
+                       capture_output=True, text=True, timeout=1800)
+    if not os.path.exists(out):                          # (KiCad could not read the board: say so, not a missing file)
+        raise RuntimeError(f"kicad-cli could not check {os.path.basename(pcb_path)} (exit {r.returncode}): "
+                           f"{(r.stdout + r.stderr).strip()[-300:] or 'no output'}")
     d = json.load(open(out))
     desc = lambda v: f"{v['type']}: {v['description']} ({'; '.join(i['description'] for i in v['items'][:2])})"
     return {"errors": [desc(v) for v in d.get("violations", []) if v["severity"] == "error"],
