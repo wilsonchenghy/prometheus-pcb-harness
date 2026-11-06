@@ -580,10 +580,10 @@ def _model(out: Path, script: str) -> dict:
     kpcbs = list((out / "kicad").glob("*.kicad_pcb"))
     if not kpcbs:
         return {"error": "no KiCad board in this folder yet"}
-    if not pcb.kicad_version():
-        return {"error": "KiCad is not installed: the 3D view shows the bare board"}
     glb = out / "board.glb"
     if not glb.exists() or glb.stat().st_mtime < kpcbs[0].stat().st_mtime:
+        if not pcb.kicad_version():                      # (asked only to export: kicad-cli takes 0.2 s to answer)
+            return {"error": "KiCad is not installed: the 3D view shows the bare board"}
         b, _ = pcb_cli.load(script)
         models = out / "models3d"
         pcb.kicad_models(b, str(models))
@@ -638,12 +638,12 @@ def _schematic(out: Path, script: str = "") -> dict:
     schs = sorted((out / "kicad").glob("*.kicad_sch"), key=lambda f: len(f.name))   # (the root: pages are <name>_<n>)
     if not schs:
         return {"error": "no KiCad schematic in this folder yet"}
-    if not pcb.kicad_version():
-        return {"error": "KiCad is not installed: the schematic view needs it to draw the sheet"}
     svg = schs[0].with_suffix(".svg")
     num = lambda f: int((re.match(r"\d+", f.stem[len(svg.stem) + 1:]) or re.match(r"", "")).group() or 0)
     pages = lambda: sorted(svg.parent.glob(svg.stem + "-*.svg"), key=num)
     if not svg.exists() or svg.stat().st_mtime < max(f.stat().st_mtime for f in schs):
+        if not pcb.kicad_version():                      # (asked only to draw: kicad-cli takes 0.2 s to answer)
+            return {"error": "KiCad is not installed: the schematic view needs it to draw the sheet"}
         for f in pages():                                # (a page gone from the design: its drawing too)
             f.unlink()
         r = subprocess.run(["kicad-cli", "sch", "export", "svg", "-o", str(schs[0].parent), str(schs[0])],
