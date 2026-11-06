@@ -333,7 +333,7 @@ a {{ color:var(--blue); text-decoration:none; }} a:hover {{ text-decoration:unde
 .wm {{ font:700 22px/1 var(--disp); letter-spacing:1.4px; text-transform:uppercase; }}
 .crumb {{ font:400 12px var(--mono); color:var(--text3); }} .crumb b {{ color:var(--text); font-weight:500; letter-spacing:.12em; text-transform:uppercase; }}
 main {{ max-width:1180px; margin:0 auto; padding:20px 16px 48px; }}
-.grid {{ display:grid; grid-template-columns:minmax(0, 1fr) 360px; gap:16px; align-items:start; }}
+.grid {{ display:grid; grid-template-columns:minmax(0, 1fr) 360px; gap:16px; align-items:stretch; }}
 @media (max-width:820px) {{ .grid {{ grid-template-columns:minmax(0, 1fr); }} }}
 .panel {{ background:var(--panel); border:1px solid var(--line); }}
 .canvas {{ padding:18px; border-radius:16px; border:1px solid #e5e7eb; box-shadow:0 30px 80px -30px rgba(17,24,39,.45);
