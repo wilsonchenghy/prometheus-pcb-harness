@@ -1266,6 +1266,19 @@ def test_a_cited_choice_is_held_against_its_datasheet_page():
     assert ev[0]["url"] == "https://x/ds.pdf" and ev[1]["url"] is None and ev[0]["quote"] == "Place a 0.1 µF capacitor"
 
 
+def test_datasheet_rows_with_a_number_per_package_and_a_slash_name():
+    """a pin table with one number column per package, read as printed rows ("2 2 6, 7 GND"), confirms the symbol;
+    a pinout drawing's row ("4 4 VCP 13 13") gives no number; an active-low name printed with a slash ("7 /HOLD")"""
+    import parts
+    ap = ("Pin Descriptions\nPin Number Pin Name Function\nSOT25 SOT89-5 SO-8\n1 4 8 VIN Input Voltage\n"
+          "2 2 6, 7 GND GND\n3 5 EN Chip Enable\n— 2, 3, 4 NC No Connection\n5 5 1 VOUT Output Voltage")
+    r = parts.datasheet_check("Regulator_Linear:AP2112K-3.3", pages=[ap])
+    assert r["agree"] == r["total"] == 5, r["pins"]
+    assert {p["name"]: p["quote"] for p in r["pins"]}["GND"] == "2 2 6, 7 GND"
+    assert "4" not in parts._numbers({"VCP"}, "4 4 VCP 13 13", 0)          # (the left side's pins, not VCP's)
+    assert parts._numbers({"HOLD"}, "7 /HOLD or /RESET (IO3) I/O Hold", 0) == ["7"]
+
+
 def test_nudge_vias_parts_two_nets_drills():
     """two nets' vias 0.45 mm apart (drill wall to wall) under a 0.5 mm rule: the one with the fewer tracks moves away
     by the shortfall, its track's end with it, and nothing else changes"""
