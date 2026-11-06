@@ -2051,7 +2051,9 @@ def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     freerouting.escape_fine_pitch(board)                 # (fine-pitch pins' first stretch drawn by the harness)
     board.router_used = "freerouting (through KiCad)"    # (FreeRouting does not know the drill gap: its vias are
     probs = freerouting.route_kicad(board, **kw)         #  parted from the others after)
-    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw)) + nudge_vias(board) + neck_vias(board)
+    probs = _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw)) + nudge_vias(board)
+    neck_vias(board)                                     # (one it cannot move is the critic's "via neck" warning:
+    return probs                                         #  a solder risk to weigh, not a board that is not joined)
 
 
 def tune_pairs(board: Board, tries_per_seg: int = 6) -> List[str]:
