@@ -1048,6 +1048,41 @@ class Board:
             return 0
         return changed
 
+    def drop_loops(self) -> int:
+        """tracks a net does not need: one whose removal leaves every pin of its net joined as before (a second run
+        beside the first, a loop, a stub left over), longest first, again until none goes. Nets with a pour or
+        carrying an amp or more are left alone (parallel copper there may be on purpose). Kept only when check()
+        finds nothing new. Returns how many tracks it removed"""
+        import math
+        poured = {pz["net"] for pz in self.pours}
+        nets = [n for n, d in self.nets.items() if n not in poured and d.get("amps", 0.1) < 1.0]
+        before, tracks0 = set(self.check()), list(self.tracks)
+        length = lambda t: sum(math.dist(a, b) for a, b in zip(t["pts"], t["pts"][1:]))
+        removed = 0
+        def joined(n, want=None):                        # (by copper, then by where track ends land: KiCad's rule)
+            g = len(self.islands(n))
+            return (g, len(self.anchor_groups(n))) if want is None or g == want[0] else (g, None)
+        for net in nets:
+            groups = joined(net)
+            again = True
+            while again:
+                again = False
+                for t in sorted((t for t in self.tracks if t["net"] == net and length(t) >= 0.5), key=length,
+                                reverse=True):          # (a run, not a corner's or a pin's escape piece)
+                    i = next(k for k, u in enumerate(self.tracks) if u is t)
+                    del self.tracks[i]
+                    if joined(net, groups) == groups:
+                        removed += 1
+                        again = True
+                        break
+                    self.tracks.insert(i, t)
+        self.__dict__.pop("_cu_memo", None)
+        if removed and set(self.check()) - before:       # (it broke something: put it all back)
+            self.tracks = tracks0
+            self.__dict__.pop("_cu_memo", None)
+            return 0
+        return removed
+
     def trim_overshoots(self) -> int:
         """a track end that runs on past the point where the next track of its net leaves it (a route taken off a
         fine-pitch pin's stub part-way) and meets nothing there: cut back to that point, so no rounded end pokes out
@@ -1985,6 +2020,7 @@ def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     unpaired = lambda: {p_ for p_ in board.check() if not p_.startswith("pair ")}   # (pairs: tuned just below)
     before = unpaired()                                  # (clean corners: no stub past a bend, no right angles;
     t0 = [dict(t, pts=list(t["pts"])) for t in board.tracks]   # kept only when the check finds nothing new)
+    board.drop_loops()                                   # (a second run of a net's track, a loop: not needed)
     board.trim_overshoots()
     board.chamfer()
     if unpaired() - before:
