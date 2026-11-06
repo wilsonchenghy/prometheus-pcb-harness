@@ -23,12 +23,12 @@
  "parts": 20,
  "nets": 31,
  "layers": 2,
- "seconds": 4.6,
+ "seconds": 5.0,
  "timings": {
   "routes/": 0.0,
-  "critic": 0.026,
-  "check": 0.52,
-  "export": 3.43
+  "critic": 0.058,
+  "check": 0.55,
+  "export": 3.81
  },
  "placement": {
   "U1": [
