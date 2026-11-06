@@ -2608,7 +2608,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     # 3. settle: a part still further than its "within d mm" (a requirement, a decoupling cap) goes to the
     # cheapest legal spot round its partner's pin within that distance, if there is one
     mov_set = set(mov) if len(mov) >= 1 else set()
-    gap = min(gap, 0.5)                                  # (legal() reads it: a held part may sit closer)
+    gap0, gap = gap, min(gap, 0.5)                       # (legal() reads it: a held part may sit closer)
     for n, d_ in NETS.items():
         lim = d_.get("limit")
         if lim is None or len(d_["pins"]) != 2:
@@ -2677,6 +2677,8 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
                     break
         if best_ is not None:
             pos[ra] = best_[1]
+    gap = gap0                                           # (lined up at the full gap: the routing's room kept)
+    _align(board, [r for r in mov if r not in many], pos, rots, legal, net_cost, nets_of)
     for r in move:
         if r in placed:
             c = board.comps[r]
@@ -2684,6 +2686,74 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             c.pop("unplaced", None)
     board.__dict__.pop("_pads_memo", None)
     return failed
+
+
+def _align(board: Board, small: Sequence[str], pos: dict, rots, legal, net_cost, nets_of, grid: float = 0.5,
+           tol: float = 1.5) -> None:
+    """autoplace's last step, a tidy board: the small parts (``small``) of one footprint turned the same way, each
+    on a ``grid`` mm grid, and a run of them side by side lined up in a row (or a column) at even gaps; each change
+    kept only where it is legal and costs at most ``tol`` mm of wire a part"""
+    def cost(rs):
+        return sum(net_cost(n) for n in sorted({n for r in rs for n in nets_of.get(r, [])}))
+
+    def take(ch):                                        # {ref: (x, y, a)}: kept if legal and nearly free
+        old = {r: pos[r] for r in ch}
+        c0 = cost(ch)
+        pos.update(ch)
+        if all(legal(r, *pos[r]) for r in ch) and cost(ch) <= c0 + tol * len(ch) + 1e-9:
+            return True
+        pos.update(old)
+        return False
+    g = lambda v: round(v / grid) * grid
+    side = lambda r: board.comps[r].get("side", "F")
+    groups: Dict[tuple, List[str]] = {}
+    for r in sorted(small):
+        groups.setdefault((board.comps[r]["fp"], side(r)), []).append(r)
+    for rs in groups.values():
+        # 1. one way round: the group's usual axis, each part turned to it where it is, else a grid step or a few off
+        axis = int(sum(pos[r][2] % 180 == 0 for r in rs) * 2 < len(rs)) * 90
+        for r in rs:
+            if pos[r][2] % 180 != axis:
+                x, y, _ = pos[r]
+                for p in sorted(((g(x) + i * grid, g(y) + j * grid) for i in range(-4, 5) for j in range(-4, 5)),
+                                key=lambda p: (math.hypot(p[0] - x, p[1] - y), p)):
+                    if any(take({r: (p[0], p[1], a)}) for a in rots if a % 180 == axis):
+                        break
+        # 2. on the grid: the nearest grid point, else the others of its cell
+        for r in rs:
+            x, y, a = pos[r]
+            for p in sorted({(gx_, gy_) for gx_ in (g(x), g(x) + grid, g(x) - grid) for gy_ in (g(y), g(y) + grid, g(y) - grid)},
+                            key=lambda p: (abs(p[0] - x) + abs(p[1] - y), p)):
+                if abs(p[0] - x) <= grid and abs(p[1] - y) <= grid and take({r: (p[0], p[1], a)}):
+                    break
+        # 3. rows and columns: neighbours (one apart a little across, a few mm along) on one line, evenly spaced
+        for k in (1, 0):                                 # (k: the coordinate shared; 1 a row, 0 a column)
+            runs, seen = [], set()
+            for r in rs:
+                if r in seen:
+                    continue
+                run, todo = [], [r]
+                while todo:
+                    q = todo.pop()
+                    if q in seen:
+                        continue
+                    seen.add(q)
+                    run.append(q)
+                    todo += [o for o in rs if o not in seen and pos[o][2] % 180 == pos[q][2] % 180 and
+                             abs(pos[o][k] - pos[q][k]) <= 1.5 and abs(pos[o][1 - k] - pos[q][1 - k]) <= 6.0]
+                if len(run) >= 2:
+                    runs.append(sorted(run, key=lambda q: (pos[q][1 - k], q)))
+            for run in runs:
+                line = g(sorted(pos[q][k] for q in run)[len(run) // 2])
+                at = lambda q, v, u: (v, u, pos[q][2]) if k == 1 else (u, v, pos[q][2])
+                if not take({q: at(q, pos[q][1 - k], line) for q in run}):
+                    for q in run:
+                        take({q: at(q, pos[q][1 - k], line)})
+                on = [q for q in run if abs(pos[q][k] - line) < 1e-6]
+                if len(on) >= 3:
+                    lo, hi = pos[on[0]][1 - k], pos[on[-1]][1 - k]
+                    step = g((hi - lo) / (len(on) - 1))
+                    take({q: at(q, lo + i * step, line) for i, q in enumerate(on)})
 
 
 def severity(probs: Sequence[str]) -> int:
