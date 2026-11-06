@@ -2252,3 +2252,21 @@ def test_a_via_moved_off_its_pad_keeps_the_nets_width():
     t = b.tracks[-1]
     assert t["net"] == "GND" and t["w"] >= b.net_width("GND") - 1e-6
     assert not any("too narrow" in p for p in b.check())
+
+
+def test_autoplace_keeps_parts_off_the_scripts_copper():
+    """a part the placer places does not land on a track the script drew (it would short to it)"""
+    import pcb
+    from shapely.geometry import LineString
+    b = pcb.Board("pl", [(0, 0), (20, 0), (20, 10), (0, 10)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (3.0, 5.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (17.0, 5.0), 0, "1k")
+    for i in range(3, 9):
+        b.place(f"R{i}", "Resistor_SMD:R_0805_2012Metric", None, 0, "1k")
+    b.net("P", [("R1", "2"), ("R2", "1")], amps=2.0)
+    b.track("P", "F", [b.pad("R1", "2"), b.pad("R2", "1")], 1.0)       # (a wide feed across the middle)
+    for i in range(3, 9, 2):
+        b.net(f"N{i}", [(f"R{i}", "1"), (f"R{i + 1}", "1")])
+    assert not pcb.autoplace(b)
+    feed = LineString([b.pad("R1", "2"), b.pad("R2", "1")]).buffer(0.5)
+    assert not [r for r in b.comps if r not in ("R1", "R2") and b.courtyard(r).intersects(feed)]

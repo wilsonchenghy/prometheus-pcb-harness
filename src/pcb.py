@@ -2487,6 +2487,17 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
         for L in "FB":
             if L in k["layers"]:
                 fixed_obs[L].append(bx)
+    for t in board.tracks:                               # and the copper the script drew (a hand-drawn feed): a
+        if t.get("fan") or t["layer"] not in fixed_obs:  # part placed on it would short to it; as small boxes
+            continue                                     # along each segment (a diagonal is no one box)
+        h_ = t["w"] / 2
+        for (xa, ya), (xb, yb) in zip(t["pts"], t["pts"][1:]):
+            n_ = max(1, int(math.ceil(math.dist((xa, ya), (xb, yb)) / 0.5)))
+            for i_ in range(n_):
+                x0_, y0_ = xa + (xb - xa) * i_ / n_, ya + (yb - ya) * i_ / n_
+                x1_, y1_ = xa + (xb - xa) * (i_ + 1) / n_, ya + (yb - ya) * (i_ + 1) / n_
+                fixed_obs[t["layer"]].append((min(x0_, x1_) - h_, min(y0_, y1_) - h_,
+                                              max(x0_, x1_) + h_, max(y0_, y1_) + h_))
 
     def box_of(r, x, y, a):
         x0, y0, x1, y1 = R_[(r, a)]
