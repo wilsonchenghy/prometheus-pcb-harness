@@ -102,8 +102,6 @@ routes):
 | ripple_main | 67 | 2 | about 50 s | clean (JLCPCB) |
 | qdd_main | 70 | 2 | about 55 s | clean (JLCPCB) |
 | controller_main | 47 | 2 | about 55 s | clean (JLCPCB), KiCad DRC clean; its two rear screw holes at x = ±20.75, 0.25 mm inboard of where the shell had them, to keep 0.5 mm from the 7.2 mm cut-outs (move the shell's bosses to match) |
-| fpv_fc (STM32F405) | 42 | 2 | about 60 s | clean (PCBWay: 0.1 mm tracks) |
-| fpv_esc (4-in-1) | 104 | 2 | about 2 min | clean (PCBWay), KiCad DRC clean |
 | twilight_fc | 199 | 4 | committed routes | clean (JLCPCB 4-layer), KiCad DRC clean |
 
 KiCad's DRC finds no errors and no unconnected items on any of them; it still warns of a few dangling track ends
@@ -192,7 +190,6 @@ Run the script to rebuild `out/`, or give it another folder. The KiCad DRC and r
 | `examples/balancing_cube/` | `cube_board.py` (+ sheet) | a balancing cube's main board: three motor channels, encoders |
 | `examples/social_wheelbot/` | `ripple_pcb.py` | a wheeled robot's power / CAN board, six motors |
 | `examples/quadruped/` | `qdd_power_board.py` | a quadruped's power / CAN board, twelve motors |
-| `examples/fpv_quad/` | `fpv_boards.py` | a 5-inch quadcopter's 4-in-1 ESC and STM32F405 flight controller (`out/fpv_esc`, `out/fpv_fc`) |
 | `examples/game_controller/` | `controller_pcb.py` | a game controller's board in its shell's outline (`controller_board.json`) |
 | `examples/imu_bno085/` | `imu_bno085.py` (+ `req.json`, run with `prometheus`) | an 18 x 22 mm BNO085 IMU breakout: USB-C, 3.3 V LDO, I2C header |
 | `examples/netlist/` | `blinker_sch.net` | a KiCad netlist to start a board from |

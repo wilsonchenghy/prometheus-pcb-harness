@@ -59,12 +59,6 @@ def _controller():
     return [(b, probs, "jlcpcb-2")]
 
 
-def _fpv():
-    g = _ex("fpv_quad/fpv_boards.py")
-    # (0.1 mm tracks off 0.4-0.5 mm pitch parts: a 4 mil house, not JLCPCB's 2-layer 5 mil)
-    return [(*g["esc_build"](), "pcbway-std"), (*g["fc_build"](), "pcbway-std")]
-
-
 def _placed(script, fixed, rules="jlcpcb-2"):
     """a bench board with its parts' positions thrown away (all but the ones the enclosure fixes) and placed and
     routed from scratch by pcb.place_and_route: the whole flow from a parts list"""
@@ -107,7 +101,6 @@ BOARDS = {
         store=os.path.join(ROOT, "examples", "balancing_cube", "routes")), "jlcpcb-2")],
     "ripple": lambda: [(*_ex("social_wheelbot/ripple_pcb.py")["build"](), "jlcpcb-2")],
     "qdd": lambda: [(*_ex("quadruped/qdd_power_board.py")["build"](), "jlcpcb-2")],
-    "fpv": _fpv,
     "controller": _controller,
     "blinker_placed": _placed("blinker.py", {"J1"}),
     "usb_ldo_placed": _placed("usb_ldo.py", {"J1", "J2"}),
