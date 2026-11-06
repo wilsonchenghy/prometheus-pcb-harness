@@ -1,0 +1,50 @@
+{
+ "lib": "Prometheus",
+ "name": "SQ4401EY",
+ "ref": "Q",
+ "footprint": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+ "datasheet": "https://www.vishay.com/docs/65411/sq4401ey.pdf",
+ "description": "40 V P-channel MOSFET, SO-8 (Vishay SQ4401EY)",
+ "pins": [
+  [
+   1,
+   "S",
+   "passive"
+  ],
+  [
+   2,
+   "S",
+   "passive"
+  ],
+  [
+   3,
+   "S",
+   "passive"
+  ],
+  [
+   4,
+   "G",
+   "passive"
+  ],
+  [
+   5,
+   "D",
+   "passive"
+  ],
+  [
+   6,
+   "D",
+   "passive"
+  ],
+  [
+   7,
+   "D",
+   "passive"
+  ],
+  [
+   8,
+   "D",
+   "passive"
+  ]
+ ]
+}

@@ -35,6 +35,10 @@ def load(path: str):
     own = Path(os.path.dirname(os.path.abspath(path))) / "footprints"   # (footprints made for this board: fpgen.py)
     if own.is_dir() and own not in pcb.FP_DIRS:
         pcb.FP_DIRS.insert(0, own)
+    import parts
+    syms = own.parent / "symbols"                        # (symbols made for this board: symgen.py)
+    if syms.is_dir() and syms not in parts.SYM_DIRS:
+        parts.SYM_DIRS.insert(0, syms)
     g = runpy.run_path(path, run_name="pcb_cli")
     if callable(g.get("build")):
         got = g["build"]()
@@ -312,6 +316,9 @@ def main(argv=None) -> int:
     if argv[:1] == ["footprint"]:
         import fpgen
         return fpgen.main(argv[1:])
+    if argv[:1] == ["symbol"]:                           # (a symbol from a datasheet's pin table: symgen.py)
+        import symgen
+        return symgen.main(argv[1:])
     if argv[:1] == ["import"]:                           # (a KiCad layout as a board script, for a revision)
         import kicad_import
         return kicad_import.main(argv[1:])

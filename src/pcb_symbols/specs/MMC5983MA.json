@@ -1,0 +1,90 @@
+{
+ "lib": "Prometheus",
+ "name": "MMC5983MA",
+ "ref": "U",
+ "footprint": "Package_LGA:LGA-16_3x3mm_P0.5mm",
+ "datasheet": "https://www.memsic.com/Public/Uploads/uploadfile/files/20220119/MMC5983MADatasheetRevA.pdf",
+ "description": "3-axis magnetometer, I2C / SPI (MEMSIC MMC5983MA, pin description)",
+ "pins": [
+  [
+   1,
+   "SCL/SPI_SCK",
+   "input"
+  ],
+  [
+   2,
+   "VDD",
+   "power_in"
+  ],
+  [
+   3,
+   "NC",
+   "no_connect"
+  ],
+  [
+   4,
+   "SPI_CS",
+   "input"
+  ],
+  [
+   5,
+   "SPI_SDO",
+   "tri_state"
+  ],
+  [
+   6,
+   "NC",
+   "no_connect"
+  ],
+  [
+   7,
+   "NC",
+   "no_connect"
+  ],
+  [
+   8,
+   "NC",
+   "no_connect"
+  ],
+  [
+   9,
+   "GND",
+   "power_in"
+  ],
+  [
+   10,
+   "CAP",
+   "passive"
+  ],
+  [
+   11,
+   "GND",
+   "power_in"
+  ],
+  [
+   12,
+   "NC",
+   "no_connect"
+  ],
+  [
+   13,
+   "VDDIO",
+   "power_in"
+  ],
+  [
+   14,
+   "NC",
+   "no_connect"
+  ],
+  [
+   15,
+   "INT",
+   "output"
+  ],
+  [
+   16,
+   "SDA/SPI_SDI",
+   "bidirectional"
+  ]
+ ]
+}

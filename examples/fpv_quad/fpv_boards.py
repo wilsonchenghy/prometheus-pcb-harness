@@ -67,7 +67,7 @@ def esc_board():
                 b.via(f"M{m}{ph}", rot(v, k), 0.4, 0.7)
         # the channel's controller: STM32F031 + 3-phase gate driver + 12 V / 3.3 V regulators in one package
         b.place(f"U{m}", QFN48, rot((UX, UY), k), a, "STSPIN32F0A", "ST STSPIN32F0ATR",
-                model="Package_DFN_QFN.3dshapes/QFN-48-1EP_7x7mm_P0.5mm_EP5.15x5.15mm.step", note=f"motor {m} controller")
+                model="Package_DFN_QFN.3dshapes/QFN-48-1EP_7x7mm_P0.5mm_EP5.15x5.15mm.step", note=f"motor {m} controller", symbol="Driver_Motor:STSPIN32F0A")
         for i, ph in enumerate("ABC"):                               # bootstrap caps over their OUT and BOOT vias
             b.place(f"C{m}{ph}B", C04, rot((2.0 + 2.0 * i, 11.15), k), a, "1u 25V", "X7R 0402", model=c04m, note="bootstrap")
         # back-EMF and bus sensing (ST 6-step: phase / 2 against the bus / 2 on the ADC): a 22k / 2k2 divider per phase
@@ -276,9 +276,9 @@ def fc_board():
     P = "Package_TO_SOT_SMD.3dshapes/"
     # MCU, gyro, crystal, flash
     b.place("U1", "Package_QFP:LQFP-64_10x10mm_P0.5mm", (0.0, 0.0), 180, "STM32F405RGT6", "ST STM32F405RGT6",
-            model="Package_QFP.3dshapes/LQFP-64_10x10mm_P0.5mm.step")
+            model="Package_QFP.3dshapes/LQFP-64_10x10mm_P0.5mm.step", symbol="MCU_ST_STM32F4:STM32F405RGTx")
     b.place("U2", "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y", (1.5, 10.75), 180, "ICM-42688-P", "TDK ICM-42688-P",
-            model="Package_LGA.3dshapes/LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y.step", side="B")
+            model="Package_LGA.3dshapes/LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y.step", side="B", symbol="Prometheus:ICM-42688-P")
     b.place("C20", C04, (-1.5, 11.5), 90, "100n", "X7R 0402", model=c04m, side="B")
     b.place("C21", C04, (4.0, 12.85), 0, "100n", "X7R 0402", model=c04m, side="B")
     b.place("Y1", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", (9.5, -1.5), 90, "8 MHz", "Abracon ABM8-8.000MHZ-B2-T",
@@ -286,7 +286,7 @@ def fc_board():
     b.place("C22", C04, (9.5, 1.25), 0, "12p", "C0G 0402", model=c04m)
     b.place("C23", C04, (9.5, -4.25), 0, "12p", "C0G 0402", model=c04m)
     b.place("U3", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", (4.5, -11.0), 90, "W25Q128JV", "Winbond W25Q128JVSIQ",
-            model="Package_SO.3dshapes/SOIC-8_5.3x5.3mm_P1.27mm.step", side="B", note="blackbox flash")
+            model="Package_SO.3dshapes/SOIC-8_5.3x5.3mm_P1.27mm.step", side="B", note="blackbox flash", symbol="Memory_Flash:W25Q128JVS")
     b.place("C24", C04, (8.25, -11.0), 90, "100n", "X7R 0402", model=c04m, side="B")
     # MCU decoupling under it (bottom), VCAP, NRST, BOOT0
     for ref, at, rot_, val in (("C1", (2.75, 4.2), 90, "100n"), ("C2", (-4.0, 4.2), 90, "100n"), ("C3", (-4.2, -3.75), 0, "100n"),
@@ -308,7 +308,7 @@ def fc_board():
     b.place("R5", R04, (12.75, -6.6), 0, "1k", "RC0402FR-071KL", model=r04m, side="B")
     # power: VBAT (from the ESC) -> 5 V buck (bottom) -> 3.3 V LDO; USB VBUS -> 5 V through a Schottky
     b.place("U4", "Package_TO_SOT_SMD:SOT-23-6", (8.5, 7.75), 90, "LMR51420", "TI LMR51420YDDCR",
-            model=P + "SOT-23-6.step", side="B")
+            model=P + "SOT-23-6.step", side="B", symbol="Prometheus:LMR51420")
     b.place("L1", "Inductor_SMD:L_Coilcraft_XAL4020-XXX", (8.0, 12.5), 0, "6u8", "Coilcraft XAL4020-682",
             model="Inductor_SMD.3dshapes/L_Coilcraft_XAL4020-XXX.step", side="B")
     b.place("C9", "Capacitor_SMD:C_1206_3216Metric", (11.75, 8.75), 90, "4u7 50V", "GRM31CR71H475KA12L",
@@ -346,20 +346,20 @@ def fc_nets(b):
     n = lambda name, pins, amps=0.01, volts=3.3: b.net(name, pins, amps=amps, volts=volts)
     n("GND", [(U, F4["VSS1"]), (U, F4["VSS2"]), (U, F4["VSSA"]), ("U2", "6"), ("C20", "2"), ("C21", "2"), ("C22", "2"),
               ("C23", "2"), ("U3", "4"), ("C24", "2")] + [(c, "2") for c in ("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8")]
-      + [("R1", "2"), ("R5", "2"), ("U4", "2"), ("C9", "2"), ("C11", "2"), ("R7", "2"), ("U5", "2"), ("C12", "2"),
+      + [("R1", "2"), ("R5", "2"), ("U4", "1"), ("C9", "2"), ("C11", "2"), ("R7", "2"), ("U5", "2"), ("C12", "2"),
          ("C13", "2"), ("J1", "A1"), ("J1", "B12"), ("J1", "A12"), ("J1", "B1"), ("R8", "2"), ("R9", "2"), ("J2", "1"),
          ("J3", "1"), ("J4", "2"), ("J4", "5"), ("D1", "1"), ("D2", "1")], amps=1.5, volts=25.0)
     n("3V3", [(U, F4["VBAT"]), (U, F4["VDD1"]), (U, F4["VDD2"]), (U, F4["VDD3"]), (U, F4["VDD4"]), (U, F4["VDDA"]),
               ("U2", "5"), ("U2", "8"), ("C20", "1"), ("C21", "1"), ("U3", "8"), ("U3", "3"), ("U3", "7"), ("C24", "1"),
               ("C1", "1"), ("C2", "1"), ("C3", "1"), ("C4", "1"), ("C5", "1"), ("C8", "1"), ("U5", "5"), ("C13", "1"),
               ("SW1", "1"), ("R3", "1")], amps=0.3)                # (D2 through R3: the 3.3 V power LED)
-    n("VBAT", [("J2", "2"), ("U4", "5"), ("U4", "4"), ("C9", "1"), ("R4", "1"), ("J4", "1")], amps=1.5, volts=25.2)
+    n("VBAT", [("J2", "2"), ("U4", "3"), ("U4", "5"), ("C9", "1"), ("R4", "1"), ("J4", "1")], amps=1.5, volts=25.2)
     n("5V", [("L1", "2"), ("C11", "1"), ("R6", "1"), ("U5", "1"), ("U5", "3"), ("C12", "1"), ("J3", "2"), ("D3", "1")],
       amps=1.5, volts=5.0)
     n("VBUS", [("J1", "A4"), ("J1", "B9"), ("J1", "B4"), ("J1", "A9"), ("D3", "2")], amps=0.5, volts=5.0)
-    n("SW", [("U4", "6"), ("L1", "1"), ("C10", "2")], amps=1.5, volts=25.2)
-    n("CB", [("U4", "1"), ("C10", "1")])
-    n("FB", [("U4", "3"), ("R6", "2"), ("R7", "1")])
+    n("SW", [("U4", "2"), ("L1", "1"), ("C10", "2")], amps=1.5, volts=25.2)
+    n("CB", [("U4", "6"), ("C10", "1")])
+    n("FB", [("U4", "4"), ("R6", "2"), ("R7", "1")])
     n("VCAP1", [(U, F4["VCAP1"]), ("C6", "1")])
     n("VCAP2", [(U, F4["VCAP2"]), ("C7", "1")])
     n("BOOT0", [(U, F4["BOOT0"]), ("R1", "1"), ("SW1", "2")])

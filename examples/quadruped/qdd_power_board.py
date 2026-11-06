@@ -105,7 +105,7 @@ def power_board():
     b.place("SW1", "Button_Switch_SMD:SW_SPDT_PCM12", (SW_X, SW_Y), 180, "PCM12", "C&K PCM12SMTR",
             model="Button_Switch_SMD.3dshapes/SW_SPDT_PCM12.step", overhang=True)   # its lever reaches the wall
     # 5 V buck
-    b.place("U2", "Package_TO_SOT_SMD:SOT-23-6", (20.0, 20.0), 0, "LMR51420", "TI LMR51420YDDCR", model=P + "SOT-23-6.step")
+    b.place("U2", "Package_TO_SOT_SMD:SOT-23-6", (20.0, 20.0), 180, "LMR51420", "TI LMR51420YDDCR", model=P + "SOT-23-6.step", symbol="Prometheus:LMR51420")
     b.place("L1", "Inductor_SMD:L_Bourns_SRN6045TA", (31.0, 20.0), 0, "10u", "Bourns SRN6045TA-100M",
             model="Inductor_SMD.3dshapes/L_Bourns_SRN6045TA.step")
     for ref, at in (("C3", (22.0, 12.0)), ("C4", (22.0, 8.0))):
@@ -125,7 +125,7 @@ def power_board():
     b.place("RT", "Resistor_SMD:R_0805_2012Metric", (-16.0, 85.0), 90, "120R", "RC0805FR-07120RL",
             model="Resistor_SMD.3dshapes/R_0805_2012Metric.step")
     b.place("U4", "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y", (16.0, 44.0), 0, "ICM-42688-P", "TDK ICM-42688-P",
-            model="Package_LGA.3dshapes/LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y.step")
+            model="Package_LGA.3dshapes/LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y.step", symbol="Prometheus:ICM-42688-P")
     # motor connectors
     for i, ((leg, k), (x, y)) in enumerate(XT.items()):
         e = LEGS[leg][1]
@@ -159,10 +159,10 @@ def power_board():
     b.net("VINF", [("R11", "2"), ("U1", "2"), ("C13", "1")], amps=0.01, volts=V)
     b.net("VD", [("RS1", "2"), ("Q1", "5"), ("Q2", "5"), ("U1", "1")], amps=30.0, volts=V)
     b.net("VBUS", [("Q1", s_) for s_ in "123"] + [("Q2", s_) for s_ in "123"] + [(j, "1") for j in XT30S] + [("J26", "1")]
-          + [("U1", "9"), ("CB1", "1"), ("CB2", "1"), ("U2", "5"), ("U2", "4"), ("C3", "1"), ("C4", "1"), ("R7", "1")],
+          + [("U1", "9"), ("CB1", "1"), ("CB2", "1"), ("U2", "3"), ("U2", "5"), ("C3", "1"), ("C4", "1"), ("R7", "1")],
           amps=30.0, volts=V)
     b.net("GND", [("J1", "2"), ("D1", "2"), ("U1", "5"), ("R3", "2"), ("R10", "2"), ("C12", "2"), ("R8", "2"),
-                  ("C11", "2"), ("CB1", "2"), ("CB2", "2"), ("SW1", "1"), ("U2", "2"), ("C3", "2"), ("C4", "2"),
+                  ("C11", "2"), ("CB1", "2"), ("CB2", "2"), ("SW1", "1"), ("U2", "1"), ("C3", "2"), ("C4", "2"),
                   ("C5", "2"), ("C6", "2"), ("R5", "2"), ("H1", "14"), ("H2", "14"), ("U3", "2"), ("U3", "8"),
                   ("C8", "2"), ("U4", "6"), ("C9", "2"), ("C10", "2"), ("C13", "2"), ("D2", "3"), ("D3", "1")] + [(j, "2") for j in XT30S] + [(j, "3") for j in GHS] + [("J26", "2"), ("J27", "3"), ("J28", "2")],
           amps=30.0, volts=V)
@@ -175,9 +175,9 @@ def power_board():
     b.net("PWR", [("U1", "7"), ("R10", "1")], amps=0.01, volts=V)
     b.net("PGD", [("U1", "8"), ("R9", "2"), ("H1", "4")], amps=0.01, volts=3.3)          # D34 (input only)
     b.net("VSENSE", [("R7", "2"), ("R8", "1"), ("C11", "1"), ("H1", "5")], amps=0.01, volts=3.3)   # D35 (ADC1_7)
-    b.net("SW", [("U2", "6"), ("L1", "1"), ("C7", "2")], amps=1.5, volts=V)
-    b.net("CB", [("U2", "1"), ("C7", "1")], amps=0.1, volts=V)
-    b.net("FB", [("U2", "3"), ("R4", "2"), ("R5", "1")], amps=0.01, volts=1.0)
+    b.net("SW", [("U2", "2"), ("L1", "1"), ("C7", "2")], amps=1.5, volts=V)
+    b.net("CB", [("U2", "6"), ("C7", "1")], amps=0.1, volts=V)
+    b.net("FB", [("U2", "4"), ("R4", "2"), ("R5", "1")], amps=0.01, volts=1.0)
     b.net("5V", [("L1", "2"), ("C5", "1"), ("C6", "1"), ("R4", "1"), ("H1", "15"), ("R12", "1")], amps=1.5, volts=5.0)
     b.net("LED", [("R12", "2"), ("D3", "2")], amps=0.01, volts=5.0)
     b.net("3V3", [("H2", "15"), ("U3", "3"), ("C8", "1"), ("U4", "5"), ("U4", "8"), ("C9", "1"), ("C10", "1"), ("R9", "1")],
@@ -247,7 +247,7 @@ def board_route(b, top_pours, vbus):
     probs += route(b, "VIN", width=0.25, amps=0.01, only=[("R11", "1"), ("R1", "1")], keepout=ko([top_pours["VIN"]]))
     probs += route(b, "VINF", width=0.25, keepout={"F": ko_all})
     probs += route(b, "VD", width=0.25, amps=0.01, only=[("U1", "1")], keepout=ko([top_pours["VD"]]))
-    probs += route(b, "VBUS", width=0.6, amps=1.0, only=[("U2", "5"), ("U2", "4"), ("C3", "1"), ("C4", "1"), ("R7", "1")],
+    probs += route(b, "VBUS", width=0.6, amps=1.0, only=[("U2", "3"), ("U2", "5"), ("C3", "1"), ("C4", "1"), ("R7", "1")],
                    keepout=ko([p for p, _ in vbus]))
     for n in ("CB", "SW", "FB", "5V", "LED", "VSENSE", "CAN_TX", "CAN_RX", "SCK", "MOSI", "MISO", "IMU_CS", "UART_TX", "UART_RX", "3V3",
               "CANH", "CANL"):

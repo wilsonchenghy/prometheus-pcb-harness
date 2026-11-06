@@ -16,6 +16,7 @@ import datetime
 import math
 import os
 import re
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import parts
@@ -171,8 +172,9 @@ def _lib_symbol(name: str) -> list:
     if name in _BOX:
         return _BOX[name][0]
     lib, sym = name.split(":", 1)
+    own = any((Path(d) / f"{lib}.kicad_symdir" / f"{sym}.kicad_sym").exists() for d in parts.SYM_DIRS)
     try:
-        t9 = _symbol9(lib, sym)
+        t9 = None if own else _symbol9(lib, sym)         # (a project symbol: its own file, already KiCad 9's form)
     except Exception:                                    # (offline with nothing cached: today's library)
         t9 = None
     nums9 = set(re.findall(r'\(number "([^"]*)"', t9 or ""))     # (an alias has none: its parent's are checked)
