@@ -1327,6 +1327,8 @@ def test_live_edit_moves_a_part_reroutes_its_nets_and_undoes(tmp_path):
     assert not cache.move("R9", (5, 5))["ok"]
     back = cache.undo_move()
     assert back["ok"] and cache.live.comps["R3"]["at"] == (15, 4) and json.loads((out / "moves.json").read_text()) == []
+    cache.undo.append((None, None, None, [], []))                     # (a "route properly" undone: its copper only)
+    assert cache.undo_move()["ok"] and cache.live.tracks == [] and cache.live.comps["R3"]["at"] == (15, 4)
 
 
 def test_nudge_vias_parts_two_nets_drills():
