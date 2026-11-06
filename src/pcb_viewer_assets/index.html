@@ -960,7 +960,8 @@ function drawHeader() {
   else if (P && P.stopped) { vv.className = "v bad"; vv.textContent = "Stopped."; vs.textContent = "The run ended before it finished: run it again."; }
   else if (R && R.board) { vv.className = "v " + (R.clean ? "ok" : "bad"); vv.textContent = R.clean ? "Ready to order." : (n === 1 ? "1 issue." : n + " issues.");
     const erc = B && !B.error && B.comps.some(c => c.symbol);
-    vs.textContent = R.clean ? `Design, house rules${R.kicad_drc && R.kicad_drc.run ? ", KiCad DRC" : ""}${erc ? " and ERC" : ""} pass.` : "Click one to see it on the board."; }
+    vs.textContent = (R.clean ? `Design, house rules${R.kicad_drc && R.kicad_drc.run ? ", KiCad DRC" : ""}${erc ? " and ERC" : ""} pass.` : "Click one to see it on the board.")
+      + (R.skipped && R.skipped.length ? " Skipped: " + R.skipped.map(s => s.what).join(", ") + "." : ""); }
   const card = $("#prog"); $("#canvas").classList.toggle("running", !!running); card.classList.toggle("on", !!running);
   if (running) {
     const frac = P.eta == null ? 0.03 : Math.max(0.03, Math.min(0.98, P.elapsed / (P.elapsed + P.eta)));

@@ -326,7 +326,6 @@ def main(argv=None) -> int:
     ap.add_argument("--boards", type=int, default=5, help="how many boards to buy parts for (default 5)")
     ap.add_argument("--rules", default=None, help="fab preset for the house check (default: the board's, else jlcpcb-2)")
     ap.add_argument("--step", action="store_true", help="also write the assembled board as STEP (needs build123d)")
-    ap.add_argument("--no-route", action="store_true", help="do not route an unrouted board")
     ap.add_argument("--size", help="a netlist's board size, WxH mm (e.g. 50x40)")
     ap.add_argument("--layers", type=int, default=2, help="a netlist's board: 2 or 4 layers (default 2)")
     ap.add_argument("--at", action="append", metavar="REF=X,Y[,ROT[,SIDE]]",
@@ -335,9 +334,10 @@ def main(argv=None) -> int:
     ap.add_argument("--kicad-drc", choices=("auto", "off", "require"), default="auto",
                     help="KiCad's own DRC on the exported board: auto (when KiCad 9+ is installed; default), off, "
                          "or require (fail when KiCad is missing)")
-    ap.add_argument("--router", choices=("freerouting", "harness"), default="freerouting",
-                    help="freerouting (FreeRouting through KiCad, the default: needs KiCad, Java and the jar, and stops "
-                         "saying which is missing) or harness (the built-in grid router, no installs)")
+    ap.add_argument("--router", choices=("freerouting", "harness"), default=None,
+                    help="freerouting (FreeRouting through KiCad: needs KiCad, Java and the jar, and stops saying "
+                         "which is missing) or harness (the built-in grid router). Default: FreeRouting when they are "
+                         "installed, else the built-in router, and the run says so")
     ap.add_argument("--stage", choices=("schematic", "critic", "place", "route", "check", "export", "all"), default="all",
                     help="run one stage: schematic (the schematic, shown in the viewer, then stop: for the engineer's "
                          "go before any layout), critic (the design review, instant), place (place what has no position), "
@@ -348,8 +348,6 @@ def main(argv=None) -> int:
     ap.add_argument("--json", action="store_true", help="print the result as JSON (for an agent) instead of text")
     ap.add_argument("--datasheets", action="store_true", help="also read each symbol part's datasheet and check its "
                     "pins against the datasheet's pin table (fetched once, then cached)")
-    ap.add_argument("--view", action="store_true", help="serve the viewer from this run and wait for Ctrl-C at the end "
-                    "(by default the viewer opens on its own in the background; 'prometheus view OUT' later)")
     ap.add_argument("--no-lcsc", action="store_true", help="do not look up LCSC numbers for parts without one "
                     "(JLCPCB's catalogue; also off when CI is set)")
     ap.add_argument("--no-view", action="store_true", help="do not open the viewer (also off when CI is set)")
@@ -366,9 +364,7 @@ def main(argv=None) -> int:
     import pcb_view
     prog = pcb_view.Progress(a.out, a.script)
     pcb.PROGRESS = prog.event
-    if a.view:
-        srv, url = pcb_view.serve(a.out, block=False)
-    elif not a.no_view and not os.environ.get("CI"):     # (the board in a browser, live, without holding the run)
+    if not a.no_view and not os.environ.get("CI"):     # (the board in a browser, live, without holding the run)
         print(f"viewer: {pcb_view.launch(a.out)}", file=sys.stderr, flush=True)
     try:
         b, probs = load_netlist(a.script, a) if a.script.endswith(".net") else load(a.script)
@@ -383,7 +379,13 @@ def main(argv=None) -> int:
         print("note:", note)
     print(f"{b.name}: {len(b.comps)} parts, {len(b.nets)} nets, {len(b.layers)} layers  [stage: {a.stage}]")
     prog.d["parts"] = len(b.comps)
-    viewing = a.view or (not a.no_view and not os.environ.get("CI"))
+    if a.router is None:                                 # (the core works without the extras: said, not hidden)
+        import freerouting
+        a.router = "freerouting" if freerouting.available() and freerouting.kicad_available() else "harness"
+        if a.router == "harness":
+            b.skip("FreeRouting", "KiCad or Java is not installed: routed with the built-in router",
+                   "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it")
+    viewing = not a.no_view and not os.environ.get("CI")
     stage = a.stage
     if viewing or stage == "schematic":                  # (the schematic and the parts at once: the engineer reviews
         import kicad_sch                                 #  them while the layout is still being worked out)
@@ -402,9 +404,9 @@ def main(argv=None) -> int:
     if stage in ("critic", "check", "export") and not b.tracks and load_state(b, a.out, key):
         print(f"from the last run in {a.out}: {sum(1 for c in b.comps.values())} parts placed, "
               f"{len(b.tracks)} tracks, {len(b.vias)} vias ({b.router_used})")
-    route_ok = stage in ("route", "all") and not a.no_route
+    route_ok = stage in ("route", "all")
     timings = {}
-    if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()) and not a.no_route:
+    if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()):
         t = time.perf_counter()
         prog.stage("place+route" if route_ok else "place")
         if route_ok:
@@ -449,10 +451,14 @@ def main(argv=None) -> int:
     lcsc_auto = {}
     if stage in ("export", "all") and not a.no_lcsc and not os.environ.get("CI"):   # (JLCPCB assembly: a C-number each)
         import parts
+        parts.JLC_DOWN = ""
         try:
             lcsc_auto = parts.fill_lcsc(b, a.boards)
         except OSError as e:
-            print(f"LCSC lookup skipped: {e}", file=sys.stderr)
+            parts.JLC_DOWN = str(e)
+        if parts.JLC_DOWN:                               # (JLCPCB's search unreachable: the numbers not looked up)
+            b.skip("LCSC numbers (JLCPCB assembly)", f"JLCPCB's search could not be reached ({parts.JLC_DOWN})",
+                   "run again online, or give lcsc= on the parts")
         if lcsc_auto:
             print(f"LCSC numbers found for {len(lcsc_auto)} parts: " + ", ".join(f"{r} {n}" for r, n in lcsc_auto.items()))
     t = time.perf_counter()
@@ -484,7 +490,7 @@ def main(argv=None) -> int:
             pcb.export_kicad8(os.path.join(a.out, "kicad"), os.path.join(a.out, "kicad8"))
             files["kicad8"] = shutil.make_archive(os.path.join(a.out, "kicad8"), "zip", os.path.join(a.out, "kicad8"))
         except Exception as e:
-            print(f"KiCad 8 copy not written: {e}", file=sys.stderr)
+            b.skip("the KiCad 8 copy (for Altium)", f"{type(e).__name__}: {str(e)[:200]}")
         if a.kicad_drc != "off":                        # a third, independent judge: KiCad's own DRC
             ver = pcb.kicad_version()
             major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
@@ -528,12 +534,15 @@ def main(argv=None) -> int:
     print("critic: " + ("no notes" if not notes else ""))
     for n in notes[:20]:
         print(f"   [{n['severity']}] {n['text']}")
+    for s_ in getattr(b, "skipped", []):
+        print(f"skipped: {s_['what']}: {s_['why']}" + (f" ({s_['how']})" if s_["how"] else ""))
     if files:
         print(f"wrote {a.out}: review {files['report']}, parts {files['html']}")
     print(f"({time.perf_counter() - t0:.1f} s: " + ", ".join(f"{k} {v} s" for k, v in timings.items()) + ")")
     clean = not (probs or chk or fchk or kchk or schk or crit_err) and (routed or stage in ("place", "critic"))
     result = {"board": b.name, "script": os.path.abspath(a.script), "stage": stage, "clean": clean, "kicad_drc": kicad,
               "router": getattr(b, "router_used", "none (routed by the script)"),
+              "skipped": getattr(b, "skipped", []),      # (what this run left out, why, and how to add it)
               "environment": {k: r["ok"] for k, r in doctor().items()},   # (what this machine had: docs/setup.md)
               "parts": len(b.comps), "nets": len(b.nets), "layers": len(b.layers),
               "seconds": round(time.perf_counter() - t0, 1), "timings": timings,
@@ -548,7 +557,7 @@ def main(argv=None) -> int:
     try:                                                 # (the page's board, so the viewer opens without rebuilding it)
         pcb_view.write_board(b, a.out, os.path.abspath(a.script))
     except Exception as e:
-        print(f"viewer board not saved: {e}", file=sys.stderr)
+        b.skip("the viewer's board.json", f"{type(e).__name__}: {str(e)[:200]}", "prometheus view out/ rebuilds it")
     if not a.no_view and not os.environ.get("CI"):       # (KiCad's 3D model ready before the page asks for it)
         for f in (pcb_view._model, pcb_view._schematic):
             try:
@@ -560,13 +569,6 @@ def main(argv=None) -> int:
     if a.json:
         sys.stdout = real_stdout
         print(json.dumps(result, indent=1))
-    if a.view:                                           # (the page stays up for a look at the result)
-        print(f"viewer: {url}  - the board stays there until Ctrl-C", file=sys.stderr, flush=True)
-        try:
-            while True:
-                time.sleep(3600)
-        except KeyboardInterrupt:
-            srv.shutdown()
     return 0 if result["clean"] else 1
 
 if __name__ == "__main__":

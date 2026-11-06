@@ -1637,3 +1637,16 @@ def test_erc_no_connect_and_allowed_conflict_and_symbol_search():
     except FileNotFoundError:
         pytest.skip("no KiCad symbol library here")
     assert found == "Driver_Motor:DRV8833PWP"
+
+
+def test_a_run_without_kicad_still_gives_a_board_and_says_what_it_skipped(tmp_path, monkeypatch):
+    """the core works with Python alone: no KiCad or Java means the built-in router, and the run lists that (what,
+    why, how to add it) under skipped in result.json instead of hiding it or failing"""
+    import freerouting
+    import pcb_cli
+    here = Path(__file__).resolve().parent.parent
+    monkeypatch.setattr(freerouting, "kicad_available", lambda: False)
+    rc = pcb_cli.main([str(here / "bench" / "blinker.py"), str(tmp_path), "--kicad-drc", "off", "--no-lcsc"])
+    r = json.loads((tmp_path / "result.json").read_text())
+    assert rc == 0 and r["clean"] and r["router"] == "harness"
+    assert [s["what"] for s in r["skipped"]] == ["FreeRouting"] and "docs/setup.md" in r["skipped"][0]["how"]

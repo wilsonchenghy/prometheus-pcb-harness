@@ -155,7 +155,7 @@ installing KiCad (it needs root); approve it, or in auto mode switch to *Accept 
 
    > Check the pins of Driver_Motor:DRV8833PWP against its datasheet.
 
-   Claude writes `board.py`, runs `prometheus board.py out/ --view` (the board opens in your browser and shows the run,
+   Claude writes `board.py`, runs `prometheus board.py out/` (the board opens in your browser and shows the run,
    its checks and the time left), reads `out/result.json` and changes the design until every check is clean.
 3. What you get in `out/`: Gerbers and drill (`gerbers.zip`), the BOM and pick-and-place for JLCPCB assembly
    (`bom_jlc.csv`, `cpl.csv`), a parts cart (`cart/buy.html`), a KiCad project (`kicad/`), a review page
