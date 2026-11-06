@@ -159,6 +159,11 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .tools .sep { width: 0; border-left: 1px solid var(--line); }
 .tools button.on { color: #fff; background: var(--ink); }
 .looks { right: 18px; bottom: 18px; display: flex; }
+.sevi { right: 18px; top: 18px; display: flex; align-items: center; gap: 12px; padding: 7px 8px 7px 12px; font: 500 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text2); }
+.sevi .lg { display: inline-flex; align-items: center; gap: 6px; } .sevi .lg i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid #b9852c; background: #fff; }
+.sevi .lg i.ok { background: #c9a45f; } .sevi .lg i.bad { background: #d6553f; border-color: #b3261e; }
+.sevi b { color: var(--text); font-weight: 500; letter-spacing: .08em; }
+.sevi button { font: 500 10.5px var(--mono); letter-spacing: .14em; text-transform: uppercase; padding: 6px 11px; cursor: pointer; }
 .looks button { border: 0; border-right: 1px solid var(--line2); background: none; padding: 8px 13px; cursor: pointer; color: var(--text2); font: 500 10.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; }
 .looks button:last-child { border-right: 0; }
 .looks button:hover { color: var(--blue); background: var(--tint); }
@@ -237,7 +242,8 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     <div class="vtag" id="vtag">Layout · <b>01/04</b></div>
     <div class="view on" id="layout"><svg id="lsvg" class="pan"></svg></div>
     <div class="view" id="v3d"><div id="three" style="position:absolute;inset:0"></div><div class="float" id="mtagbox" style="right:34px;top:22px;padding:6px 11px;font:500 10px var(--mono);letter-spacing:1.6px;text-transform:uppercase;color:var(--ctext2)"><span id="mtag"></span></div><div id="render"><img id="rimg" alt="KiCad 3D render"></div></div>
-    <div class="view" id="schem"><svg id="ssvg" class="pan"></svg><div class="float looks" id="sheets" style="display:none"></div></div>
+    <div class="view" id="schem"><svg id="ssvg" class="pan"></svg><div class="float looks" id="sheets" style="display:none"></div>
+      <div class="float sevi" id="sevi"></div></div>
     <div class="view" id="parts"><div class="plist" id="plist"></div><svg id="psvg"></svg>
       <div class="pfoot"><b id="pcount"></b><span id="pnow"></span><button class="btn" id="pverify">Verify pins</button></div></div>
     <div class="shimmer"></div><div class="spot"></div>
@@ -1092,10 +1098,10 @@ async function openPin(ref, num) {
   drawEvidence(); drawSchemMarks();
 }
 async function checkAll() {
-  if (evBusy) return; evBusy = true; drawEvidence();
+  if (evBusy) return; evBusy = true; drawEvidence(); drawSchemBar();
   EVC = await getJ("/api/evidence?cites=1"); drawEvidence();
   for (const c of symParts()) { await evFor(c.ref); drawEvidence(); drawSchemMarks(); }
-  evBusy = false; drawEvidence();
+  evBusy = false; drawEvidence(); drawSchemMarks();
 }
 function evRow(box, o) { const d = document.createElement("div"); d.className = "ev";
   d.innerHTML = `<div><div class="w">${esc(o.w)}</div><div class="x">${esc(o.x)}</div></div><div class="pg">${o.page ? "p. " + esc(String(o.page)) : ""}</div>` +
@@ -1123,14 +1129,26 @@ function drawEvidence() {
     for (const q of (e && e.pins) || []) evRow(box, { w: `pin ${q.num} · ${q.name}`, x: `→ ${q.net}${q.with && q.with.length ? " · " + q.with.join(", ") : ""}`, page: q.page, quote: q.quote,
       st: q.status, cls: q.status === "agrees" ? "ok" : q.status === "differs" ? "bad" : "mute", open: () => openPin(c.ref, q.num) }); }
 }
+// the schematic's evidence bar: what the marks mean, each part's score, the check on demand
+function drawSchemBar() {
+  const bar = $("#sevi"); if (!bar) return; const ps = symParts();
+  if (!ps.length) { bar.style.display = "none"; return; } bar.style.display = "flex";
+  const done = ps.every(c => EV[c.ref]);
+  const score = ps.filter(c => EV[c.ref]).map(c => { const e = EV[c.ref];
+    return `<span>${esc(c.ref)} <b>${e.pins ? `${e.agree}/${e.total}` : "not read"}</b></span>`; }).join("");
+  bar.innerHTML = `<span>Datasheet pins</span><span class="lg"><i class="ok"></i>agrees</span><span class="lg"><i class="bad"></i>differs</span><span class="lg"><i></i>${done ? "not found" : "not checked"}</span>` +
+    score + `<button class="btn ${done ? "" : "primary"}">${evBusy ? "Reading…" : done ? "Check again" : "Check"}</button>`;
+  bar.querySelector("button").onclick = () => { if (done) { for (const k in EV) delete EV[k]; EVC = null; } checkAll(); };
+}
 // the schematic's pin marks: each wired pin of a part with a datasheet, at its end on KiCad's sheet (its own mm)
 function drawSchemMarks() {
+  drawSchemBar();
   const g = $("#smarks"); if (!g || !SHEETS || !SHEETS[curSheet]) return; g.innerHTML = "";
   const parts_ = new Map(symParts().map(c => [c.ref, c]));
   for (const p of SHEETS[curSheet].pins || []) { const c = parts_.get(p.ref); if (!c) continue;
     const pad = c.pads.find(q => q.num === p.num); if (!pad || !pad.net) continue;
     const e = EV[p.ref], q = e && e.pins && e.pins.find(x => x.num === p.num), st = q ? q.status : null;
-    const m = el("circle", { cx: p.x, cy: p.y, r: .75, class: "spin", fill: st === "agrees" ? "#c9a45f" : st === "differs" ? "#d6553f" : "#fff",
+    const m = el("circle", { cx: p.x, cy: p.y, r: 1, class: "spin", fill: st === "agrees" ? "#c9a45f" : st === "differs" ? "#d6553f" : "#fff",
       stroke: st === "differs" ? "#b3261e" : "#b9852c", "stroke-width": .3 }, g);
     const nm = pinName(c, p.num), on = (B.comps.filter(o => o.ref !== c.ref && o.pads.some(x => x.net === pad.net)).map(o => o.ref)).join(", ");
     hover(m, `<b>${esc(p.ref)} pin ${esc(p.num)}</b> · ${esc(nm)} → <span class="m">${esc(pad.net)}</span>${on ? " · " + esc(on) : ""}<br>` +
