@@ -641,6 +641,12 @@ def _attach(head, rest):
         ends = [it for it in q.items if it[0] in ("label", "gnd")]
         if len(q.pins) != 2 or q.off is not None or len(ends) != 2 or abs(ends[0][1][0] - ends[1][1][0]) > 1e-6:
             continue
+        stubs = [w for w in q.items if w[0] == "wire"]
+        if any(not any(abs(w[2][0] - w[1][0]) < 1e-6 and min(abs(w[1][1] - it[1][1]), abs(w[2][1] - it[1][1])) < 1e-6
+                       and abs(w[2][0] - it[1][0]) < 1e-6 for w in stubs) for it in ends):
+            continue                                      # (an end whose stub leaves sideways - a 2-pin connector's
+            #                                               pins, both on one side - is no part standing on a pin's
+            #                                               wire: the wire stopped short of it, KiCad read it open)
         top, low = sorted(ends, key=lambda it: it[1][1])
         hit = [it for it in (low, top) if it[0] == "label" and it[3] != "GND" and it[3] in sides]
         if hit:                                           # (both on the IC: on the one at its foot, a pull-up's)
@@ -674,7 +680,10 @@ def _attach(head, rest):
         if not cols:
             continue
         far = (cols[-1][2], e[1])                         # (the pin's label stays by the pin, the wire on under it)
-        head.items += [("wire", e, far)] + [("junction", (c, e[1])) for _, _, c, _ in cols[:-1]]
+        stops = [e] + [(c, e[1]) for _, _, c, _ in cols]  # (the wire in pieces from part to part, as KiCad keeps it:
+        head.items += [("wire", a_, b_) for a_, b_ in zip(stops, stops[1:])] + \
+            [("junction", (c, e[1])) for _, _, c, _ in cols[:-1]]   # one long wire with a junction on it lost the
+        #                                                              stretch past the junction: the far part open)
         for q, a, c, off in cols:
             q.items = [it for it in q.items if it is not a]
             pt = a[1]
