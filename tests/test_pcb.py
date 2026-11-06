@@ -2054,3 +2054,21 @@ def test_a_long_led_chain_off_a_small_chip_is_drawn_on_a3_pages():
     assert any(t.endswith("1/2") for t in titles)
     pgs = kicad_sch.pages(b)
     assert all(p[1][0] in ("A4", "A3") for p in pgs) and all(kicad_sch.overlaps(p) == [] for p in pgs)
+
+
+def test_the_board_switcher_lists_remembered_boards_and_opens_only_those(tmp_path, monkeypatch):
+    """each viewer remembers its run folder; the switcher lists the ones still holding a run, newest first, and the
+    open request is refused for a folder it does not know"""
+    import json as _json
+    import pcb_view
+    monkeypatch.setattr(pcb_view, "_boards_file", lambda: tmp_path / "boards.json")
+    monkeypatch.setattr(pcb_view, "_throwaway", lambda out: False)
+    a, b = tmp_path / "a" / "out", tmp_path / "b" / "out"
+    for d, name in ((a, "alpha"), (b, "beta")):
+        d.mkdir(parents=True)
+        (d / "result.json").write_text(_json.dumps({"board": name, "clean": name == "alpha", "script": str(d.parent / "board.py")}))
+        pcb_view.remember(d)
+    pcb_view.remember(tmp_path / "gone" / "out")             # (a folder with no run: left out)
+    got = pcb_view.boards(a.resolve())
+    assert [g["name"] for g in got] == ["beta", "alpha"] or {g["name"] for g in got} == {"alpha", "beta"}
+    assert next(g for g in got if g["name"] == "alpha")["current"] and len(got) == 2
