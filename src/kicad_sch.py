@@ -175,7 +175,10 @@ def _lib_symbol(name: str) -> list:
         t9 = _symbol9(lib, sym)
     except Exception:                                    # (offline with nothing cached: today's library)
         t9 = None
-    if t9:
+    nums9 = set(re.findall(r'\(number "([^"]*)"', t9 or ""))     # (an alias has none: its parent's are checked)
+    if nums9 and nums9 != {p["num"] for p in parts.symbol(name)["pins"]}:
+        t9 = None                                        # (KiCad 9 numbered its pins otherwise, USB-C's S1 now SH:
+    if t9:                                               #  the pads are matched to today's numbers, so today's)
         top = _sx_parse(t9)
     else:
         tree = _sx_parse(parts._fetch(f"{lib}.kicad_symdir/{sym}.kicad_sym"))
