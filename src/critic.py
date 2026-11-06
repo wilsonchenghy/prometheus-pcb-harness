@@ -254,16 +254,12 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
     import pcb as _pcb
     from shapely.geometry import LineString as _LSe
     for r, c in board.comps.items():
-        try:
-            tree = _pcb._sx_parse(_pcb._fp_file(c["fp"]).read_text())
-        except (OSError, ValueError, AttributeError):
+        if c.get("unplaced"):                            # (not placed yet: nowhere to measure from)
             continue
-        segs = []
-        for ln in _pcb._find(tree, "fp_line"):
-            if any(isinstance(q, list) and q[0] == "layer" and str(q[1]) == "Edge.Cuts" for q in ln):
-                st, en = _pcb._find(ln, "start"), _pcb._find(ln, "end")
-                if st and en:
-                    segs.append([(float(st[0][1]), -float(st[0][2])), (float(en[0][1]), -float(en[0][2]))])
+        try:
+            segs = _pcb.footprint(c["fp"]).get("edge_marks") or []
+        except (OSError, ValueError):
+            continue
         if not segs:
             continue
         a_ = _m.radians(c["rot"])

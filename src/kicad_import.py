@@ -511,11 +511,18 @@ def _schematic_symbols(path: str) -> Dict[str, tuple]:
     ``path`` (power symbols aside): the board file does not say which symbol a part is, nor which of its pins are
     left open on purpose; its schematic does"""
     out: Dict[str, tuple] = {}
-    for sch in sorted(Path(path).parent.glob("*.kicad_sch")):
+    todo, seen = [Path(path).with_suffix(".kicad_sch")], set()   # (this project's sheets: its top sheet and the
+    while todo:                                                    #  sheets it names, not every one in the folder)
+        sch = todo.pop(0)
+        if sch in seen or not sch.exists():
+            continue
+        seen.add(sch)
         try:
             tree = _sx_parse(sch.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        todo += [sch.parent / str(p_[2]) for sh in tree if isinstance(sh, list) and sh[:1] == ["sheet"]
+                 for p_ in _find(sh, "property") if len(p_) > 2 and str(p_[1]) in ("Sheetfile", "Sheet file")]
         libs = {str(x[1]): x for lb in _find(tree, "lib_symbols") for x in lb[1:] if isinstance(x, list)}
         flags = [(float(a[1]), float(a[2])) for nc in tree if isinstance(nc, list) and nc[:1] == ["no_connect"]
                  for a in _find(nc, "at")]

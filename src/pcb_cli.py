@@ -43,12 +43,21 @@ def load(path: str):
     if callable(g.get("build")):
         got = g["build"]()
         if isinstance(got, tuple):
-            return got[0], list(got[1])
-        return got, None
+            return _own(got[0]), list(got[1])
+        return _own(got), None
     for name in ("board", "b", "PCB"):
         if isinstance(g.get(name), pcb.Board):
-            return g[name], g.get("PCB_ROUTE_PROBLEMS")
+            return _own(g[name]), g.get("PCB_ROUTE_PROBLEMS")
     raise SystemExit(f"{path}: defines no build() and no board / b / PCB")
+
+
+def _own(b):
+    """the copper the script drew itself, tagged ``user`` as it comes from the script (before any routing): the design
+    key hashes it and nothing else, and the routing leaves it as drawn"""
+    for it in list(b.tracks) + list(b.vias):
+        if not it.get("fan"):
+            it.setdefault("user", True)
+    return b
 
 
 def load_netlist(path: str, a):
@@ -256,8 +265,12 @@ def design_key(b) -> str:
     d = {"comps": {r: [c["fp"]] + ([] if c.get("unplaced") else [c["at"], c["rot"], c.get("side", "F")])
                    for r, c in sorted(b.comps.items())},
          "nets": b.nets, "pours": b.pours, "holes": b.holes, "outline": b.outline.wkt}
-    if b.tracks or b.vias:                               # the copper the script drew itself (a hand-drawn feed): a
-        d["copper"] = [b.tracks, b.vias]                 # change to it is another design (left out when there is
+    mine_t = [(t["net"], t["layer"], [[round(c, 4) for c in p] for p in t["pts"]], round(t["w"], 4))
+              for t in b.tracks if t.get("user")]        # the copper the script drew itself (a hand-drawn feed, tagged
+    mine_v = [(v["net"], [round(c, 4) for c in v["at"]], v["drill"], v["dia"])   # by load): a change to it is
+              for v in b.vias if v.get("user")]          # another design; the router's copper is not the design
+    if mine_t or mine_v:                                 # (and left out when there is none: the keys of boards
+        d["copper"] = [mine_t, mine_v]                   #  without any stay as they were)
     return hashlib.sha1(json.dumps(d, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
@@ -626,7 +639,7 @@ def main(argv=None) -> int:
         timings["export"] = round(time.perf_counter() - t, 2)
     sections = [("routing", probs), ("placement" if stage in ("place", "critic") else "design check", chk),
                 ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else []) + (
-                [("schematic", schk)] if kicad["run"] else [])
+                [("schematic", schk)] if kicad["run"] or schk else [])   # (read back even when the board would not open)
     if stage in ("place", "critic"):
         sections = [s_ for s_ in sections if s_[0] != "house check"]
     if not b.tracks and not probs:                       # (nothing routed yet: no routing to call clean)

@@ -206,6 +206,24 @@ def _prefetch_callers():
 
 
 
+def _arc_points(p0, pm, p1, step: float = 0.1):
+    """an arc through three points as a polyline every ``step`` mm (a round courtyard drawn as arcs: its three
+    points alone make a diamond of 64 % of the circle)"""
+    (ax, ay), (bx, by), (cx, cy) = p0, pm, p1
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-12:
+        return [p0, p1]
+    ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+    uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+    r = math.hypot(ax - ux, ay - uy)
+    a0, am, a1 = (math.atan2(y - uy, x - ux) for x, y in (p0, pm, p1))
+    sweep = (a1 - a0) % (2 * math.pi)
+    if (am - a0) % (2 * math.pi) > sweep:                # (the mid point says which way round)
+        sweep -= 2 * math.pi
+    n = max(2, int(abs(sweep) * r / step) + 1)
+    return [p0] + [(ux + r * math.cos(a0 + sweep * k / n), uy + r * math.sin(a0 + sweep * k / n)) for k in range(1, n)] + [p1]
+
+
 def _courtyard_poly(tree):
     """a footprint's courtyard as KiCad draws it (F.CrtYd lines, rectangles, polygons, arcs and circles closed into
     one shape, footprint frame, y up), or None when its strokes close nothing (the box of them is used then)"""
@@ -219,7 +237,7 @@ def _courtyard_poly(tree):
             lines.append(LineString([xy(_find(ln, "start")[0]), xy(_find(ln, "end")[0])]))
     for ln in _find(tree, "fp_arc"):
         if on(ln) and _find(ln, "start") and _find(ln, "mid") and _find(ln, "end"):
-            lines.append(LineString([xy(_find(ln, k)[0]) for k in ("start", "mid", "end")]))
+            lines.append(LineString(_arc_points(*[xy(_find(ln, k)[0]) for k in ("start", "mid", "end")])))
     for ln in _find(tree, "fp_rect"):
         if on(ln) and _find(ln, "start") and _find(ln, "end"):
             (x0, y0), (x1, y1) = xy(_find(ln, "start")[0]), xy(_find(ln, "end")[0])
@@ -323,6 +341,10 @@ def footprint(name: str) -> Dict:
             xs += [float(q[1]) for q in pts_]
             ys += [-float(q[2]) for q in pts_]
     crt = (min(xs), min(ys), max(xs), max(ys)) if xs else None
+    edge_marks = [[(float(st[0][1]), -float(st[0][2])), (float(en[0][1]), -float(en[0][2]))]   # (Edge.Cuts lines
+                  for ln in _find(tree, "fp_line")                                         #  of its own: where the
+                  if any(isinstance(c, list) and c[0] == "layer" and str(c[1]) == "Edge.Cuts" for c in ln)   # board
+                  for st, en in [(_find(ln, "start"), _find(ln, "end"))] if st and en]     #  edge should run)
     crt_poly = _courtyard_poly(tree) if crt else None   # (its real shape, as KiCad's DRC judges overlaps: an SOIC's
     #                                                     is narrower over the body than across its pins)
     # silkscreen, for renders: the reference designator's place and the outline strokes on F.SilkS
@@ -353,7 +375,8 @@ def footprint(name: str) -> Dict:
     if mod and isinstance(mod[0][1], str):
         m_ = re.sub(r"^\$\{[^}]*\}/", "", mod[0][1])
         model = re.sub(r"\.wrl$", ".step", m_) if "3dshapes/" in m_ else None
-    _FP[name] = {"pads": pads, "courtyard": crt, "courtyard_poly": crt_poly, "ref": ref, "silk": silk, "model": model}
+    _FP[name] = {"pads": pads, "courtyard": crt, "courtyard_poly": crt_poly, "edge_marks": edge_marks, "ref": ref,
+                 "silk": silk, "model": model}
     return _FP[name]
 
 
@@ -1072,12 +1095,10 @@ class Board:
         pn = self.pad_net()
         vias0 = list(self.vias)
         try:
-            self.vias = []                               # (each layer's copper of each net without its vias)
-            self.__dict__.pop("_cu_memo", None)
-            cu = self.copper()
-        finally:
+            self.vias = []                               # (each layer's copper of each net without its vias, no
+            cu = self.copper(pours=False)                #  pours: poured nets are not judged; the memo is keyed by
+        finally:                                         #  the vias as well, so the board's own stays)
             self.vias = vias0
-            self.__dict__.pop("_cu_memo", None)
         poured = {pz["net"] for pz in self.pours}
         for net, d in self.nets.items():
             amps = d.get("amps") or 0.0
@@ -1155,7 +1176,7 @@ class Board:
         for v in list(self.vias):                        # passes' drops at one pad): one goes, the tracks that met
             if v not in self.vias:                       # it brought on to the other
                 continue
-            for w in [w for w in self.vias if w is not v and w["net"] == v["net"]]:
+            for w in [w for w in self.vias if w is not v and w["net"] == v["net"] and not w.get("user")]:
                 if math.dist(v["at"], w["at"]) - (v["drill"] + w["drill"]) / 2 >= self.hole_gap - 1e-6:
                     continue
                 for t in list(self.tracks):              # (a snapshot: the joins added here are not walked again)
@@ -1186,7 +1207,7 @@ class Board:
             touched = sum(1 for L in self.layers if (v["net"], L) in cu and cu[(v["net"], L)].intersects(disk))
             others = [w for w in self.vias if w is not v and w["net"] == v["net"]
                       and Point(w["at"]).distance(Point(v["at"])) < (w["dia"] + v["dia"]) / 2]
-            if touched >= 2 or others:
+            if touched >= 2 or others or v.get("user"):  # (the script's own via stays as drawn)
                 keep_v.append(v)
         for v in self.vias:                              # (a via the tracks of one layer meet at: their ends are
             if v in keep_v:                              # brought to its centre first, so they still meet)
@@ -2224,20 +2245,20 @@ def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
 def mark_user_copper(board: Board) -> None:
     """the copper on the board before any routing is the script's own (a hand-drawn feed): tagged ``user``, so the
     clean-up passes (spurs, loops, overshoots, chamfers) and the rip-up leave it as drawn"""
-    if getattr(board, "_user_marked", False):         # (once: later calls find the router's copper there too)
-        return
+    if getattr(board, "_user_marked", False) or any(it.get("user") for it in board.tracks + board.vias):
+        board._user_marked = True                        # (once - later calls find the router's copper there too -
+        return                                           #  or already tagged as the script drew it: pcb_cli.load)
     board._user_marked = True
-    for t in board.tracks:
-        if not t.get("fan"):
-            t.setdefault("user", True)
+    for it in board.tracks + board.vias:
+        if not it.get("fan"):
+            it.setdefault("user", True)
 
 
 def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     """route the whole board with ``router``: "freerouting" (FreeRouting through KiCad, as KiCad users route:
     ``freerouting.route_kicad``; needs KiCad, Java and the FreeRouting jar, and says which is missing) or "harness"
     (``autoroute``, this file's grid router, chosen explicitly). Sets ``board.router_used``"""
-    if not getattr(board, "_fan", None):
-        mark_user_copper(board)                          # (first routing call: what is there, the script drew)
+    mark_user_copper(board)                              # (first routing call: what is there, the script drew)
     if router == "harness":
         board.router_used = "harness"
         probs = autoroute(board, **kw)
@@ -2338,8 +2359,8 @@ def _second_pass(board: Board, probs: List[str], again) -> List[str]:
         return probs
     before = (list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())), probs,
               severity(probs) + severity(board.check()))
-    board.tracks = [t for t in board.tracks if t["net"] not in nets]
-    board.vias = [v for v in board.vias if v["net"] not in nets]
+    board.tracks = [t for t in board.tracks if t["net"] not in nets or t.get("user")]   # (the script's own copper
+    board.vias = [v for v in board.vias if v["net"] not in nets or v.get("user")]       #  stays as it drew it)
     board.__dict__.pop("_cu_memo", None)
     try:
         probs2 = again()
@@ -3011,8 +3032,7 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     if move is None:
         move = [r for r, c in board.comps.items() if c.get("unplaced")] or \
                [r for r, c in board.comps.items() if not c["overhang"]]
-    if not getattr(board, "_fan", None):
-        mark_user_copper(board)                          # (the script's own copper, before any try routes)
+    mark_user_copper(board)                              # (the script's own copper, before any try routes)
     tracks0, vias0, fan0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
     tries = max(1, tries)
     if workers is None:
@@ -3115,6 +3135,8 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
                 continue
             moved = False
             for v, o in sorted(((a, b),) if b.get("fixed") else ((a, b), (b, a)), key=lambda p: len(ends(p[0]))):
+                if v.get("user") or any(t.get("user") for t, _ in ends(v)):
+                    continue                             # (the script's via, or one its tracks end at: as drawn)
                 others = {L: unary_union([g for (nt, l), g in fixed.items() if l == L and nt != v["net"]] or [Point(0, 0).buffer(0)])
                           for L in board.layers}
 
@@ -3172,6 +3194,8 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
                 and ring.distance(g) < neck - 1e-6]
 
     for v in list(board.vias):
+        if v.get("user"):                                # (the script's own via: where it drew it)
+            continue
         near = against(v, v["at"])
         if not near:
             continue
@@ -3182,6 +3206,9 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
         ends = [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)   # (every end the via's ring
                 if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < v["dia"] / 2]  # holds:
         #                                                    FreeRouting ends a track off the via's centre too)
+        if any(t.get("user") for t, _ in ends):          # (a hand-drawn track ends there: not dragged along)
+            left.append(f"via {v['net']} at {v['at']}: against {r0}.{n0}, the script's own track ends in it")
+            continue
         pad_at = g0.representative_point().coords[0]
         mrr = g0.minimum_rotated_rectangle.exterior.coords   # (the track off the pad: as wide as the net needs,
         minor = min(math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2]))   # up to the pad's own width - a 0.2 mm
@@ -3815,15 +3842,22 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
     for n, d in board.nets.items():                      # (a net that lost or gained a moved part's pin)
         if any(r in moved for r, _ in d["pins"]):
             bad.add(n)
-    bad |= {t["net"] for t in board.tracks if not t.get("fan")} | {v["net"] for v in board.vias}
-    #       (a net the script draws copper for itself is finished from that copper, not given its old routing
-    #        back: the earlier copper may run beside the hand-drawn one, a second path of the same net)
+    k_t = lambda t: (t["net"], t["layer"], tuple(tuple(round(c, 4) for c in p) for p in t["pts"]), round(t["w"], 4))
+    k_v = lambda v: (v["net"], tuple(round(c, 4) for c in v["at"]))
+    mine, theirs = {}, {}                                # (the copper the script draws, now and when it was routed:
+    for it in board.tracks + board.vias:                 #  a net whose hand-drawn copper changed gets no old routing
+        if it.get("user"):                               #  back - it ran beside the old copper - and the old hand-
+            mine.setdefault(it["net"], set()).add(k_t(it) if "pts" in it else k_v(it))   # drawn copper itself never
+    for it in old["tracks"] + old["vias"]:               #  comes back)
+        if it.get("user"):
+            theirs.setdefault(it["net"], set()).add(k_t(it) if "pts" in it else k_v(it))
+    bad |= {n for n in set(mine) | set(theirs) if mine.get(n, set()) != theirs.get(n, set())}
     have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) for t in board.tracks}
     have_v = {(v["net"], tuple(v["at"])) for v in board.vias}
     have_v_list = list(board.vias)
     old_t = [t for t in old["tracks"] if (t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) not in have_t
-             and not t.get("fan")]                       # (escape stubs are laid afresh each build, not reused)
-    old_v = [v for v in old["vias"] if (v["net"], tuple(v["at"])) not in have_v]
+             and not t.get("fan") and not t.get("user")]  # (escape stubs are laid afresh each build, not reused)
+    old_v = [v for v in old["vias"] if (v["net"], tuple(v["at"])) not in have_v and not v.get("user")]
 
     def shape(it):
         if "pts" in it:
@@ -4542,7 +4576,7 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
             torn -= poured_                              # (a ground's pins drop through vias: leave it be)
             redo = fails | torn
             board.tracks = [t for t in board.tracks if t["net"] not in redo or t.get("fan") or t.get("user")]
-            board.vias = [v for v in board.vias if v["net"] not in redo or v["net"] in poured_]
+            board.vias = [v for v in board.vias if v["net"] not in redo or v["net"] in poured_ or v.get("user")]
             order = [j for j in jobs if j[0] in fails] + [j for j in jobs if j[0] in torn]
             got = []
             for job in order:

@@ -2455,3 +2455,60 @@ def test_a_saved_routing_without_the_scripts_copper_is_not_reused(tmp_path):
     assert not pcb_cli.load_store(b, str(store), key)
     save([{"net": "A", "layer": "F", "pts": drawn, "w": 0.5, "amps": None}])
     assert pcb_cli.load_store(b, str(store), key)
+
+
+def test_design_key_is_the_scripts_not_the_routers(tmp_path):
+    """the design key covers the copper the script draws (tagged as load builds the board), not the routing added
+    after: the key of a routed board is the key of its script (the viewer's live edit and the next CLI run agree)"""
+    import pcb
+    import pcb_cli
+    (tmp_path / "s.py").write_text('''from pcb import Board
+def build():
+    b = Board("dk", [(0, 0), (24, 0), (24, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (5.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (19.0, 6.0), 0, "1k")
+    b.place("R3", "Resistor_SMD:R_0805_2012Metric", (12.0, 2.5), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")], amps=1.0)
+    b.net("B", [("R1", "1"), ("R3", "1")])
+    b.net("C", [("R2", "2"), ("R3", "2")])
+    b.track("A", "F", [b.pad("R1", "2"), b.pad("R2", "1")], 0.6)
+    return b
+''')
+    b, _ = pcb_cli.load(str(tmp_path / "s.py"))
+    k0 = pcb_cli.design_key(b)
+    pcb.route_board(b, "harness")
+    assert len(b.tracks) > 1 and pcb_cli.design_key(b) == k0
+
+
+def test_the_scripts_vias_stay_where_it_drew_them():
+    """a via the script draws against a pad of its own net is not moved by neck_vias, nor merged away by tidy"""
+    import pcb
+    b = pcb.Board("uv", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("C1", "Capacitor_SMD:C_0805_2012Metric", (8.0, 6.0), 0, "")
+    b.place("C2", "Capacitor_SMD:C_0805_2012Metric", (14.0, 6.0), 0, "")
+    b.net("A", [("C1", "2"), ("C2", "2")])
+    x, y = b.pad("C1", "2")
+    b.via("A", (x + 0.75, y))
+    pcb.mark_user_copper(b)
+    pcb.neck_vias(b)
+    b.tidy()
+    assert [tuple(v["at"]) for v in b.vias] == [(x + 0.75, y)]
+
+
+def test_a_round_courtyard_drawn_with_arcs_is_round():
+    """a courtyard of two half-circle arcs is a circle (its area within 2 %), not the diamond of their end and mid
+    points"""
+    import pcb
+    tree = pcb._sx_parse('(footprint "x" (fp_arc (start -5 0) (mid 0 -5) (end 5 0) (layer "F.CrtYd")) '
+                         '(fp_arc (start 5 0) (mid 0 5) (end -5 0) (layer "F.CrtYd")))')
+    g = pcb._courtyard_poly(tree)
+    assert abs(g.area - math.pi * 25) < 0.02 * math.pi * 25
+
+
+def test_edge_marks_wait_for_a_placed_part():
+    """a part whose footprint marks the board edge is not judged against the edge before it is placed"""
+    import critic
+    import pcb
+    b = pcb.Board("em", [(0, 0), (40, 0), (40, 30), (0, 30)])
+    b.place("J1", "Connector_Audio:Jack_3.5mm_CUI_SJ1-3523N_Horizontal", None, 0, "")
+    assert not any(n["kind"] == "edge" and "marks where" in n["text"] for n in critic.review(b))
