@@ -673,7 +673,8 @@ def _boards_file() -> Path:
 
 def _throwaway(out: str) -> bool:
     import tempfile
-    return out.startswith(str(Path(tempfile.gettempdir()).resolve())) or "/pytest-of-" in out
+    tmp = {str(Path(d).resolve()) for d in (tempfile.gettempdir(), "/tmp", "/var/tmp") if os.path.isdir(d)}
+    return any(out == t or out.startswith(t + "/") for t in tmp) or "/pytest-of-" in out
 
 
 def remember(out_dir) -> None:
