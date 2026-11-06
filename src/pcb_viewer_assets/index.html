@@ -89,8 +89,19 @@ h4 { margin: 4px 0 10px; }
 .dsh-body { flex: 1; overflow: auto; background: #e9ecef; padding: 18px; }
 .dsh-pagebox { position: relative; margin: 0 auto; width: max-content; box-shadow: 0 8px 30px -12px rgba(17,24,39,.4); }
 .dsh-pagebox canvas { display: block; background: #fff; }
-.dsmark { position: absolute; background: rgba(226,180,92,.35); outline: 1px solid rgba(185,133,44,.8); pointer-events: none; }
-.dsmark.row { background: rgba(31,95,168,.08); outline: 2px solid #1f5fa8; outline-offset: 2px; border-radius: 3px; }
+.dsh-pagebox { overflow: hidden; }
+.dsmark { position: absolute; background: rgba(226,180,92,.32); border-bottom: 2px solid #b9852c; pointer-events: none; }
+.dsmark.row { background: transparent; border: 0; border-radius: 4px; box-shadow: 0 0 0 2px #b9852c, 0 0 0 6px rgba(226,180,92,.28), 0 0 0 4000px rgba(24,33,43,.22); animation: dspulse 1.6s ease-out 1; }
+@keyframes dspulse { 0% { box-shadow: 0 0 0 2px #b9852c, 0 0 0 18px rgba(226,180,92,0), 0 0 0 4000px rgba(24,33,43,0); } }
+.dstag { position: absolute; transform: translateY(calc(-100% - 10px)); display: inline-flex; align-items: center; gap: 7px; padding: 4px 9px; background: #fff; border: 1px solid #ecd6a8; box-shadow: 0 6px 18px -8px rgba(17,24,39,.45); font: 500 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: #8a5f19; white-space: nowrap; pointer-events: none; }
+.dstag i { width: 7px; height: 7px; border-radius: 50%; background: #c9a45f; }
+.spin { cursor: pointer; transition: r .12s; } .spin:hover { stroke-width: .5; }
+.evbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.evbar small { color: var(--text2); font-size: 11.5px; line-height: 1.35; }
+.evh { font: 500 11px var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--text2); margin: 16px 0 8px; display: flex; justify-content: space-between; }
+.ev .st { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.ev .st.ok { color: var(--green); } .ev .st.bad { color: var(--red); } .ev .st.mute { color: var(--text3); }
+
 .ev { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 12px; margin-bottom: -1px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
 .ev:hover { background: var(--tint); }
 .ev .w { font: 500 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text2); }
@@ -600,7 +611,7 @@ async function drawSchem() {
   const svg = $("#ssvg"); if (!B || B.error) return;
   if (SHEETS === null || !SHEETS.length) { const r = await getJ("/api/schematic"), got = [];   // (KiCad's own drawing only:
     ((r && r.svgs) || []).forEach((url, i) => { const [w, h] = (r.sizes || [])[i] || [];          // no stand-in; its size
-      if (w && h) got.push({ url, w, h }); });                                                       // from the server)
+      if (w && h) got.push({ url, w, h, pins: ((r.pins || [])[i]) || [] }); });                                                       // from the server)
     SHEETS = got;
     if (!got.length) { svg.innerHTML = ""; $("#msg").textContent = r && r.error ? r.error : "KiCad is drawing the schematic…";
       if (!(r && r.error)) setTimeout(() => activeView() === "schem" && drawSchem(), 1500); return; } }
@@ -614,6 +625,7 @@ async function drawSchem() {
   const sh = SHEETS[curSheet]; svg.innerHTML = "";                            // (one page at a time, fitted: readable)
   el("rect", { x: 0, y: 0, width: sh.w, height: sh.h, fill: "#ffffff" }, svg);
   el("image", { href: sh.url, x: 0, y: 0, width: sh.w, height: sh.h }, svg);
+  el("g", { id: "smarks" }, svg); drawSchemMarks();
   const fit = () => SZ.set(-6, -6, sh.w + 12, sh.h + 12); fit(); setTimeout(fit, 400);   // (and again once the side panels
 }                                                                                          // have made room)
 let curSheet = 99;
@@ -788,7 +800,7 @@ async function annotateDatasheet(c, pinXY, L) {
   el("text", { x: L.x + L.w - 22, y: L.y + L.h - 22, fill: "#9a7a3a", "font-size": 11, "font-family": FONT, "text-anchor": "end" }, link).textContent = "open the page ›";
   for (const q of d.pins) { const a = pinXY[q.num]; if (!a) continue; const ok = q.status === "agrees";
     const g = el("g", { style: "cursor:pointer" }, svg), x = a[0] + (a[2].rot === 0 ? -16 : a[2].rot === 180 ? 16 : 0), y = a[1] + (a[2].rot === 90 ? 16 : a[2].rot === 270 ? -16 : 0);
-    g.addEventListener("click", () => openDatasheet({ ref, link: d.datasheet, page: q.page || d.page, find: q.quote || [q.name, q.num], title: `${ref} pin ${q.num} ${q.name}` }));
+    g.addEventListener("click", () => openDatasheet({ ref, link: d.datasheet, page: q.page || d.page, find: q.quote || [q.name, q.num], title: `${ref} pin ${q.num} ${q.name}`, tag: `${ref} · pin ${q.num} ${q.name}` }));
     el("circle", { cx: x, cy: y, r: 5.5, fill: ok ? "#c9a45f" : "#d6553f" }, g);
     el("path", { d: ok ? `M${x - 2.6},${y} l1.8,1.9 l3.4,-3.6` : `M${x - 2.2},${y - 2.2} l4.4,4.4 M${x + 2.2},${y - 2.2} l-4.4,4.4`, fill: "none", stroke: "#fff", "stroke-width": 1.4, "stroke-linecap": "round" }, g);
     hover(g, ok ? `pin ${q.num} ${q.name}: the datasheet agrees` : `pin ${q.num} ${q.name}: ${q.status}` + (q.datasheet.length ? ` (the datasheet lists ${q.datasheet.join(", ")})` : "")); }
@@ -1031,7 +1043,7 @@ async function openDatasheet(o) {                       // o: {ref | url, page, 
   if (!window.pdfjsLib) { $("#dsnote").textContent = "PDF.js did not load: open the original."; return; }
   try { DSDOC[key] = DSDOC[key] || await pdfjsLib.getDocument("/api/datasheet.pdf?" + key).promise; }
   catch (e) { $("#dsnote").className = "dsh-note warn"; $("#dsnote").textContent = "This datasheet could not be loaded here: open the original."; return; }
-  dsCur = { doc: DSDOC[key], page: Math.min(Math.max(o.page || 1, 1), DSDOC[key].numPages), find: dsTokens(o.find), quote: o.find };
+  dsCur = { doc: DSDOC[key], page: Math.min(Math.max(o.page || 1, 1), DSDOC[key].numPages), find: dsTokens(o.find), quote: o.find, tag: o.tag || o.title };
   await dsShow();
 }
 async function dsShow() {
@@ -1058,6 +1070,8 @@ async function dsShow() {
   if (row) { for (const b of row) add(b);
     const x0 = Math.min(...row.map(b => b.x)), x1 = Math.max(...row.map(b => b.x + b.w)), y0 = Math.min(...row.map(b => b.y)), y1 = Math.max(...row.map(b => b.y + b.h));
     const r = add({ x: x0 - 4, y: y0 - 3, w: x1 - x0 + 8, h: y1 - y0 + 6 }, "row"); r.scrollIntoView({ block: "center", inline: "center" });
+    if (dsCur.tag) { const t = document.createElement("div"); t.className = "dstag"; t.innerHTML = "<i></i>" + esc(dsCur.tag) + " · p." + dsCur.page;
+      Object.assign(t.style, { left: (x0 - 4) + "px", top: (y0 - 3) + "px" }); marks.appendChild(t); }
     note.className = "dsh-note ok"; note.innerHTML = `Found on page ${dsCur.page}: <q>${q}</q>, boxed.`; }
   else if (boxes.length) { for (const b of boxes) add(b); boxes[0] && marks.lastChild.scrollIntoView({ block: "center" });
     note.className = "dsh-note warn"; note.innerHTML = `<q>${q}</q> is not on one line of page ${dsCur.page}: its words are highlighted where they are. Read the row by hand.`; }
@@ -1066,21 +1080,68 @@ async function dsShow() {
 $("#dsprev").onclick = () => { if (dsCur && dsCur.page > 1) { dsCur.page--; dsShow(); } };
 $("#dsnext").onclick = () => { if (dsCur && dsCur.page < dsCur.doc.numPages) { dsCur.page++; dsShow(); } };
 $("#dsclose").onclick = () => $("#dsheet").classList.remove("on");
-// the evidence: each decision the run cites (result.json "evidence"), a click away from its page
+// the evidence, on demand (a run never waits for it): the citations checked against their pages, and each part's
+// wired pins against its datasheet's pin table, a click from that row; the schematic's pin marks show the same
+const EV = {}; let EVC = null, evBusy = false;
+async function evFor(ref) { return EV[ref] || (EV[ref] = await getJ("/api/evidence?ref=" + encodeURIComponent(ref))); }
+const symParts = () => ((B && B.comps) || []).filter(c => c.symbol && c.symbol.datasheet && /^https?:/i.test(c.symbol.datasheet));
+const pinName = (c, num) => ((c.symbol.pins || []).find(q => q.num === num) || {}).key || "";
+async function openPin(ref, num) {
+  const c = B.comps.find(x => x.ref === ref), nm = c ? pinName(c, num) : "", e = await evFor(ref), q = e && e.pins && e.pins.find(p => p.num === num);
+  openDatasheet({ ref, link: e && e.datasheet, page: (q && q.page) || (e && e.page) || 1, find: (q && q.quote) || [nm, num], tag: `${ref} · pin ${num} ${nm}` });
+  drawEvidence(); drawSchemMarks();
+}
+async function checkAll() {
+  if (evBusy) return; evBusy = true; drawEvidence();
+  EVC = await getJ("/api/evidence?cites=1"); drawEvidence();
+  for (const c of symParts()) { await evFor(c.ref); drawEvidence(); drawSchemMarks(); }
+  evBusy = false; drawEvidence();
+}
+function evRow(box, o) { const d = document.createElement("div"); d.className = "ev";
+  d.innerHTML = `<div><div class="w">${esc(o.w)}</div><div class="x">${esc(o.x)}</div></div><div class="pg">${o.page ? "p. " + esc(String(o.page)) : ""}</div>` +
+    (o.st ? `<div class="st ${o.cls}">${esc(o.st)}</div>` : "") + (o.quote ? `<q>${esc(o.quote)}</q>` : "");
+  d.onclick = o.open; box.appendChild(d); }
 function drawEvidence() {
-  const box = $("#evidence"); box.innerHTML = ""; const ev = (R && R.evidence) || [];
-  $("#bevidence").textContent = ev.length;
-  if (!ev.length) { box.innerHTML = `<div class="empty"><b>No citations yet</b>A value or pin given with its datasheet page (cite=) is listed here, a click from that page. Each part's pins against its datasheet are in Parts.</div>`; return; }
-  for (const e of ev) { const d = document.createElement("div"); d.className = "ev";
-    d.innerHTML = `<div><div class="w">${esc(e.ref || "")} · ${esc(e.what || "")}</div><div class="x">${esc(e.value == null ? "" : String(e.value))}</div></div><div class="pg">${e.page ? "p. " + esc(String(e.page)) : ""}</div>` + (e.quote ? `<q>${esc(e.quote)}</q>` : "");
-    d.onclick = () => openDatasheet({ ref: e.url ? null : e.ref, url: e.url, link: e.url, page: e.page, find: e.quote || [e.value], title: `${e.ref || ""} ${e.what || ""}` });
-    box.appendChild(d); }
+  const box = $("#evidence"); if (!box) return; box.innerHTML = "";
+  const cites = (EVC && EVC.cites) || (R && R.evidence) || [], parts_ = symParts();
+  const pinN = Object.values(EV).reduce((n, e) => n + ((e && e.pins) || []).length, 0);
+  $("#bevidence").textContent = cites.length + pinN;
+  const bar = box.appendChild(document.createElement("div")); bar.className = "evbar";
+  const done = parts_.every(c => EV[c.ref]) && EVC;
+  bar.innerHTML = `<button class="btn primary">${evBusy ? "Reading datasheets…" : done ? "Check again" : "Check against datasheets"}</button>` +
+    `<small>${parts_.length} part${parts_.length === 1 ? "" : "s"} with a datasheet. Read once, then cached.</small>`;
+  bar.querySelector("button").onclick = () => { if (done) { for (const k in EV) delete EV[k]; EVC = null; } checkAll(); };
+  const h1 = box.appendChild(document.createElement("div")); h1.className = "evh"; h1.innerHTML = `<span>Cited values</span><span>${cites.length}</span>`;
+  if (!cites.length) { const e = box.appendChild(document.createElement("div")); e.className = "empty"; e.innerHTML = "<b>None cited</b>A value given with its datasheet page (cite=) is listed here."; }
+  for (const e of cites) evRow(box, { w: `${e.ref || ""} · ${e.what || ""}`, x: e.value == null ? "" : String(e.value), page: e.page, quote: e.quote,
+    st: e.found === true ? "on its page" : e.found === false ? "not on its page" : "not checked", cls: e.found === true ? "ok" : e.found === false ? "bad" : "mute",
+    open: () => openDatasheet({ ref: e.url ? null : e.ref, url: e.url, link: e.url, page: e.page, find: e.quote || [e.value], tag: `${e.ref || ""} · ${e.what || ""}` }) });
+  for (const c of parts_) { const e = EV[c.ref];
+    const h = box.appendChild(document.createElement("div")); h.className = "evh";
+    h.innerHTML = `<span>${esc(c.ref)} · ${esc(c.value || c.symbol.name)} pins</span><span>${e && e.pins ? `${e.agree} / ${e.total} agree` : e && e.error ? "not read" : evBusy ? "reading…" : "not checked"}</span>`;
+    if (e && e.error) { const x = box.appendChild(document.createElement("div")); x.className = "empty"; x.textContent = "Not read: " + e.error; continue; }
+    for (const q of (e && e.pins) || []) evRow(box, { w: `pin ${q.num} · ${q.name}`, x: `→ ${q.net}${q.with && q.with.length ? " · " + q.with.join(", ") : ""}`, page: q.page, quote: q.quote,
+      st: q.status, cls: q.status === "agrees" ? "ok" : q.status === "differs" ? "bad" : "mute", open: () => openPin(c.ref, q.num) }); }
+}
+// the schematic's pin marks: each wired pin of a part with a datasheet, at its end on KiCad's sheet (its own mm)
+function drawSchemMarks() {
+  const g = $("#smarks"); if (!g || !SHEETS || !SHEETS[curSheet]) return; g.innerHTML = "";
+  const parts_ = new Map(symParts().map(c => [c.ref, c]));
+  for (const p of SHEETS[curSheet].pins || []) { const c = parts_.get(p.ref); if (!c) continue;
+    const pad = c.pads.find(q => q.num === p.num); if (!pad || !pad.net) continue;
+    const e = EV[p.ref], q = e && e.pins && e.pins.find(x => x.num === p.num), st = q ? q.status : null;
+    const m = el("circle", { cx: p.x, cy: p.y, r: .75, class: "spin", fill: st === "agrees" ? "#c9a45f" : st === "differs" ? "#d6553f" : "#fff",
+      stroke: st === "differs" ? "#b3261e" : "#b9852c", "stroke-width": .3 }, g);
+    const nm = pinName(c, p.num), on = (B.comps.filter(o => o.ref !== c.ref && o.pads.some(x => x.net === pad.net)).map(o => o.ref)).join(", ");
+    hover(m, `<b>${esc(p.ref)} pin ${esc(p.num)}</b> · ${esc(nm)} → <span class="m">${esc(pad.net)}</span>${on ? " · " + esc(on) : ""}<br>` +
+      (st ? `datasheet: ${esc(st)}${q.page ? ", p." + q.page : ""}` : "click: its row in the datasheet"));
+    m.addEventListener("click", ev => { ev.stopPropagation(); openPin(p.ref, p.num); }); }
 }
 
 // ---------- data ----------
 async function getJ(u) { try { return await (await fetch(u, { cache: "no-store" })).json(); } catch (e) { return null; } }
 async function loadAll() {
-  R = await getJ("/api/result"); B = await getJ("/api/board"); SHEETS = null;
+  R = await getJ("/api/result"); B = await getJ("/api/board"); SHEETS = null; for (const k in EV) delete EV[k]; EVC = null;
   $("#msg").textContent = !B || B.error ? ((B && B.error) || "No board yet") : "";
   drawHeader(); drawLayers(); drawNets(); drawChecks(); drawRun(); drawFiles(); drawEvidence(); drawLayout(); fitLayout();
   if (activeView() === "schem") drawSchem(); if (activeView() === "parts") drawParts(); if (threeReady) build3d();

@@ -1850,3 +1850,20 @@ def test_the_viewer_serves_a_cited_datasheet_and_nothing_else(tmp_path, monkeypa
     assert pcb_view._datasheet_pdf(Cache(), tmp_path, "", url) == dst
     assert pcb_view._datasheet_pdf(Cache(), tmp_path, "", "https://example.com/other.pdf") is None
     dst.unlink()
+
+
+def test_schematic_pin_marks_sit_on_the_wires_and_labels(tmp_path):
+    """the viewer's schematic pin marks: every pin end of a part on the BNO085 sheet is on a wire end, a label, or a
+    no-connect mark, so a mark is on its pin as KiCad draws it"""
+    import re
+    import kicad_sch
+    import pcb_cli
+    import pcb_view
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "imu_bno085" / "imu_bno085.py"))
+    sch = kicad_sch.write(b, str(tmp_path))
+    text = Path(sch).read_text()
+    ends = {(round(float(a), 2), round(float(b_), 2)) for a, b_ in
+            re.findall(r'\((?:xy|at) ([\d.\-]+) ([\d.\-]+)', text)}
+    pins = pcb_view._sch_pins(sch)
+    assert len(pins) > 40 and {p["ref"] for p in pins} >= {"U1", "U2", "J1"}
+    assert all((round(p["x"], 2), round(p["y"], 2)) in ends for p in pins)
