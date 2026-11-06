@@ -1,0 +1,303 @@
+{
+ "board": "pam8403_stereo_amp",
+ "script": "/home/user/prometheus-pcb-harness/boards/16_pam8403_stereo_amp/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": false,
+  "skipped": "KiCad (kicad-cli) is not installed",
+  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+ },
+ "router": "harness",
+ "skipped": [
+  {
+   "what": "FreeRouting",
+   "why": "KiCad or Java is not installed: routed with the built-in router",
+   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
+  }
+ ],
+ "environment": {
+  "kicad": false,
+  "kicad_python": false,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 20,
+ "nets": 18,
+ "layers": 2,
+ "seconds": 14.2,
+ "timings": {
+  "place+route": 11.62,
+  "critic": 0.01,
+  "check": 0.12,
+  "export": 1.57
+ },
+ "placement": {
+  "J1": [
+   46.8,
+   8.0,
+   90,
+   "F"
+  ],
+  "J2": [
+   6.5,
+   20.0,
+   270,
+   "F"
+  ],
+  "RV1": [
+   12.0,
+   32.0,
+   270,
+   "F"
+  ],
+  "U1": [
+   25.0,
+   17.0,
+   270,
+   "F"
+  ],
+  "J3": [
+   43.0,
+   37.2,
+   0,
+   "F"
+  ],
+  "J4": [
+   34.0,
+   37.2,
+   0,
+   "F"
+  ],
+  "SW1": [
+   24.0,
+   2.6,
+   180,
+   "F"
+  ],
+  "C1": [
+   18.25,
+   26.7,
+   270,
+   "F"
+  ],
+  "C2": [
+   16.95,
+   19.05,
+   270,
+   "F"
+  ],
+  "C3": [
+   23.1,
+   22.3,
+   90,
+   "F"
+  ],
+  "C4": [
+   20.5,
+   22.3,
+   90,
+   "F"
+  ],
+  "C5": [
+   25.6,
+   22.5,
+   90,
+   "F"
+  ],
+  "C6": [
+   36.75,
+   12.75,
+   0,
+   "F"
+  ],
+  "C8": [
+   25.6,
+   11.5,
+   90,
+   "F"
+  ],
+  "R1": [
+   40.3,
+   5.75,
+   270,
+   "F"
+  ],
+  "R2": [
+   39.55,
+   9.6,
+   180,
+   "F"
+  ],
+  "R3": [
+   21.6,
+   10.6,
+   180,
+   "F"
+  ],
+  "R4": [
+   25.2,
+   8.05,
+   180,
+   "F"
+  ],
+  "R5": [
+   32.55,
+   13.75,
+   90,
+   "F"
+  ],
+  "D1": [
+   18.35,
+   9.95,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (39.45, 10.32) is 0.19 mm from R2.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R2"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via CC1 at (39.50, 6.75) is 0.02 mm from R1.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via MUTE at (24.25, 8.00) is 0.00 mm from R4.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R4"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via RN at (27.25, 13.50) is 0.00 mm from U1.14 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (42.25, 10.50) is 0.00 mm from J1.A9 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (42.25, 10.50) is 0.00 mm from J1.B4 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (25.75, 14.50) is 0.00 mm from U1.13 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "3 of 20 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "J3",
+    "J4",
+    "D1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C20182914",
+  "RV1": "C444934",
+  "SW1": "C221841",
+  "C1": "C1623",
+  "C2": "C1623",
+  "C3": "C15849",
+  "C4": "C15849",
+  "C5": "C15850",
+  "C6": "C12891",
+  "C8": "C15850",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C21190",
+  "R4": "C25804",
+  "R5": "C25804"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "C3",
+   "what": "VDD decoupling",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+   "page": 8,
+   "quote": "placing it as close as possible to the device VDD terminal",
+   "found": null
+  },
+  {
+   "ref": "C6",
+   "what": "bulk",
+   "value": "22u",
+   "url": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+   "page": 8,
+   "quote": "or greater is recommended",
+   "found": null
+  },
+  {
+   "ref": "C4",
+   "what": "VREF bypass",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+   "page": 8,
+   "quote": "is recommended for the best THD and noise performance",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/16_pam8403_stereo_amp/out/kicad8.zip"
+ }
+}
