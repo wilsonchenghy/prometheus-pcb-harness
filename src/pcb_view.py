@@ -314,9 +314,12 @@ class _Cache:
             b = self._board()
             t0 = time.perf_counter()
             ref, at, rot, tracks, vias = self.undo.pop()
-            b.comps[ref]["at"], b.comps[ref]["rot"], b.tracks, b.vias = at, rot, tracks, vias
+            b.tracks, b.vias = tracks, vias
             b.__dict__.pop("_cu_memo", None)
             moves = self.out / "moves.json"
+            if ref is None:                              # (a "route properly": its copper only)
+                return self._after(b, t0, [], [])
+            b.comps[ref]["at"], b.comps[ref]["rot"] = at, rot
             if moves.exists():
                 moves.write_text(json.dumps(json.loads(moves.read_text())[:-1], indent=1))
             return self._after(b, t0, [], [])
@@ -335,6 +338,7 @@ class _Cache:
             if not torn and not before:
                 return self._after(b, t0, [], [])
             keep = [dict(t, pts=list(t["pts"])) for t in b.tracks], [dict(v) for v in b.vias]
+            self.undo.append((None, None, None) + keep)  # (undone like a move)
             b.tracks, b.vias = [], []
             b.__dict__.pop("_cu_memo", None)
             probs = pcb.place_and_route(b, move=[], router="freerouting" if freerouting.kicad_available()
@@ -342,6 +346,7 @@ class _Cache:
             short = lambda ps: sum(1 for p_ in ps if " short " in p_ or "apart (clearance" in p_)
             after = b.check()
             if short(after) > short(before) or len(probs) + len(after) >= len(before):   # (no better: as it was)
+                self.undo.pop()
                 b.tracks, b.vias = keep
                 b.__dict__.pop("_cu_memo", None)
                 got = self._after(b, t0, [], [])
