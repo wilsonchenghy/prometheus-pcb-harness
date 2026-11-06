@@ -353,9 +353,15 @@ class _Part:
         self.at = (0.0, 0.0)
         labels = [it for it in self.items if it[0] == "label"]
         grounds = [it for it in self.items if it[0] == "gnd"]
-        # an upright two-pin part between one net on top and ground at its foot: it can stand in a bank on a rail
-        self.rail = (labels[0][3] if two and len(labels) == 1 and len(grounds) == 1 and grounds[0][2] == 0
-                     and labels[0][1][1] < grounds[0][1][1] else None)
+        # an upright two-pin part between one net on top and ground at its foot (decoupling), or a net of its own
+        # at its foot (pull-ups on 3V3): it can stand in a bank on that rail
+        self.rail, self.foot = None, None
+        if two and len(labels) == 1 and len(grounds) == 1 and grounds[0][2] == 0 and labels[0][1][1] < grounds[0][1][1]:
+            self.rail, self.foot = labels[0][3], "gnd"
+        elif two and len(labels) == 2 and not grounds and abs(labels[0][1][0] - labels[1][1][0]) < 1e-6:
+            top, low = sorted(labels, key=lambda it: it[1][1])
+            if top[3] != low[3]:
+                self.rail, self.foot = top[3], "label"
 
     def _rebox(self):
         bb = _union(self.hard + self.soft)
@@ -480,8 +486,8 @@ def _chain(ps):
         if len(nets) != 2 or None in nets or "GND" in nets:
             continue
         a, b = nets
-        left = [q for q in ps if q.rail == a and q is not L]
-        right = [q for q in ps if q.rail == b and q is not L]
+        left = [q for q in ps if q.rail == a and q.foot == "gnd" and q is not L]
+        right = [q for q in ps if q.rail == b and q.foot == "gnd" and q is not L]
         if not right:
             a, b, left, right = b, a, right, left
         if not right:
@@ -543,7 +549,8 @@ def _banks(ps):
     for p in ps:
         if id(p) in seen:
             continue
-        mates = [q for q in ps if q.rail and p.rail and q.lib == p.lib and q.rail == p.rail and id(q) not in seen]
+        mates = [q for q in ps if q.rail and p.rail and q.lib == p.lib and q.rail == p.rail and q.foot == p.foot
+                 and id(q) not in seen]
         for k in range(0, max(len(mates), 1), BANK):
             grp = mates[k:k + BANK] if p.rail else [p]
             seen.update(id(q) for q in grp)
@@ -554,27 +561,31 @@ def _banks(ps):
 
 
 def _rail(grp):
-    """join a bank's tops and feet (each part's own frame; the parts then stand ``pitch`` apart)"""
+    """join a bank's tops (and, over ground, its feet; a pull-up keeps its own net's label at its foot): each part's
+    own frame, the parts then standing ``pitch`` apart"""
     pitch = math.ceil(max(q.w for q in grp) / G) * G
     for k, q in enumerate(grp):
         q.pitch = pitch
-        top = next(it for it in q.items if it[0] == "label")
-        foot = next(it for it in q.items if it[0] == "gnd")
-        et, ef = top[1], foot[1]
+        top = min((it for it in q.items if it[0] == "label"), key=lambda it: it[1][1])
+        foot = next((it for it in q.items if it[0] == "gnd"), None)
+        et, ef = top[1], (foot[1] if foot else None)
         q.items = [it for it in q.items if it is not top and it is not foot]
         q.soft = [s_ for s_ in q.soft if not (_hit(s_, (et[0] - 0.01, et[1] - 0.01, et[0] + 0.01, et[1] + 0.01))
-                                            or _hit(s_, (ef[0] - 0.01, ef[1] + 0.01, ef[0] + 0.01, ef[1] + 0.02)))]
+                                            or (ef and _hit(s_, (ef[0] - 0.01, ef[1] + 0.01, ef[0] + 0.01, ef[1] + 0.02))))]
         if k == 0:                                       # (the rail's one label, outward to the left; one ground)
             n = top[3]
-            q.items += [("label", et, 180, n), ("gnd", ef, 0)]
             w = len(n) * CH + 0.6 + q.pad
-            q.soft += [(et[0] - w, et[1] - 1.9, et[0], et[1] + 0.3), (ef[0] - 2.2, ef[1], ef[0] + 2.2, ef[1] + 5.2)]
+            q.items.append(("label", et, 180, n))
+            q.soft.append((et[0] - w, et[1] - 1.9, et[0], et[1] + 0.3))
+            if ef:
+                q.items += [("gnd", ef, 0), ("junction", ef)]              # (the ground symbol, the stub, the rail)
+                q.soft.append((ef[0] - 2.2, ef[1], ef[0] + 2.2, ef[1] + 5.2))
         if k < len(grp) - 1:                             # (on to the next part)
-            q.items += [("wire", et, (et[0] + pitch, et[1])), ("wire", ef, (ef[0] + pitch, ef[1]))]
+            q.items.append(("wire", et, (et[0] + pitch, et[1])))
+            if ef:
+                q.items.append(("wire", ef, (ef[0] + pitch, ef[1])))
         if 0 < k < len(grp) - 1:                         # (three wires meet)
-            q.items += [("junction", et), ("junction", ef)]
-        if k == 0:
-            q.items.append(("junction", ef))             # (the ground symbol, the stub, the rail)
+            q.items += [("junction", et)] + ([("junction", ef)] if ef else [])
         q._rebox()
     for q, nxt in zip(grp, grp[1:]):                     # (its room reaches the next part's: the wires are inside)
         q.box = (q.box[0], q.box[1], max(q.box[2], pitch + nxt.box[0] - 0.01), q.box[3])

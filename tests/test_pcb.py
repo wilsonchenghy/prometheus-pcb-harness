@@ -1431,6 +1431,20 @@ def test_schematic_draws_decoupling_as_a_bank_on_one_rail():
     assert kicad_sch.overlaps(lay) == []
 
 
+def test_schematic_draws_pull_ups_as_a_bank_on_their_rail():
+    """resistors from one rail to nets of their own (I2C and strap pull-ups on 3V3) stand on one wire across their
+    tops with one rail label, each foot keeping its own net's label"""
+    import kicad_sch
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "imu_bno085" / "imu_bno085.py"))
+    lay = kicad_sch.layout(b)
+    ups = [p for _, _, ps in lay[0] for p in ps if getattr(p, "pitch", 0) and p.foot == "label"]
+    assert len(ups) >= 3 and {p.rail for p in ups} == {"3V3"}
+    labels = [it[3] for p in ups for it in p.items if it[0] == "label"]
+    assert labels.count("3V3") == 1 and {"SCL", "SDA"} <= set(labels)
+    assert kicad_sch.overlaps(lay) == []
+
+
 def test_schematic_of_a_large_design_is_a3_pages_joined_by_global_labels(tmp_path):
     """a design that needs more than A3 (the flight controller) is A3 pages under a cover sheet, every part on one
     page, nothing overlapping, and - read back by KiCad - one netlist, the board's"""
