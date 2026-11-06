@@ -1,0 +1,55 @@
+{
+ "lib": "Prometheus",
+ "name": "TPS54360B",
+ "ref": "U",
+ "footprint": "Package_SO:Texas_R-PDSO-G8_EP2.95x4.9mm_Mask2.4x3.1mm_ThermalVias",
+ "datasheet": "https://www.ti.com/lit/ds/symlink/tps54360b.pdf",
+ "description": "60 V 3.5 A step-down converter (TI TPS54360B, pin functions)",
+ "pins": [
+  [
+   1,
+   "BOOT",
+   "passive"
+  ],
+  [
+   2,
+   "VIN",
+   "power_in"
+  ],
+  [
+   3,
+   "EN",
+   "input"
+  ],
+  [
+   4,
+   "RT/CLK",
+   "input"
+  ],
+  [
+   5,
+   "FB",
+   "input"
+  ],
+  [
+   6,
+   "COMP",
+   "output"
+  ],
+  [
+   7,
+   "GND",
+   "power_in"
+  ],
+  [
+   8,
+   "SW",
+   "power_out"
+  ],
+  [
+   9,
+   "PAD",
+   "power_in"
+  ]
+ ]
+}

@@ -138,7 +138,7 @@ def arm_board():
         b.place(f"C{20 + i}", C1210, (x, COUT_Y), 270, "10u 50V", "Murata GRM32ER71H106KA12L", model=c1210m,
                 note="buck output")
     b.place("U1", "Package_DFN_QFN:Texas_RGY_R-PVQFN-N20_EP2.05x3.05mm", U1, 180, "LM5145", "TI LM5145RGYR",
-            model="Package_DFN_QFN.3dshapes/Texas_RGY_R-PVQFN-N20_EP2.05x3.05mm.step", note="24 V buck controller")
+            model="Package_DFN_QFN.3dshapes/Texas_RGY_R-PVQFN-N20_EP2.05x3.05mm.step", note="24 V buck controller", symbol="Prometheus:LM5145")
     ux, uy = U1
     near = [  # by the gate-drive pins: VCC and BST caps between the FETs and U1, ILIM and VIN parts above / below
         ("C30", C06, (7.6, -40.1), 180, "2u2 25V", "GRM188R61E225KA12D"),       # VCC (pad 2 to the power ground)
