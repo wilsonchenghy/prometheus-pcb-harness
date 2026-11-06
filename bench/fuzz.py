@@ -6,6 +6,8 @@ and every export.
 
     python bench/fuzz.py 20            # 20 cases, seeds 0..19
     python bench/fuzz.py 5 --seed 100  # 5 cases from seed 100
+    python bench/fuzz.py 20 --kicad    # and KiCad's DRC on each: a board the harness calls clean that KiCad does
+                                       # not is a disagreement, printed with KiCad's findings (exit 1)
 """
 import math
 import os
@@ -81,7 +83,7 @@ def make(seed: int):
     return b, spec
 
 
-def case(seed: int, router: str) -> dict:
+def case(seed: int, router: str, kicad: bool = False) -> dict:
     b, spec = make(seed)
     t = time.perf_counter()
     out = tempfile.mkdtemp()
@@ -90,28 +92,38 @@ def case(seed: int, router: str) -> dict:
     notes = critic.review(b, spec)
     fchk = fab.fab_check(b, "jlcpcb-2")
     fab.order(b, os.path.join(out, "order"))
-    pcb.export_kicad(b, os.path.join(out, "kicad"))
-    return {"seed": seed, "parts": len(b.comps), "nets": len(b.nets), "s": round(time.perf_counter() - t, 1),
-            "clean": not probs and not chk, "problems": len(probs), "check": len(chk), "fab": len(fchk),
-            "critic": len(notes)}
+    paths = pcb.export_kicad(b, os.path.join(out, "kicad"))
+    r = {"seed": seed, "parts": len(b.comps), "nets": len(b.nets), "s": round(time.perf_counter() - t, 1),
+         "clean": not probs and not chk, "problems": len(probs), "check": len(chk), "fab": len(fchk),
+         "critic": len(notes)}
+    if kicad:                                            # (the same board judged by KiCad's own DRC)
+        d = pcb.kicad_drc(next(p_ for p_ in paths if p_.endswith(".kicad_pcb")))
+        r["kicad"] = d["errors"] + d["unconnected"]
+        r["disagree"] = r["clean"] and not fchk and bool(r["kicad"])
+    return r
 
 
 def main(argv):
     n = int(argv[0]) if argv and argv[0].isdigit() else 10
     s0 = int(argv[argv.index("--seed") + 1]) if "--seed" in argv else 0
     router = argv[argv.index("--router") + 1] if "--router" in argv else "freerouting"
-    crashed = 0
+    kicad = "--kicad" in argv
+    crashed = disagree = 0
     for seed in range(s0, s0 + n):
         try:
-            r = case(seed, router)
+            r = case(seed, router, kicad)
             print(f"seed {seed}: {r['parts']} parts, {r['nets']} nets, {r['s']} s, "
                   f"{'clean' if r['clean'] else 'not clean'} ({r['problems']} routing, {r['check']} check, "
-                  f"{r['fab']} house, {r['critic']} critic)", flush=True)
+                  f"{r['fab']} house, {r['critic']} critic"
+                  + (f", {len(r['kicad'])} KiCad DRC" if kicad else "") + ")", flush=True)
+            if r.get("disagree"):
+                disagree += 1
+                print("  DISAGREE: clean to the harness, not to KiCad:", *r["kicad"][:8], sep="\n    ", flush=True)
         except Exception:
             crashed += 1
             print(f"seed {seed}: CRASH\n" + traceback.format_exc(), flush=True)
-    print(f"{n} cases, {crashed} crashed")
-    return 1 if crashed else 0
+    print(f"{n} cases, {crashed} crashed" + (f", {disagree} where KiCad's DRC disagreed" if kicad else ""))
+    return 1 if crashed or disagree else 0
 
 
 if __name__ == "__main__":

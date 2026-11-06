@@ -281,7 +281,24 @@ class _Part:
         self.items, hard, soft = [], [self.body], []
         gnd: Dict[Tuple[int, int], List[Tuple[float, float]]] = {}
         done = set()
+        # (two pins facing each other closer than two stubs - the units of a dual pot end to end - would have their
+        #  stub wires overlap, and KiCad joins wires that touch: those pins get their label right at the pin)
+        segs = []
         for p, (x, y) in zip(self.pins, ends):
+            dx, dy = DIRS[int((p["rot"] + self.rot + 180) % 360)]
+            segs.append((net[p["num"]], (x, y), (x + dx * STUB, y + dy * STUB)))
+
+        def _near(q, a, b):
+            L_ = math.dist(a, b)
+            t_ = max(0.0, min(1.0, ((q[0] - a[0]) * (b[0] - a[0]) + (q[1] - a[1]) * (b[1] - a[1])) / (L_ * L_ or 1.0)))
+            return math.dist(q, (a[0] + t_ * (b[0] - a[0]), a[1] + t_ * (b[1] - a[1]))) < 0.05
+        tight = set()
+        for i, (n1, a1, b1) in enumerate(segs):
+            for j, (n2, a2, b2) in enumerate(segs):
+                if i != j and n1 != n2 and n1 is not None and n2 is not None and \
+                        (_near(a2, a1, b1) or _near(b2, a1, b1) or _near(a1, a2, b2) or _near(b1, a2, b2)):
+                    tight.add(i)
+        for k_pin, (p, (x, y)) in enumerate(zip(self.pins, ends)):
             if (round(x, 3), round(y, 3)) in done:       # (stacked pins: one stub serves them all)
                 continue
             done.add((round(x, 3), round(y, 3)))
@@ -292,14 +309,21 @@ class _Part:
             if n is None:
                 self.items.append(("nc", (x, y)))
                 continue
-            e = (x + dx * STUB, y + dy * STUB)
-            self.items.append(("wire", (x, y), e))
-            hard.append((min(x, e[0]), min(y, e[1]), max(x, e[0]), max(y, e[1])))
+            if k_pin in tight:
+                e = (x, y)                               # (no stub: the label sits on the pin's end)
+            else:
+                e = (x + dx * STUB, y + dy * STUB)
+                self.items.append(("wire", (x, y), e))
+                hard.append((min(x, e[0]), min(y, e[1]), max(x, e[0]), max(y, e[1])))
             if n == "GND":
                 gnd.setdefault((dx, dy), []).append(e)
                 continue
             w = len(n) * CH + 0.6 + pad
-            if dx == 0 and not two:                      # (an IC's top / bottom row: upright, clear of its neighbours)
+            if k_pin in tight and dx != 0:               # (on the pin's end, between two facing pins: upright,
+                up = dx > 0                              #  one up and the other down, clear of each other)
+                self.items.append(("label", e, 90 if up else 270, n))
+                soft.append((e[0] - 1.9, e[1] - w, e[0] + 0.3, e[1]) if up else (e[0] - 0.3, e[1], e[0] + 1.9, e[1] + w))
+            elif dx == 0 and not two:                    # (an IC's top / bottom row: upright, clear of its neighbours)
                 self.items.append(("label", e, 90 if dy < 0 else 270, n))
                 soft.append((e[0] - 1.9, e[1] - w, e[0] + 0.3, e[1]) if dy < 0 else (e[0] - 0.3, e[1], e[0] + 1.9, e[1] + w))
             else:
@@ -317,20 +341,42 @@ class _Part:
                         hard.append(_union([(q[0], q[1], q[0], q[1]), (q2[0], q2[1], q2[0], q2[1])]))
                         es[k] = q2
             es.sort(key=lambda q: (q[1], q[0]))
-            for a, b in zip(es, es[1:]):
-                self.items.append(("wire", a, b))
-                hard.append(_union([(a[0], a[1], a[0], a[1]), (b[0], b[1], b[0], b[1])]))
-            if dy < 0:                                   # (pins on top: the symbol points up)
-                at = es[0]
-                self.items.append(("gnd", at, 180))
-                soft.append((at[0] - 2.2, at[1] - 5.2, at[0] + 2.2, at[1]))
-            else:
-                at = max(es, key=lambda q: (q[1], -q[0]))
-                self.items.append(("gnd", at, 0))
-                soft.append((at[0] - 2.2, at[1], at[0] + 2.2, at[1] + 5.2))
-            if len(es) > 1:                              # (where three wires meet: a junction)
-                for q in es[1:-1] + [at]:
-                    self.items.append(("junction", q))
+            # (a wire joining two ground stubs must not touch another net's pin or stub on the way - two units of a
+            #  dual pot end to end: KiCad joins whatever a wire's end or run touches - so the stubs are joined in
+            #  runs between such pins, each run with its own ground symbol)
+            others = [q for it in self.items if it[0] in ("wire", "label") for q in it[1:3]
+                      if isinstance(q, tuple) and len(q) == 2 and not any(math.dist(q, g_) < 1e-6 for g_ in es)]
+            others += [q for q in ends if not any(math.dist(q, g_) < 1e-6 for g_ in es)]
+
+            def touches(a, b):
+                L_ = math.dist(a, b)
+                for q in others:
+                    t_ = ((q[0] - a[0]) * (b[0] - a[0]) + (q[1] - a[1]) * (b[1] - a[1])) / (L_ * L_ or 1.0)
+                    if -1e-6 <= t_ <= 1 + 1e-6 and math.dist(q, (a[0] + t_ * (b[0] - a[0]),
+                                                                  a[1] + t_ * (b[1] - a[1]))) < 0.05:
+                        return True
+                return False
+            runs = [[es[0]]]
+            for q in es[1:]:
+                if touches(runs[-1][-1], q):
+                    runs.append([q])
+                else:
+                    runs[-1].append(q)
+            for run in runs:
+                for a, b in zip(run, run[1:]):
+                    self.items.append(("wire", a, b))
+                    hard.append(_union([(a[0], a[1], a[0], a[1]), (b[0], b[1], b[0], b[1])]))
+                if dy < 0:                               # (pins on top: the symbol points up)
+                    at = run[0]
+                    self.items.append(("gnd", at, 180))
+                    soft.append((at[0] - 2.2, at[1] - 5.2, at[0] + 2.2, at[1]))
+                else:
+                    at = max(run, key=lambda q: (q[1], -q[0]))
+                    self.items.append(("gnd", at, 0))
+                    soft.append((at[0] - 2.2, at[1], at[0] + 2.2, at[1] + 5.2))
+                if len(run) > 1:                         # (where three wires meet: a junction)
+                    for q in run[1:-1] + [at]:
+                        self.items.append(("junction", q))
         # reference and value: right of an upright part, else the first free place above / below the body
         b = self.body
         tw = max(len(ref), len(self.value)) * CH + 0.6

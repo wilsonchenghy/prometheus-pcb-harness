@@ -66,6 +66,11 @@ a re-run does not route again.
 
 You can also draw copper yourself: `b.track(net, "F", [(x, y), ...], width)`, `b.via(net, (x, y))`,
 `b.pour(net, layer, polygon)`, `b.stitch(net, region)` (stitching vias), `b.hole((x, y), d=3.2)` (mounting holes).
+Copper drawn in the script (a wide power feed, an RF line) is part of the design:
+- The run routes the rest from it.
+- It leaves the drawn copper exactly as drawn.
+- The placer keeps parts off it.
+- A clean run keeps the result in `routes/` like any other.
 
 ## 4. Checks
 

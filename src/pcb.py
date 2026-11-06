@@ -205,6 +205,63 @@ def _prefetch_callers():
         prefetch(sorted(names))
 
 
+
+def _arc_points(p0, pm, p1, step: float = 0.1):
+    """an arc through three points as a polyline every ``step`` mm (a round courtyard drawn as arcs: its three
+    points alone make a diamond of 64 % of the circle)"""
+    (ax, ay), (bx, by), (cx, cy) = p0, pm, p1
+    d = 2 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    if abs(d) < 1e-12:
+        return [p0, p1]
+    ux = ((ax * ax + ay * ay) * (by - cy) + (bx * bx + by * by) * (cy - ay) + (cx * cx + cy * cy) * (ay - by)) / d
+    uy = ((ax * ax + ay * ay) * (cx - bx) + (bx * bx + by * by) * (ax - cx) + (cx * cx + cy * cy) * (bx - ax)) / d
+    r = math.hypot(ax - ux, ay - uy)
+    a0, am, a1 = (math.atan2(y - uy, x - ux) for x, y in (p0, pm, p1))
+    sweep = (a1 - a0) % (2 * math.pi)
+    if (am - a0) % (2 * math.pi) > sweep:                # (the mid point says which way round)
+        sweep -= 2 * math.pi
+    n = max(2, int(abs(sweep) * r / step) + 1)
+    return [p0] + [(ux + r * math.cos(a0 + sweep * k / n), uy + r * math.sin(a0 + sweep * k / n)) for k in range(1, n)] + [p1]
+
+
+def _courtyard_poly(tree):
+    """a footprint's courtyard as KiCad draws it (F.CrtYd lines, rectangles, polygons, arcs and circles closed into
+    one shape, footprint frame, y up), or None when its strokes close nothing (the box of them is used then)"""
+    from shapely.geometry import LineString, Point, Polygon, box
+    from shapely.ops import polygonize, unary_union
+    on = lambda ln: any(isinstance(c, list) and c[0] == "layer" and "CrtYd" in str(c[1]) for c in ln)
+    xy = lambda q: (float(q[1]), -float(q[2]))
+    lines, areas = [], []
+    for ln in _find(tree, "fp_line"):
+        if on(ln) and _find(ln, "start") and _find(ln, "end"):
+            lines.append(LineString([xy(_find(ln, "start")[0]), xy(_find(ln, "end")[0])]))
+    for ln in _find(tree, "fp_arc"):
+        if on(ln) and _find(ln, "start") and _find(ln, "mid") and _find(ln, "end"):
+            lines.append(LineString(_arc_points(*[xy(_find(ln, k)[0]) for k in ("start", "mid", "end")])))
+    for ln in _find(tree, "fp_rect"):
+        if on(ln) and _find(ln, "start") and _find(ln, "end"):
+            (x0, y0), (x1, y1) = xy(_find(ln, "start")[0]), xy(_find(ln, "end")[0])
+            areas.append(box(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)))
+    for ln in _find(tree, "fp_poly"):
+        if on(ln) and _find(ln, "pts"):
+            pts = [xy(q) for q in _find(_find(ln, "pts")[0], "xy")]
+            if len(pts) >= 3:
+                areas.append(Polygon(pts).buffer(0))
+    for ln in _find(tree, "fp_circle"):
+        if on(ln) and _find(ln, "center") and _find(ln, "end"):
+            c_, e_ = xy(_find(ln, "center")[0]), xy(_find(ln, "end")[0])
+            areas.append(Point(c_).buffer(math.dist(c_, e_), 32))
+    if lines:
+        areas += list(polygonize(unary_union(lines)))
+    g = unary_union(areas) if areas else None
+    if g is None or g.is_empty or g.area < 1e-6:
+        return None
+    if g.geom_type == "MultiPolygon":                    # (pieces: their outer shape, holes filled)
+        g = unary_union([Polygon(p.exterior) for p in g.geoms])
+    elif g.geom_type == "Polygon":
+        g = Polygon(g.exterior)
+    return g
+
 def footprint(name: str) -> Dict:
     """KiCad footprint "Lib:Name" -> {"pads": {number: [pad, ...]}, "courtyard": (x0, y0, x1, y1)}; a pad is
     {"at": (x, y) board frame (y up), "size": (w, h), "rot": deg, "shape": rect|roundrect|circle|oval|...,
@@ -284,6 +341,12 @@ def footprint(name: str) -> Dict:
             xs += [float(q[1]) for q in pts_]
             ys += [-float(q[2]) for q in pts_]
     crt = (min(xs), min(ys), max(xs), max(ys)) if xs else None
+    edge_marks = [[(float(st[0][1]), -float(st[0][2])), (float(en[0][1]), -float(en[0][2]))]   # (Edge.Cuts lines
+                  for ln in _find(tree, "fp_line")                                         #  of its own: where the
+                  if any(isinstance(c, list) and c[0] == "layer" and str(c[1]) == "Edge.Cuts" for c in ln)   # board
+                  for st, en in [(_find(ln, "start"), _find(ln, "end"))] if st and en]     #  edge should run)
+    crt_poly = _courtyard_poly(tree) if crt else None   # (its real shape, as KiCad's DRC judges overlaps: an SOIC's
+    #                                                     is narrower over the body than across its pins)
     # silkscreen, for renders: the reference designator's place and the outline strokes on F.SilkS
     ref = None
     for t in _find(tree, "fp_text") + _find(tree, "property"):
@@ -312,7 +375,8 @@ def footprint(name: str) -> Dict:
     if mod and isinstance(mod[0][1], str):
         m_ = re.sub(r"^\$\{[^}]*\}/", "", mod[0][1])
         model = re.sub(r"\.wrl$", ".step", m_) if "3dshapes/" in m_ else None
-    _FP[name] = {"pads": pads, "courtyard": crt, "ref": ref, "silk": silk, "model": model}
+    _FP[name] = {"pads": pads, "courtyard": crt, "courtyard_poly": crt_poly, "edge_marks": edge_marks, "ref": ref,
+                 "silk": silk, "model": model}
     return _FP[name]
 
 
@@ -503,12 +567,16 @@ class Board:
         from shapely import affinity
         from shapely.geometry import box
         c = self.comps[ref]
-        crt = footprint(c["fp"])["courtyard"]
+        fp = footprint(c["fp"])
+        crt = fp["courtyard"]
         if not crt:
             return None
+        g = fp.get("courtyard_poly")
+        if g is None:
+            g = box(*crt)
         if c.get("side", "F") == "B":
-            crt = (-crt[2], crt[1], -crt[0], crt[3])
-        return affinity.translate(affinity.rotate(box(*crt), c["rot"], origin=(0, 0)), *c["at"])
+            g = affinity.scale(g, -1.0, 1.0, origin=(0, 0))
+        return affinity.translate(affinity.rotate(g, c["rot"], origin=(0, 0)), *c["at"])
 
     def net(self, name: str, pins: Sequence[Tuple[str, str]], amps: float = 0.1, volts: float = 5.0,
             width: Optional[float] = None, cite=None):
@@ -656,9 +724,8 @@ class Board:
         others = {L: unary_union([g for (n, l), g in fixed.items() if l == L and n != net] or [Point(0, 0).buffer(0)])
                   for L in self.layers}
         drills = unary_union([Point(x, y).buffer(d / 2 + self.hole_gap + via[0] / 2, 12) for x, y, d in self.all_holes()] +
-                             [g.centroid.buffer(d / 2 + self.hole_gap + via[0] / 2, 12)
-                              for _, _, _, g, d in self.pad_shapes() if d] +
-                             [Point(v["at"]).buffer(v["drill"] / 2 + self.hole_gap + via[0] / 2, 12) for v in self.vias]
+                             [h["geom"].buffer(self.hole_gap + via[0] / 2, 12)   # (each drill as its shape: a USB-C
+                              for h in self.drill_list()]                        #  shell's slot is longer than wide)
                              or [Point(0, 0).buffer(0)])
         inside = self.outline.buffer(-(via[1] / 2 + 0.3))
         edge_in = self.outline.buffer(-(self.edge + 0.02))   # (the stub as well as its via keeps the edge gap)
@@ -759,7 +826,7 @@ class Board:
                         continue
                     place = (c["at"][0], c["at"][1], c["rot"])
                     plated = bool(pad["layers"]) and pad.get("kind") != "np_thru_hole"
-                    d = dict(name=f"{ref} pad {num}" if plated else "hole", plated=plated, slot=None)
+                    d = dict(name=f"{ref} pad {num}" if plated else "hole", plated=plated, slot=None, ref=ref)
                     if pad.get("slot") and abs(pad["slot"][0] - pad["slot"][1]) > 1e-6:
                         g = _pad_poly({**pad, "shape": "oval", "size": pad["slot"], "prims": []}, place)
                         q = list(g.minimum_rotated_rectangle.exterior.coords)
@@ -788,14 +855,19 @@ class Board:
     def fanout(self, width: float = 0.2, reach: float = 0.5):
         """a straight stub off the outer end of every fine-pitch pad on a net, before any routing, so no route runs
         where another pad's way out must go"""
+        from shapely.geometry import LineString, Polygon
         self._fan = getattr(self, "_fan", set())
         pn = self.pad_net()
+        ko = {L: [Polygon(k) for k in self.keepout_zones(L)] for L in "FB"}
         for (ref, num), n in pn.items():
             if (ref, num) in self._fan or ref not in self.comps or num not in self.comps[ref]["pads"]:
                 continue
             e = _escape(self, ref, num, reach)
-            if e:
-                self.track(n, "B" if self.comps[ref].get("side", "F") == "B" else "F", [e[0], e[1]], width, 0.01)
+            L = "B" if self.comps[ref].get("side", "F") == "B" else "F"
+            if e and any(LineString([e[0], e[1]]).buffer(width / 2).intersects(k) for k in ko[L]):
+                continue                                 # (no stub into a keep-out: an antenna's; the router
+            if e:                                        #  leaves that pad another way)
+                self.track(n, L, [e[0], e[1]], width, 0.01)
                 self.tracks[-1]["fan"] = (ref, num)
                 self._fan.add((ref, num))
 
@@ -1007,13 +1079,123 @@ class Board:
                 good[sel] |= shapely.dwithin(g, pts[sel], 0.005)
         return [(k, tuple(e)) for (k, e), ok in zip(ends, good) if not ok]
 
+    VIA_AMPS_PER_MM = 1.0 / 0.3      # A per mm of drill: a 0.3 mm via, 25 um of plating, ~1 A (IPC-2152, a short
+    #                                  barrel; a conservative figure, as the house calculators give for 10-20 C)
+
+    def via_current(self, min_amps: float = 1.0) -> List[Tuple[str, List[Tuple[float, float]], float, float]]:
+        """where a net carrying current changes layer through too few vias: for each net of at least ``min_amps``
+        and no pour (a plane spreads it over its many drops), the vias that are the only way between two parts of
+        its copper each holding a part on the net's power path (a connector, fuse, inductor, transistor, diode,
+        relay or battery: a branch to a chip, a resistor or a capacitor draws its own share, unknown, and is not
+        judged), whose drills together carry less than the net's current (``VIA_AMPS_PER_MM`` per mm of drill). [(net, via centres, their amps, the
+        net's)]"""
+        from shapely.geometry import Point
+        out = []
+        pads = self.pad_shapes()
+        pn = self.pad_net()
+        vias0 = list(self.vias)
+        try:
+            self.vias = []                               # (each layer's copper of each net without its vias, no
+            cu = self.copper(pours=False)                #  pours: poured nets are not judged; the memo is keyed by
+        finally:                                         #  the vias as well, so the board's own stays)
+            self.vias = vias0
+        poured = {pz["net"] for pz in self.pours}
+        for net, d in self.nets.items():
+            amps = d.get("amps") or 0.0
+            vs = [v for v in self.vias if v["net"] == net]
+            if amps < min_amps or not vs or net in poured:   # (a plane spreads the current over its many drops:
+                continue                                      #  each carries its own pin's share, not the net's)
+            isl = []                                     # (layer, polygon) islands of the net
+            for L in self.layers:
+                g = cu.get((net, L))
+                if g is not None and not g.is_empty:
+                    isl += [(L, q) for q in getattr(g, "geoms", [g])]
+            if len(isl) < 2:
+                continue
+            parent = list(range(len(isl)))
+
+            def find(a):
+                while parent[a] != a:
+                    parent[a] = parent[parent[a]]
+                    a = parent[a]
+                return a
+
+            def at(pt, L=None):
+                return [k for k, (L_, q) in enumerate(isl) if (L is None or L_ == L) and q.intersects(pt)]
+            for r, n, L, g, dr in pads:                  # (a plated hole joins the layers: no via needed there)
+                if dr and pn.get((r, n)) == net:
+                    ks = at(g.centroid)
+                    for a, b in zip(ks, ks[1:]):
+                        parent[find(a)] = find(b)
+            links = {}                                   # (the vias between each pair of island groups: by the via's
+            for v in vs:                                 #  ring, as copper joins - its centre may be just off a track)
+                ks = at(Point(v["at"]).buffer(v["dia"] / 2 - 0.01, 12))
+                for a, b in zip(ks, ks[1:]):
+                    links.setdefault(tuple(sorted((find(a), find(b)))), []).append(v)
+            pins = {}                                    # (the current-carrying pins on each island group)
+            for r, n, L, g, dr in pads:
+                if pn.get((r, n)) == net and not r.upper().startswith("C"):
+                    for k in at(g.centroid, None if dr else L):
+                        pins.setdefault(find(k), set()).add((r, n))
+            for (a, b), lst in links.items():
+                if a == b:
+                    continue
+                par = {k: k for k in set(find(k) for k in range(len(isl)))}   # (the net joined without these vias)
+
+                def f2(x):
+                    while par[x] != x:
+                        x = par[x]
+                    return x
+                for (c, e), l2 in links.items():
+                    if l2 is not lst and c != e:
+                        par[f2(c)] = f2(e)
+                if f2(a) == f2(b):
+                    continue                             # (another way round: not the only way)
+                side_a = {k for k in par if f2(k) == f2(a)}
+                pa_ = set().union(*[pins.get(k, set()) for k in side_a])
+                pb_ = set().union(*[pins.get(k, set()) for k in par if k not in side_a])
+                power = lambda ps: any(re.match(r"(J|P|F|L|Q|K|BT|D)\d", r_.upper())
+                                       and "LED" not in self.comps[r_]["fp"].upper() for r_, _ in ps)
+                if not power(pa_) or not power(pb_):     # (the path of the net's current runs between connectors,
+                    continue                             #  fuses, inductors, switches, diodes: a branch to a chip or a
+                    #                                      resistor draws its own share, unknown, not judged here)
+                cap = sum(v["drill"] * self.VIA_AMPS_PER_MM for v in lst)
+                if cap + 1e-9 < amps:
+                    out.append((net, [tuple(v["at"]) for v in lst], round(cap, 2), amps))
+        return out
+
     def tidy(self) -> int:
         """dead vias taken away: a via that meets its own net's copper on fewer than two layers joins nothing (KiCad
-        warns "via dangling"); the track ends meeting in it are brought to its centre first, so they still meet.
-        Kept only when check() finds nothing new. Returns how many vias it removed"""
+        warns "via dangling"); the track ends meeting in it are brought to its centre first, so they still meet. And
+        of two vias of one net drilled closer than the hole gap, one goes, its tracks brought to the other. Each kept
+        only when check() finds nothing new. Returns how many vias it removed"""
         from shapely.geometry import Point
         before = set(self.check())
         vias0, tracks0 = list(self.vias), [dict(t, pts=list(t["pts"])) for t in self.tracks]
+        merged = 0                                       # two vias of one net drilled into each other (two routing
+        for v in list(self.vias):                        # passes' drops at one pad): one goes, the tracks that met
+            if v not in self.vias:                       # it brought on to the other
+                continue
+            for w in [w for w in self.vias if w is not v and w["net"] == v["net"] and not w.get("user")]:
+                if math.dist(v["at"], w["at"]) - (v["drill"] + w["drill"]) / 2 >= self.hole_gap - 1e-6:
+                    continue
+                for t in list(self.tracks):              # (a snapshot: the joins added here are not walked again)
+                    if t["net"] == w["net"]:
+                        for i in (0, -1):
+                            if 1e-6 < math.dist(t["pts"][i], v["at"]) and math.dist(t["pts"][i], w["at"]) < w["dia"] / 2:
+                                j_ = {k_: x_ for k_, x_ in t.items() if k_ not in ("fan", "user")}
+                                self.tracks.append({**j_, "pts": [tuple(t["pts"][i]), tuple(v["at"])]})
+                self.vias.remove(w)
+                merged += 1
+        if merged:
+            self.__dict__.pop("_cu_memo", None)
+            if set(self.check()) - before:               # (it broke something: as they were)
+                self.vias, self.tracks = list(vias0), [dict(t, pts=list(t["pts"])) for t in tracks0]
+                self.__dict__.pop("_cu_memo", None)
+                merged = 0
+            else:
+                before = set(self.check())
+                vias0, tracks0 = list(self.vias), [dict(t, pts=list(t["pts"])) for t in self.tracks]
         self.vias = []                                   # (each net's copper without its vias: what a via meets;
         self.__dict__.pop("_cu_memo", None)              # pour islands kept, the ones only a via joins too)
         cu = self.copper(prune=False)
@@ -1025,7 +1207,7 @@ class Board:
             touched = sum(1 for L in self.layers if (v["net"], L) in cu and cu[(v["net"], L)].intersects(disk))
             others = [w for w in self.vias if w is not v and w["net"] == v["net"]
                       and Point(w["at"]).distance(Point(v["at"])) < (w["dia"] + v["dia"]) / 2]
-            if touched >= 2 or others:
+            if touched >= 2 or others or v.get("user"):  # (the script's own via stays as drawn)
                 keep_v.append(v)
         for v in self.vias:                              # (a via the tracks of one layer meet at: their ends are
             if v in keep_v:                              # brought to its centre first, so they still meet)
@@ -1039,14 +1221,14 @@ class Board:
                         self.tracks.append({**t, "pts": [tuple(e), tuple(v["at"])]})
         changed = len(vias0) - len(keep_v)
         if not changed:
-            return 0
+            return merged
         self.vias = keep_v
         self.__dict__.pop("_cu_memo", None)
         if set(self.check()) - before:                   # (it broke something: put it all back)
             self.vias, self.tracks = vias0, tracks0
             self.__dict__.pop("_cu_memo", None)
-            return 0
-        return changed
+            return merged
+        return changed + merged
 
     def drop_loops(self) -> int:
         """tracks a net does not need: one whose removal leaves every pin of its net joined as before (a second run
@@ -1067,7 +1249,8 @@ class Board:
             again = True
             while again:
                 again = False
-                for t in sorted((t for t in self.tracks if t["net"] == net and length(t) >= 0.5), key=length,
+                for t in sorted((t for t in self.tracks if t["net"] == net and length(t) >= 0.5
+                                 and not t.get("user")), key=length,
                                 reverse=True):          # (a run, not a corner's or a pin's escape piece)
                     i = next(k for k, u in enumerate(self.tracks) if u is t)
                     del self.tracks[i]
@@ -1095,6 +1278,8 @@ class Board:
             pad_at.setdefault((pn.get((r, n)), L if not d else "*"), []).append(g)
         cut, groups = 0, {}                              # (each net's pieces by KiCad's end rule, before any cut)
         for k, t in enumerate(self.tracks):
+            if t.get("user"):                            # (the script's own copper: as it drew it)
+                continue
             for end in (0, -1):
                 if len(t["pts"]) < 2:                    # (cut to nothing by its other end)
                     break
@@ -1140,6 +1325,8 @@ class Board:
         from shapely.geometry import LineString, Point
         ends = {}
         for k, t in enumerate(self.tracks):
+            if t.get("user"):                            # (the script's own copper: as it drew it)
+                continue
             for i in (0, -1):
                 ends.setdefault((t["net"], t["layer"], tuple(round(c, 4) for c in t["pts"][i])), []).append((k, i))
         joined, gone = [], set()                         # (two segments end to end: one polyline)
@@ -1164,6 +1351,8 @@ class Board:
             lands[(u["net"], u["layer"])].append(u["pts"][-1])
         n = 0
         for t in tracks:
+            if t.get("user"):
+                continue
             others = [g for (nt, l), g in fixed.items() if l == t["layer"] and nt != t["net"]]
             near = lands.get((t["net"], t["layer"]), []) + [v["at"] for v in self.vias if v["net"] == t["net"]] + \
                 [(g.centroid.x, g.centroid.y) for g in pad_pts]
@@ -1203,7 +1392,8 @@ class Board:
         from shapely.ops import substring, unary_union
         changed = 0
         idx = set(range(len(self.tracks)) if tracks is None else tracks)
-        orig, before = None, {}
+        orig, before = None, {}                          # (the script's own copper: a loose tip cut back to where
+        #                                                  the routing joined it - an escape stub - never dropped)
         for _ in range(rounds):
             loose = [(k, e) for k, e in self.loose_ends(only=sorted(i for i in idx if i < len(self.tracks)))]
             if not loose:
@@ -1237,6 +1427,8 @@ class Board:
                     for c in getattr(g, "coords", []):
                         far = max(far, line.project(Point(c)))
                 if far <= 1e-3:
+                    if t.get("user"):                    # (the script's own track: kept, whole)
+                        continue
                     drop.add(k)                          # it lies inside nothing of its net: the whole spur goes
                     changed += 1
                     continue
@@ -1247,7 +1439,7 @@ class Board:
                 if len(new) >= 2 and cut.length > 1e-3:
                     t["pts"] = new if tuple(pts[0]) == tuple(t["pts"][0]) else new[::-1]
                     changed += 1
-                else:
+                elif not t.get("user"):
                     drop.add(k)
                     changed += 1
             if drop:
@@ -1660,6 +1852,19 @@ class Board:
                     gap = shp[int(i)].distance(hg)
                     probs.append(f"{'track' if 'pts' in it else 'via'} {it['net']} {max(gap, 0):.2f} mm from the bare "
                                  f"hole at ({x:.1f}, {y:.1f}) (keep {hc:.2f} mm)")
+        if bare:                                              # and so does every pad: a mounting hole on a part's
+            from shapely.strtree import STRtree as _STp           # pad cuts it (a footprint's own pegs beside its own
+            pth = _STp([g for *_, g, _ in pads])                  # pads are the maker's design, not checked here)
+            hit = set()
+            for h in bare:
+                (x, y), hg = h["at"], h["geom"]
+                for i in pth.query(hg, predicate="dwithin", distance=hc - 1e-6):
+                    ref, num, L, g, _ = pads[int(i)]
+                    if ref == h.get("ref") or (ref, num, (x, y)) in hit:
+                        continue
+                    hit.add((ref, num, (x, y)))
+                    probs.append(f"{ref} pad {num or '(mount)'} {max(g.distance(hg), 0):.2f} mm from the bare hole at "
+                                 f"({x:.1f}, {y:.1f}) (keep {hc:.2f} mm)")
         inner = self.outline.buffer(-self.edge)               # copper keeps the edge gap from the routed edge
         for ref, num, L, g, _ in pads:
             if not inner.contains(g):
@@ -1716,8 +1921,15 @@ class Board:
                     continue
                 if self.comps[refs[i]].get("side", "F") != self.comps[refs[j]].get("side", "F"):
                     continue                                 # top and bottom parts may overlap in plan
-                if cy[refs[i]].intersection(cy[refs[j]]).area > 0.05:
-                    probs.append(f"courtyards of {refs[i]} and {refs[j]} overlap")
+                if cy[refs[i]].intersection(cy[refs[j]]).area > 1e-3:     # (KiCad's DRC flags any overlap: a
+                    probs.append(f"courtyards of {refs[i]} and {refs[j]} overlap")   # 0.03 mm strip is one)
+        if tree is not None:                                 # a mounting hole is drilled through whatever is there
+            from shapely.geometry import Point as _Ph
+            for x, y, d in self.holes:
+                hg = _Ph(x, y).buffer(d / 2, 16)
+                for j in sorted(int(j) for j in tree.query(hg)):
+                    if cy[refs[j]].intersection(hg).area > 0.05:
+                        probs.append(f"the mounting hole at ({x:.1f}, {y:.1f}) is inside the courtyard of {refs[j]}")
         if any(c.get("symbol") for c in self.comps.values()):  # (every symbol pin has a pad, every pad a pin)
             import parts
             probs += parts.pin_check(self)
@@ -2033,13 +2245,28 @@ def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     return probs
 
 
+def mark_user_copper(board: Board) -> None:
+    """the copper on the board before any routing is the script's own (a hand-drawn feed): tagged ``user``, so the
+    clean-up passes (spurs, loops, overshoots, chamfers) and the rip-up leave it as drawn"""
+    if getattr(board, "_user_marked", False) or any(it.get("user") for it in board.tracks + board.vias):
+        board._user_marked = True                        # (once - later calls find the router's copper there too -
+        return                                           #  or already tagged as the script drew it: pcb_cli.load)
+    board._user_marked = True
+    for it in board.tracks + board.vias:
+        if not it.get("fan"):
+            it.setdefault("user", True)
+
+
 def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     """route the whole board with ``router``: "freerouting" (FreeRouting through KiCad, as KiCad users route:
     ``freerouting.route_kicad``; needs KiCad, Java and the FreeRouting jar, and says which is missing) or "harness"
     (``autoroute``, this file's grid router, chosen explicitly). Sets ``board.router_used``"""
+    mark_user_copper(board)                              # (first routing call: what is there, the script drew)
     if router == "harness":
         board.router_used = "harness"
-        return autoroute(board, **kw)
+        probs = autoroute(board, **kw)
+        neck_vias(board)                                 # (a via its route left against a pad of its own net moved a
+        return probs                                     #  neck away, as after FreeRouting: solder wicks down it)
     if router != "freerouting":
         raise ValueError("router: freerouting or harness")
     import freerouting
@@ -2135,8 +2362,8 @@ def _second_pass(board: Board, probs: List[str], again) -> List[str]:
         return probs
     before = (list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())), probs,
               severity(probs) + severity(board.check()))
-    board.tracks = [t for t in board.tracks if t["net"] not in nets]
-    board.vias = [v for v in board.vias if v["net"] not in nets]
+    board.tracks = [t for t in board.tracks if t["net"] not in nets or t.get("user")]   # (the script's own copper
+    board.vias = [v for v in board.vias if v["net"] not in nets or v.get("user")]       #  stays as it drew it)
     board.__dict__.pop("_cu_memo", None)
     try:
         probs2 = again()
@@ -2443,6 +2670,17 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
         for L in "FB":
             if L in k["layers"]:
                 fixed_obs[L].append(bx)
+    for t in board.tracks:                               # and the copper the script drew (a hand-drawn feed): a
+        if t.get("fan") or t["layer"] not in fixed_obs:  # part placed on it would short to it; as small boxes
+            continue                                     # along each segment (a diagonal is no one box)
+        h_ = t["w"] / 2
+        for (xa, ya), (xb, yb) in zip(t["pts"], t["pts"][1:]):
+            n_ = max(1, int(math.ceil(math.dist((xa, ya), (xb, yb)) / 0.5)))
+            for i_ in range(n_):
+                x0_, y0_ = xa + (xb - xa) * i_ / n_, ya + (yb - ya) * i_ / n_
+                x1_, y1_ = xa + (xb - xa) * (i_ + 1) / n_, ya + (yb - ya) * (i_ + 1) / n_
+                fixed_obs[t["layer"]].append((min(x0_, x1_) - h_, min(y0_, y1_) - h_,
+                                              max(x0_, x1_) + h_, max(y0_, y1_) + h_))
 
     def box_of(r, x, y, a):
         x0, y0, x1, y1 = R_[(r, a)]
@@ -2867,6 +3105,7 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     if move is None:
         move = [r for r, c in board.comps.items() if c.get("unplaced")] or \
                [r for r, c in board.comps.items() if not c["overhang"]]
+    mark_user_copper(board)                              # (the script's own copper, before any try routes)
     tracks0, vias0, fan0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
     tries = max(1, tries)
     if workers is None:
@@ -2969,6 +3208,8 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
                 continue
             moved = False
             for v, o in sorted(((a, b),) if b.get("fixed") else ((a, b), (b, a)), key=lambda p: len(ends(p[0]))):
+                if v.get("user") or any(t.get("user") for t, _ in ends(v)):
+                    continue                             # (the script's via, or one its tracks end at: as drawn)
                 others = {L: unary_union([g for (nt, l), g in fixed.items() if l == L and nt != v["net"]] or [Point(0, 0).buffer(0)])
                           for L in board.layers}
 
@@ -3026,6 +3267,8 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
                 and ring.distance(g) < neck - 1e-6]
 
     for v in list(board.vias):
+        if v.get("user"):                                # (the script's own via: where it drew it)
+            continue
         near = against(v, v["at"])
         if not near:
             continue
@@ -3033,11 +3276,21 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
         fixed = board.copper(pours=False)
         others = {L: unary_union([g for (nt, l), g in fixed.items() if l == L and nt != v["net"]] or [Point(0, 0).buffer(0)])
                   for L in board.layers}
-        ends = [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)
-                if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < 0.02]
+        ends = [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)   # (every end the via's ring
+                if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < v["dia"] / 2]  # holds:
+        #                                                    FreeRouting ends a track off the via's centre too)
+        if any(t.get("user") for t, _ in ends):          # (a hand-drawn track ends there: not dragged along)
+            left.append(f"via {v['net']} at {v['at']}: against {r0}.{n0}, the script's own track ends in it")
+            continue
         pad_at = g0.representative_point().coords[0]
+        mrr = g0.minimum_rotated_rectangle.exterior.coords   # (the track off the pad: as wide as the net needs,
+        minor = min(math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2]))   # up to the pad's own width - a 0.2 mm
+        wide = round(max(width, min(board.net_width(v["net"]), minor)), 3)   # tie on a 1.5 A ground failed the
+        #                                                    current check - else ``width`` where only that fits)
+        w_try = [width]
 
         def lands(at):
+            width = w_try[0]
             if against(v, at) or any(Point(at).buffer(v["dia"] / 2).distance(others[L]) < board.clear - 1e-6
                                      for L in board.layers if not others[L].is_empty):
                 return False
@@ -3055,13 +3308,20 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
         tries = [(round(v["at"][0] + r * math.cos(a0 + da), 4), round(v["at"][1] + r * math.sin(a0 + da), 4))
                  for r in [reach * k / 20 for k in range(1, 21)]
                  for da in [math.radians(t) for t in (0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180)]]
-        at = next((p_ for p_ in tries if lands(p_)), None)
+        at = None
+        for w_ in dict.fromkeys([wide, width]):
+            w_try[0] = w_
+            at = next((p_ for p_ in tries if lands(p_)), None)
+            if at is not None:
+                break
         if at is None:
             left.append(f"via {v['net']} at {v['at']}: against {r0}.{n0}, no room to move it a neck away")
             continue
         for t, i in ends:
             t["pts"] = list(t["pts"]); t["pts"][i] = at
-        board.tracks.append({"net": v["net"], "layer": L0, "pts": [tuple(round(c, 4) for c in pad_at), at], "w": width, "amps": None})
+        board.tracks.append({"net": v["net"], "layer": L0, "pts": [tuple(round(c, 4) for c in pad_at), at], "w": w_try[0],
+                             "amps": None, **({"neck": True} if w_try[0] < board.net_width(v["net"]) - 1e-6
+                                              and minor < board.net_width(v["net"]) - 1e-6 else {})})
         v["at"] = at
         board.__dict__.pop("_cu_memo", None)
     return left
@@ -3205,10 +3465,9 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         # a via keeps the hole gap from every drill, this net's own plated holes too, except that inside one of those
         # the layer change needs no via at all (the plated hole joins the layers)
         # (vias already on the board included: this net's own may be reused as they stand)
-        drl = [(g.centroid, d) for r_, n_, L_, g, d in board.pad_shapes() if d and L_ == "F"] + \
-              [(Point(v_["at"]), v_["drill"]) for v_ in board.vias]
-        if drl:
-            vblk = vblk | _cxy(unary_union([c.buffer(d / 2 + board.hole_gap + via[0] / 2 + 0.02, 12) for c, d in drl]), XX, YY)
+        drl = [h["geom"] for h in board.drill_list()]  # (each drill as its shape: a USB-C shell's slot is longer
+        if drl:                                          #  than it is wide)
+            vblk = vblk | _cxy(unary_union([g_.buffer(board.hole_gap + via[0] / 2 + 0.02, 12) for g_ in drl]), XX, YY)
         own_tht = unary_union([g for r_, n_, L_, g, d in board.pad_shapes()
                                if d and L_ == "F" and pn.get((r_, n_)) == net] +
                               [Point(v_["at"]).buffer(v_["dia"] / 2) for v_ in board.vias if v_["net"] == net]
@@ -3254,12 +3513,22 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
 
     fanned = getattr(board, "_fan", set())
 
+    def stub_w(pin):                                     # a way out of a fine-pitch pad no wider than the pad: a
+        mrr = pads[pin][0].minimum_rotated_rectangle.exterior.coords    # full-width track along it runs into the
+        return min(width, min(math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2])))   # next pins (a pin entry)
+
+    def stub_track(pin, L, pts):
+        w_ = stub_w(pin)
+        board.track(net, L, pts, w_, amps)
+        if w_ < width - 1e-6:
+            board.tracks[-1]["neck"] = True
+
     def stub_of(pin):
         e = _escape(board, *pin) if "~" not in pin[1] else None
         if e is None:
             return None
         if pin not in fanned:
-            board.track(net, pads[pin][1], [e[0], e[1]], width, amps)
+            stub_track(pin, pads[pin][1], [e[0], e[1]])
         return e[1]
     if not only and getattr(board, "pour_root", True) and any(tree[L] for L in LT):   # the net has a pour: the pour is the root, and every pad,
         todo = [p_ for p_ in pins]                       # the first too, is joined to it (a first pad taken as
@@ -3371,8 +3640,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         if Ls[path[0][2]] != L_pin and not own_tht.contains(Point(float(xs[ci]), float(ys[cj]))):
             board.via(net, (round(float(xs[ci]), 4), round(float(ys[cj]), 4)), *via)   # (the escape via)
         if e:
-            board.track(net, L_pin, ([e[1]] if pin in fanned else [e[0], e[1]]) + [(float(xs[ci]), float(ys[cj]))],
-                        width, amps)
+            stub_track(pin, L_pin, ([e[1]] if pin in fanned else [e[0], e[1]]) + [(float(xs[ci]), float(ys[cj]))])
         else:
             board.track(net, L_pin, [(sx, sy), (float(xs[ci]), float(ys[cj]))], width, amps)
         seg = []
@@ -3655,12 +3923,22 @@ def reuse_routes(board: Board, old: dict, rip: Sequence[Tuple[float, float, floa
     for n, d in board.nets.items():                      # (a net that lost or gained a moved part's pin)
         if any(r in moved for r, _ in d["pins"]):
             bad.add(n)
+    k_t = lambda t: (t["net"], t["layer"], tuple(tuple(round(c, 4) for c in p) for p in t["pts"]), round(t["w"], 4))
+    k_v = lambda v: (v["net"], tuple(round(c, 4) for c in v["at"]))
+    mine, theirs = {}, {}                                # (the copper the script draws, now and when it was routed:
+    for it in board.tracks + board.vias:                 #  a net whose hand-drawn copper changed gets no old routing
+        if it.get("user"):                               #  back - it ran beside the old copper - and the old hand-
+            mine.setdefault(it["net"], set()).add(k_t(it) if "pts" in it else k_v(it))   # drawn copper itself never
+    for it in old["tracks"] + old["vias"]:               #  comes back)
+        if it.get("user"):
+            theirs.setdefault(it["net"], set()).add(k_t(it) if "pts" in it else k_v(it))
+    bad |= {n for n in set(mine) | set(theirs) if mine.get(n, set()) != theirs.get(n, set())}
     have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) for t in board.tracks}
     have_v = {(v["net"], tuple(v["at"])) for v in board.vias}
     have_v_list = list(board.vias)
     old_t = [t for t in old["tracks"] if (t["net"], t["layer"], tuple(map(tuple, t["pts"])), t["w"]) not in have_t
-             and not t.get("fan")]                       # (escape stubs are laid afresh each build, not reused)
-    old_v = [v for v in old["vias"] if (v["net"], tuple(v["at"])) not in have_v]
+             and not t.get("fan") and not t.get("user")]  # (escape stubs are laid afresh each build, not reused)
+    old_v = [v for v in old["vias"] if (v["net"], tuple(v["at"])) not in have_v and not v.get("user")]
 
     def shape(it):
         if "pts" in it:
@@ -4059,7 +4337,9 @@ _KICAD_LAYERS = [(0, "F.Cu", "signal"), (2, "B.Cu", "signal"), (9, "F.Adhes", "u
                  (33, "B.Fab", "user")]
 # library-file tokens a footprint inside a board does not carry (KiCad 10's library is newer than the board format)
 _FP_DROP = {"version", "generator", "generator_version", "tedit", "embedded_fonts", "embedded_files",
-            "duplicate_pad_numbers_are_jumpers", "jumper_pad_groups", "component_classes"}
+            "duplicate_pad_numbers_are_jumpers", "jumper_pad_groups", "component_classes",
+            "point"}                                     # (KiCad 10's anchor points: KiCad 9 cannot read a board
+                                                         #  that has one, and they carry no copper)
 
 
 def place_refs(board: "Board", sizes: Sequence[float] = (0.8,), gap: float = 0.25) -> Dict[str, Optional[Tuple]]:
@@ -4167,8 +4447,9 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
                 out.append(v)
                 continue
             k = v[0]
-            if k == "model":
-                out.append(v)
+            if k == "model":                             # (the library's model path, as the KiCad 9 file this
+                out.append([k, _Q(re.sub(r"^\$\{KICAD\d+_3DMODEL_DIR\}/", "${KICAD9_3DMODEL_DIR}/", str(v[1])))]
+                           + v[2:] if len(v) > 1 else v)     # is finds it: a newer library names KICAD10's)
             elif k == "at" and owner in ("pad", "property", "fp_text"):
                 x, y = float(v[1]), float(v[2])
                 a = float(v[3]) if len(v) > 3 else 0.0
@@ -4180,6 +4461,10 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
                 out.append([k, v[1], -float(v[2]) if back else v[2]] + v[3:])
             elif k == "angle" and back:
                 out.append(["angle", -float(v[1])])
+            elif k == "layer" and owner.startswith("fp_") and len(v) > 1 and str(v[1]) == "Edge.Cuts":
+                out.append([k, _Q("Dwgs.User")])        # (a part's mark of where the board edge should run - a
+            #                                              jack's notch: the board's outline is the script's, and a
+            #                                              second, open outline is a malformed board to KiCad)
             elif k in ("layer", "layers") and back:
                 out.append([k] + [flipL(s) if isinstance(s, _Q) else s for s in v[1:]])
             elif k == "effects" and back and owner in ("property", "fp_text"):
@@ -4386,8 +4671,8 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
             poured_ = {pz["net"] for pz in board.pours}
             torn -= poured_                              # (a ground's pins drop through vias: leave it be)
             redo = fails | torn
-            board.tracks = [t for t in board.tracks if t["net"] not in redo or t.get("fan")]
-            board.vias = [v for v in board.vias if v["net"] not in redo or v["net"] in poured_]
+            board.tracks = [t for t in board.tracks if t["net"] not in redo or t.get("fan") or t.get("user")]
+            board.vias = [v for v in board.vias if v["net"] not in redo or v["net"] in poured_ or v.get("user")]
             order = [j for j in jobs if j[0] in fails] + [j for j in jobs if j[0] in torn]
             got = []
             for job in order:
@@ -4518,8 +4803,11 @@ def kicad_drc(pcb_path: str, refill: bool = False) -> Dict[str, list]:
                         "pcbnew.ZONE_FILLER(b).Fill(b.Zones())\nb.Save(sys.argv[1])", path],
                        check=True, capture_output=True, timeout=1800)
     out = os.path.join(tmp, "drc.json")
-    subprocess.run(["kicad-cli", "pcb", "drc", "--severity-all", "--format", "json", "-o", out, path],
-                   capture_output=True, timeout=1800)
+    r = subprocess.run(["kicad-cli", "pcb", "drc", "--severity-all", "--format", "json", "-o", out, path],
+                       capture_output=True, text=True, timeout=1800)
+    if not os.path.exists(out):                          # (KiCad could not read the board: say so, not a missing file)
+        raise RuntimeError(f"kicad-cli could not check {os.path.basename(pcb_path)} (exit {r.returncode}): "
+                           f"{(r.stdout + r.stderr).strip()[-300:] or 'no output'}")
     d = json.load(open(out))
     desc = lambda v: f"{v['type']}: {v['description']} ({'; '.join(i['description'] for i in v['items'][:2])})"
     return {"errors": [desc(v) for v in d.get("violations", []) if v["severity"] == "error"],
@@ -4674,10 +4962,16 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     for ref in sorted(board.comps, key=lambda r: (re.sub(r"\d", "", r), r)):
         pcb_.append(_kicad_footprint(board, ref, board.comps[ref], netnum, tx, ty, labels.get(ref, "keep"),
                                      body_dir=os.path.join(out_dir, "3d")))
+    hole_refs, k_h = [], 0                               # (H1, H2 ... past any part the script named so: two
+    for _ in board.holes:                                #  footprints with one reference and KiCad's Specctra
+        k_h += 1                                         #  export, FreeRouting's input, fails without a word)
+        while f"H{k_h}" in board.comps:
+            k_h += 1
+        hole_refs.append(f"H{k_h}")
     for i, (x, y, d) in enumerate(board.holes):          # mounting holes: a bare (non-plated) hole each
         pcb_.append(["footprint", _Q(f"MountingHole:MountingHole_{d:g}mm"), ["layer", _Q("F.Cu")],
                      ["uuid", _uuid(board.name, "hole", i)], ["at", tx(x), ty(y), 0],
-                     ["property", _Q("Reference"), _Q(f"H{i + 1}"), ["at", 0, -d / 2 - 1.0, 0], ["layer", _Q("F.Fab")],
+                     ["property", _Q("Reference"), _Q(hole_refs[i]), ["at", 0, -d / 2 - 1.0, 0], ["layer", _Q("F.Fab")],
                       ["uuid", _uuid(board.name, "hole", i, "ref")], ["effects", ["font", ["size", 1, 1], ["thickness", 0.15]]]],
                      ["property", _Q("Value"), _Q(f"hole {d:g} mm"), ["at", 0, d / 2 + 1.0, 0], ["layer", _Q("F.Fab")],
                       ["uuid", _uuid(board.name, "hole", i, "val")], ["effects", ["font", ["size", 1, 1], ["thickness", 0.15]]]],

@@ -199,6 +199,12 @@ VIA_PAD_NECK = 0.2
 # Design-rule presets: each house's STANDARD capabilities (no extra charge), conservative, mm (hole_gap: drill wall to
 # drill wall between nets; hole_gap_same: within one net, e.g. stitching vias; default the same). Houses revise these:
 # check the house's capabilities page for your order (layer count, copper weight, thickness change them).
+def default_rules(board) -> str:
+    """the house preset a board made without one is checked against: JLCPCB's 2-layer process, or its 4-layer one
+    for a board of more than two copper layers (the 2-layer preset would refuse it for its layer count alone)"""
+    return "jlcpcb-4" if len(getattr(board, "layers", "FB")) > 2 else "jlcpcb-2"
+
+
 RULES = {
     "jlcpcb-2": dict(track=0.127, space=0.127, drill=0.3, via_dia=0.6, annular=0.13, hole_gap=0.5, hole_gap_same=0.254, edge=0.3,
                      pth_drill=0.3, max_layers=2, note="JLCPCB 2-layer, 1 oz outer"),
@@ -218,7 +224,7 @@ def fab_check(board, rules=None) -> List[str]:
     process. Run with Board.check(): that one checks the design, this one the fab's limits. Default: the rules the
     board was made with (``Board(..., rules=)``), else JLCPCB 2-layer"""
     from shapely.geometry import LineString, Point
-    rules = rules if rules is not None else (getattr(board, "rules", None) or "jlcpcb-2")
+    rules = rules if rules is not None else (getattr(board, "rules", None) or default_rules(board))
     r = RULES[rules] if isinstance(rules, str) else rules
     out = []
     if len(board.layers) > r.get("max_layers", 99):
@@ -287,7 +293,7 @@ def report(board, out_dir: str, rules="jlcpcb-2", boards: int = 5) -> str:
     x0, y0, x1, y1 = board.outline.bounds
     ls = lines(board, boards)
     esc = html.escape
-    rules = rules if rules is not None else (getattr(board, "rules", None) or "jlcpcb-2")
+    rules = rules if rules is not None else (getattr(board, "rules", None) or default_rules(board))
     r = RULES[rules] if isinstance(rules, str) else rules
 
     def card(title, ps):

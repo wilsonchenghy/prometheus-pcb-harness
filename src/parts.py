@@ -336,8 +336,11 @@ def datasheet_notes(board) -> List[dict]:
                           "text": f"{ref} pin {q['num']} ({q['name']}): the datasheet numbers it {', '.join(q['datasheet'])} "
                                   f"(page {d['page']})"})
         if not bad:
-            notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],
-                          "text": f"{ref}: {d['agree']} of {d['total']} pins agree with the datasheet's pin table"})
+            miss = [q for q in d["pins"] if q["status"] != "agrees"]     # (which ones: a name the table spells
+            notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],   # another way, to check by hand)
+                          "text": f"{ref}: {d['agree']} of {d['total']} pins agree with the datasheet's pin table"
+                                  + (f" (page {d['page']}); not found there: " + ", ".join(
+                                      f"pin {q['num']} {q['name']}" for q in miss[:6]) if miss else "")})
     for e in evidence(board):                           # (a citation must say what its page says)
         if e["found"] is False:
             notes.append({"severity": "warning", "kind": "evidence", "refs": [e["ref"]],

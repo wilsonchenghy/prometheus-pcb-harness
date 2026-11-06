@@ -1356,6 +1356,8 @@ def test_live_edit_moves_a_part_reroutes_its_nets_and_undoes(tmp_path):
     assert got["ok"] and got["rerouted"] == ["B"] and got["check"] == [] and cache.rev == 1
     assert cache.live.comps["R3"]["at"] == (14, 6)
     assert sorted(tuple(map(tuple, t["pts"])) for t in cache.live.tracks if t["net"] == "A") == a_kept
+    c2, _ = pcb_cli.load(str(script))                  # (the live edit is keyed as the next CLI run keys the script)
+    assert cache.live_key == pcb_cli.design_key(c2)
     script.write_text(script.read_text().replace("(30, 0), (30, 20)", "(32, 0), (32, 20)"))
     assert not cache.refresh()["ok"] and cache.rev == 1
     cache.undo.append((None, None, None, [], []))                     # (a "route properly" undone: its copper only)
@@ -2098,3 +2100,486 @@ def test_the_board_switcher_lists_remembered_boards_and_opens_only_those(tmp_pat
     got = pcb_view.boards(a.resolve())
     assert [g["name"] for g in got] == ["beta", "alpha"] or {g["name"] for g in got} == {"alpha", "beta"}
     assert next(g for g in got if g["name"] == "alpha")["current"] and len(got) == 2
+
+
+def test_a_pad_on_a_bare_hole_is_a_finding():
+    """a mounting hole drilled through a part's pad cuts it (KiCad's hole clearance): the design check says so, and
+    the placement check flags the hole inside the part's courtyard before any routing"""
+    import pcb
+    b = pcb.Board("h", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (10.0, 10.0), 0, "")
+    b.hole((11.9, 10.0), d=3.2)                          # (its wall 0.3 mm into pin 1's 1.7 mm pad, drills 0.6 apart)
+    assert any("J1 pad 1" in p and "bare hole" in p for p in b.check())
+    assert any("mounting hole" in p and "J1" in p for p in b.check_placement())
+    c = pcb.Board("h2", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    c.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (10.0, 10.0), 0, "")
+    c.hole((20.0, 10.0), d=3.2)
+    assert not any("bare hole" in p for p in c.check()) and not any("mounting hole" in p for p in c.check_placement())
+
+
+def test_a_via_keeps_the_hole_gap_from_a_slot_by_its_shape(monkeypatch):
+    """the router's vias keep the hole gap from a USB-C shell's slot by the slot's shape (it is longer than it is
+    wide: a circle at its centre let a ground via in 0.16 mm from it: tests/data/usbc_power_breakout.py)"""
+    import runpy
+    import pcb
+    monkeypatch.setenv("PCB_REROUTE", "1")
+    monkeypatch.setenv("PCB_WORKERS", "1")
+    here = Path(__file__).parent.parent
+    b = runpy.run_path(str(here / "tests" / "data" / "usbc_power_breakout.py"))["build"]()   # (boards/03, as first)
+    pcb.place_and_route(b, router="harness")
+    assert not any("drills" in p for p in b.check())
+
+
+def test_export_drops_kicad10_footprint_items(tmp_path):
+    """KiCad's library now gives some footprints KiCad 10's (point ...) anchors and ${KICAD10_3DMODEL_DIR} models:
+    the exported board is KiCad 9's format, which cannot read a point, so they are left out and the model path
+    written as KiCad 9 finds it"""
+    import pcb
+    b = pcb.Board("p", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("D1", "LED_THT:LED_D3.0mm", (8.0, 6.0), 0, "red")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (14.0, 6.0), 0, "1k")
+    b.net("A", [("D1", "2"), ("R1", "1")])
+    pcb.export_kicad(b, str(tmp_path / "k"))
+    txt = next((tmp_path / "k").glob("*.kicad_pcb")).read_text()
+    assert "(point" not in txt and "KICAD10_3DMODEL_DIR" not in txt
+    import shutil
+    if shutil.which("kicad-cli"):                         # (and KiCad opens it: its DRC writes a report)
+        d = pcb.kicad_drc(str(next((tmp_path / "k").glob("*.kicad_pcb"))))
+        assert "errors" in d
+
+
+def test_kicad_drc_says_when_kicad_cannot_read_the_board(tmp_path):
+    """a board file KiCad cannot open is a clear error, not a missing report file"""
+    import shutil
+    import pcb
+    if not shutil.which("kicad-cli"):
+        pytest.skip("no kicad-cli")
+    bad = tmp_path / "bad.kicad_pcb"
+    bad.write_text("(kicad_pcb (version 20241229) (footprint \"x\" (layer \"F.Cu\") (point (at 0 0) (size 1))))")
+    with pytest.raises(RuntimeError, match="could not check"):
+        pcb.kicad_drc(str(bad))
+
+
+def test_cli_finishes_and_keeps_a_board_whose_script_draws_some_copper(tmp_path, capsys):
+    """a script that draws part of its copper (a hand-drawn power feed) with every part placed: the run routes the
+    rest (not 'routed by the script'), keeps it in routes/, and --stage check starts from the saved board; a change
+    to the hand-drawn copper is another design"""
+    import json
+    import pcb_cli
+    d = tmp_path / "bd"
+    (d / "routes").mkdir(parents=True)
+    src = '''from pcb import Board
+OUT = [(0, 0), (30, 0), (30, 20), (0, 20)]
+W = %s
+def build():
+    b = Board("hand", OUT, rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (6.0, 10.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (24.0, 10.0), 0, "1k")
+    b.place("R3", "Resistor_SMD:R_0805_2012Metric", (15.0, 15.0), 0, "1k")
+    b.net("P", [("R1", "2"), ("R2", "1")], amps=1.0)
+    b.net("Q", [("R1", "1"), ("R3", "1")])
+    b.net("S", [("R2", "2"), ("R3", "2")])
+    x1, y1 = b.pad("R1", "2"); x2, y2 = b.pad("R2", "1")
+    b.track("P", "F", [(x1, y1), (x2, y2)], W)
+    return b
+'''
+    (d / "board.py").write_text(src % "0.6")
+    (d / "req.json").write_text('{"size_mm": [30, 20]}')
+    out = str(d / "out")
+    pcb_cli.main([str(d / "board.py"), out, "--spec", str(d / "req.json"), "--router", "harness", "--kicad-drc", "off",
+                  "--no-lcsc"])
+    r = json.load(open(d / "out" / "result.json"))
+    assert r["clean"] and r["router"] == "harness" and list((d / "routes").glob("hand_*.json.gz"))
+    capsys.readouterr()
+    pcb_cli.main([str(d / "board.py"), out, "--spec", str(d / "req.json"), "--stage", "check", "--kicad-drc", "off"])
+    assert "from the last run" in capsys.readouterr().out and json.load(open(d / "out" / "result.json"))["clean"]
+    (d / "board.py").write_text(src % "0.8")                # (the hand-drawn feed widened: not the saved board)
+    pcb_cli.main([str(d / "board.py"), out, "--stage", "check", "--kicad-drc", "off"])
+    assert "another version of the design" in capsys.readouterr().out
+
+
+def test_critic_takes_the_hole_count_alone():
+    """req.json "holes": 4 (the count, no diameter) is read as {"count": 4}, not a crash"""
+    import critic
+    import pcb
+    b = pcb.Board("c", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.hole((3, 3), d=3.2)
+    notes = critic.review(b, {"holes": 2})
+    assert any(n["kind"] == "holes" and n["severity"] == "error" for n in notes)
+    assert not any(n["kind"] == "holes" and n["severity"] == "error" for n in critic.review(b, {"holes": 1}))
+
+
+def test_fanout_keeps_out_of_a_keepout():
+    """the fan-out's stubs stay out of a keep-out (an antenna's): a pad whose way out runs into one gets no stub;
+    the others keep theirs"""
+    import pcb
+    b = pcb.Board("f", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("U1", "Package_SO:SSOP-28_3.9x9.9mm_P0.635mm", (15.0, 10.0), 90, "")   # (pin 1 at (10.9, 7.4), its
+    b.net("A", [("U1", "1"), ("U1", "28")])                                          #  pad down to y 6.8)
+    b.net("B", [("U1", "5"), ("U1", "24")])
+    b.keepout([(9.0, 0), (12.0, 0), (12.0, 6.6), (9.0, 6.6)], "FB", "antenna")      # (just past pin 1's end)
+    b.fanout()
+    fanned = {t.get("fan") for t in b.tracks}
+    assert ("U1", "1") not in fanned and ("U1", "5") in fanned
+    assert not any("keep-out" in p for p in b.check())
+
+
+def test_the_scripts_own_copper_is_left_as_drawn():
+    """copper the script draws (a feed with right angles, its tip inside the pad) comes out of routing exactly as
+    drawn: the spur trim, loop removal, overshoot cut and chamfer leave it be; the router finishes the rest (and a
+    dangling end the script draws is the script's to fix: a finding, not trimmed away)"""
+    import pcb
+    b = pcb.Board("user_copper", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (6.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (24.0, 14.0), 0, "1k")
+    b.place("R3", "Resistor_SMD:R_0805_2012Metric", None, 0, "1k")
+    b.net("P", [("R1", "2"), ("R2", "1")], amps=0.5)
+    b.net("Q", [("R1", "1"), ("R3", "1")])
+    b.net("S", [("R2", "2"), ("R3", "2")])
+    (x1, y1), (x2, y2) = b.pad("R1", "2"), b.pad("R2", "1")
+    drawn = [(x1, y1), (x1 + 5.0, y1), (x1 + 5.0, y2), (x2, y2), (x2, y2 + 0.4)]   # (right angles; a tip in R2.1)
+    b.track("P", "F", drawn, 0.5)
+    probs = pcb.place_and_route(b, router="harness")
+    assert not probs
+    mine = [t for t in b.tracks if t["net"] == "P" and t["layer"] == "F" and t["w"] == 0.5]
+    assert any([tuple(p) for p in t["pts"]] == drawn for t in mine) and all(t.get("user") for t in mine)
+
+
+def test_schematic_keeps_facing_pins_apart(tmp_path):
+    """a dual pot's units lie end to end, pin 3 facing pin 4: their stubs, and the wire joining the ground pins on
+    one side, must not touch the other net (KiCad's netlist of the sheet had the left input shorted to GND)"""
+    import shutil
+    import kicad_sch
+    import pcb
+    b = pcb.Board("dp", [(0, 0), (40, 0), (40, 30), (0, 30)])
+    b.place("RV1", "Potentiometer_THT:Potentiometer_Alps_RK097_Dual_Horizontal", (30.0, 10.0), 270, "10k",
+            symbol="Device:R_Potentiometer_Dual")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (5.0, 20.0), 0, "")
+    b.net("GND", [("RV1", "1"), ("RV1", "4"), ("J1", "1")])
+    b.net("AINL", [("RV1", "3"), ("J1", "2")])
+    b.net("WL", [("RV1", "2"), ("J1", "3")])
+    b.net("WR", [("RV1", "5"), ("RV1", "6"), ("J1", "4")])
+    path = kicad_sch.write(b, str(tmp_path))
+    if not shutil.which("kicad-cli"):
+        pytest.skip("no kicad-cli to read the sheet back")
+    assert kicad_sch.check(b, path) == []
+
+
+def test_a_via_moved_off_its_pad_keeps_the_nets_width():
+    """neck_vias moves a via off a pad of its own net with a track as wide as the net needs (up to the pad's
+    width), not a 0.2 mm tie that then fails the current check"""
+    import pcb
+    b = pcb.Board("nv", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("C1", "Capacitor_SMD:C_0805_2012Metric", (8.0, 6.0), 0, "10u")
+    b.place("C2", "Capacitor_SMD:C_0805_2012Metric", (14.0, 6.0), 0, "10u")
+    b.net("GND", [("C1", "2"), ("C2", "2")], amps=1.5)
+    b.net("V", [("C1", "1"), ("C2", "1")], amps=0.1)
+    x, y = b.pad("C1", "2")
+    b.via("GND", (x + 1.0, y))                            # (its ring right against the pad)
+    assert not pcb.neck_vias(b)
+    t = b.tracks[-1]
+    assert t["net"] == "GND" and t["w"] >= b.net_width("GND") - 1e-6
+    assert not any("too narrow" in p for p in b.check())
+
+
+def test_autoplace_keeps_parts_off_the_scripts_copper():
+    """a part the placer places does not land on a track the script drew (it would short to it)"""
+    import pcb
+    from shapely.geometry import LineString
+    b = pcb.Board("pl", [(0, 0), (20, 0), (20, 10), (0, 10)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (3.0, 5.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (17.0, 5.0), 0, "1k")
+    for i in range(3, 9):
+        b.place(f"R{i}", "Resistor_SMD:R_0805_2012Metric", None, 0, "1k")
+    b.net("P", [("R1", "2"), ("R2", "1")], amps=2.0)
+    b.track("P", "F", [b.pad("R1", "2"), b.pad("R2", "1")], 1.0)       # (a wide feed across the middle)
+    for i in range(3, 9, 2):
+        b.net(f"N{i}", [(f"R{i}", "1"), (f"R{i + 1}", "1")])
+    assert not pcb.autoplace(b)
+    feed = LineString([b.pad("R1", "2"), b.pad("R2", "1")]).buffer(0.5)
+    assert not [r for r in b.comps if r not in ("R1", "R2") and b.courtyard(r).intersects(feed)]
+
+
+def test_fine_pitch_escapes_follow_the_pads_long_axis():
+    """the stubs drawn out of a fine-pitch part's pins before FreeRouting run along each pad's long axis: the end
+    pins of a long SSOP row lie further out along the row than across it, and a stub along the row ran into the
+    next pin (0.155 mm at 0.635 mm pitch)"""
+    import freerouting
+    import pcb
+    b = pcb.Board("e", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("U1", "Package_SO:SSOP-28_3.9x9.9mm_P0.635mm", (15.0, 10.0), 90, "")
+    for i in range(1, 15):
+        b.net(f"N{i}", [("U1", str(i)), ("U1", str(29 - i))])
+    assert freerouting.escape_fine_pitch(b) == 28
+    assert not [p for p in b.check() if "apart" in p or "short" in p]
+
+
+def test_tidy_merges_two_vias_of_one_net_drilled_into_each_other():
+    """two vias of one net closer than the hole gap (two routing passes' drops at one spot) become one, the tracks
+    that met the second brought to the first"""
+    import pcb
+    b = pcb.Board("tv", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (5.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (15.0, 6.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    (x1, y1), (x2, y2) = b.pad("R1", "2"), b.pad("R2", "1")
+    b.track("A", "F", [(x1, y1), (10.0, y1)], 0.3)
+    b.via("A", (10.0, y1))
+    b.via("A", (10.3, y1))                               # (drilled 0.0 mm from the first)
+    b.track("A", "B", [(10.3, y1), (x2 - 1.5, y2)], 0.3)
+    b.via("A", (x2 - 1.5, y2))                           # (and up again to R2.1)
+    b.track("A", "F", [(x2 - 1.5, y2), (x2, y2)], 0.3)
+    assert any("drills" in p for p in b.check())
+    assert b.tidy() >= 1 and len(b.vias) == 2
+    assert not any("drills" in p for p in b.check()) and len(b.islands("A")) == 1
+
+
+def test_courtyards_are_kicads_shapes():
+    """a courtyard is the footprint's own shape (an SOIC's is notched over the body, past its pins), not its box, and
+    any overlap of two is one (KiCad's DRC flags a 0.03 mm strip): a part tucked into the notch is clear, a part
+    0.03 mm over another is not"""
+    import pcb
+    b = pcb.Board("cy", [(0, 0), (20, 0), (20, 14), (0, 14)])
+    b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (8.0, 6.0), 0, "")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (8.0 + 4.4, 6.0 + 3.23), 0, "")   # (in the corner notch)
+    assert not any("overlap" in p for p in b.check_placement())
+    assert b.courtyard("U1").area < 7.4 * 5.4 - 0.5
+    c = pcb.Board("cy2", [(0, 0), (20, 0), (20, 14), (0, 14)])
+    c.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 6.0), 0, "")
+    c.place("R2", "Resistor_SMD:R_0603_1608Metric", (5.0, 6.0 + 1.46 - 0.03), 0, "")  # (0.03 mm over R1's)
+    assert any("overlap" in p for p in c.check_placement())
+
+
+def test_house_check_of_a_four_layer_board_without_a_preset():
+    """a 4-layer board made with no house preset is checked against JLCPCB's 4-layer process, not refused by the
+    2-layer one for its layer count"""
+    import fab
+    import pcb
+    b = pcb.Board("l4", [(0, 0), (20, 0), (20, 20), (0, 20)], layers=4)
+    assert not any("layers" in p for p in fab.fab_check(b))
+    assert any("layers" in p for p in fab.fab_check(b, "jlcpcb-2"))
+
+
+def test_a_via_moved_off_its_pad_takes_every_track_end_in_its_ring():
+    """neck_vias brings along each track end its via's ring holds, not only one at its centre (FreeRouting ends a
+    track 0.2 mm off a via's centre; left behind, the track dangled)"""
+    import pcb
+    b = pcb.Board("nv2", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("C1", "Capacitor_SMD:C_0805_2012Metric", (8.0, 6.0), 0, "10u")
+    b.place("C2", "Capacitor_SMD:C_0805_2012Metric", (14.0, 6.0), 0, "10u")
+    b.net("A", [("C1", "2"), ("C2", "2")])
+    x, y = b.pad("C1", "2")
+    (x2, y2) = b.pad("C2", "2")
+    b.via("A", (x + 0.75, y))                             # (against C1.2: it moves ~0.3 mm off)
+    b.track("A", "B", [(x + 0.75 - 0.15, y + 0.15), (x2 - 1.5, y2)], 0.25)   # (its end in the ring, off centre)
+    b.via("A", (x2 - 1.5, y2))
+    b.track("A", "F", [(x2 - 1.5, y2), (x2, y2)], 0.25)
+    assert not pcb.neck_vias(b)
+    assert not any("dangling" in p for p in b.check()) and len(b.islands("A")) == 1
+
+
+def test_mounting_holes_take_references_no_part_has(tmp_path):
+    """a script that names parts H1, H2 (headers): the exported mounting holes are numbered past them, so no two
+    footprints share a reference (KiCad's Specctra export, FreeRouting's input, failed without a word)"""
+    import re
+    import pcb
+    b = pcb.Board("hr", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("H1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (10.0, 10.0), 0, "")
+    b.place("H2", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (20.0, 10.0), 0, "")
+    b.hole((3.5, 3.5))
+    b.hole((26.5, 16.5))
+    txt = next(p for p in pcb.export_kicad(b, str(tmp_path)) if p.endswith(".kicad_pcb"))
+    refs = re.findall(r'\(property "Reference" "([^"]*)"', open(txt).read())
+    assert len(refs) == len(set(refs)) == 4
+
+
+def test_via_current_warns_of_a_power_path_through_one_via():
+    """a 3 A net that changes layer through one 0.3 mm via (~1 A) is a critic warning; three of them in parallel
+    with a 0.4 mm drill (4 A) are not"""
+    import critic
+    import pcb
+    def board(n_vias, drill):
+        b = pcb.Board("vc", [(0, 0), (30, 0), (30, 12), (0, 12)], rules="jlcpcb-2")
+        b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (3.0, 7.0), 0, "")
+        b.place("R1", "Resistor_SMD:R_2512_6332Metric", (24.0, 6.0), 0, "0.1")
+        b.place("R2", "Resistor_SMD:R_2512_6332Metric", (24.0, 1.0), 0, "0.1")   # (closing the other end)
+        b.place("F2", "Fuse:Fuse_1206_3216Metric", (20.0, 10.0), 0, "")           # (the path's far side: a fuse)
+        b.net("P", [("J1", "1"), ("R1", "1"), ("F2", "1")], amps=3.0)
+        b.net("Q", [("J1", "2"), ("R1", "2"), ("R2", "1"), ("R2", "2")], amps=0.1)
+        (xj, yj), (xr, yr) = b.pad("J1", "1"), b.pad("R1", "1")
+        b.track("P", "B", [(xj, yj), (14.0, yj)], 2.0)
+        for k in range(n_vias):
+            b.via("P", (14.0, yj - 0.9 + 0.9 * k), drill, drill + 0.4)
+        b.track("P", "F", [(14.0, yj), (xr, yr)], 2.0)
+        b.track("P", "F", [b.pad("F2", "1"), (xr, yr)], 0.6)
+        return b
+    weak = lambda b: [n for n in critic.review(b) if n["kind"] == "via current"]
+    assert weak(board(1, 0.3)) and not weak(board(3, 0.4))
+
+
+def test_import_keeps_overhang_symbols_and_no_connects(tmp_path):
+    """a board exported and imported back (prometheus import) keeps an edge connector's overhang, each part's
+    symbol (read from the project's schematic, used when its pins are the footprint's pads) and the pins the
+    schematic flags no-connect"""
+    import kicad_import
+    import pcb
+    b = pcb.Board("rt", [(0, 0), (30, 0), (30, 18), (0, 18)], rules="jlcpcb-2")
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (3.2, 9.0), 270, "USB-C",
+            overhang=True, symbol="Connector:USB_C_Receptacle_USB2.0_16P")
+    b.place("U1", None, (18.0, 9.0), 0, "CH340C", symbol="Interface_USB:CH340C")
+    b.net("D+", [("J1", "A6"), ("J1", "B6"), ("U1", "UD+")])
+    b.net("D-", [("J1", "A7"), ("J1", "B7"), ("U1", "UD-")])
+    b.nc("U1", "nRI", "nDCD")
+    paths = pcb.export_kicad(b, str(tmp_path / "k"))
+    kpcb = next(p for p in paths if p.endswith(".kicad_pcb"))
+    kicad_import.write(kpcb, str(tmp_path / "rev"))
+    src = (tmp_path / "rev" / "board.py").read_text()
+    j1 = next(ln for ln in src.splitlines() if ln.startswith("b.place('J1'"))
+    u1 = next(ln for ln in src.splitlines() if ln.startswith("b.place('U1'"))
+    assert "overhang=True" in j1 and "symbol='Interface_USB:CH340C'" in u1
+    nc = next(ln for ln in src.splitlines() if ln.startswith("b.nc('U1'"))
+    assert "'11'" in nc and "'12'" in nc                 # (nRI, nDCD)
+
+
+def test_freerouting_gives_the_same_tracks_twice(monkeypatch):
+    """the same placed board routed by FreeRouting twice gives the same tracks in the same order (KiCad's session
+    import hands segments back in no fixed order: different Gerbers for the same copper)"""
+    import runpy
+    import freerouting
+    import pcb
+    if not (freerouting.available() and freerouting.kicad_available()):
+        pytest.skip("FreeRouting through KiCad is not installed")
+    monkeypatch.setenv("PCB_REROUTE", "1")
+    here = Path(__file__).parent.parent
+    runs = []
+    for _ in range(2):
+        b = runpy.run_path(str(here / "bench" / "blinker.py"))["build"]()
+        pcb.route_board(b, "freerouting")
+        runs.append([(t["net"], t["layer"], [tuple(p) for p in t["pts"]], t["w"]) for t in b.tracks])
+    assert runs[0] == runs[1]
+
+
+def test_a_saved_routing_without_the_scripts_copper_is_not_reused(tmp_path):
+    """routes/ and board_state.pkl are reused only when they still hold every track the script draws: an older
+    harness that trimmed or dropped them saved a routing under the same design key"""
+    import gzip
+    import pcb
+    import pcb_cli
+    b = pcb.Board("sc", [(0, 0), (20, 0), (20, 12), (0, 12)])
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (5.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (15.0, 6.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    drawn = [b.pad("R1", "2"), b.pad("R2", "1")]
+    b.track("A", "F", drawn, 0.5)
+    key = pcb_cli.design_key(b)
+    store = tmp_path / "routes"
+    store.mkdir()
+    def save(tracks):
+        b2 = pcb.Board("sc", [(0, 0), (20, 0), (20, 12), (0, 12)])
+        b2.comps = b.comps
+        b2.tracks, b2.vias = tracks, []
+        pcb_cli.save_store(b2, str(store), key)
+    save([{"net": "A", "layer": "F", "pts": drawn, "w": 0.3, "amps": None}])          # (narrowed: not the script's)
+    assert not pcb_cli.load_store(b, str(store), key)
+    save([{"net": "A", "layer": "F", "pts": drawn, "w": 0.5, "amps": None}])
+    assert pcb_cli.load_store(b, str(store), key)
+
+
+def test_design_key_is_the_scripts_not_the_routers(tmp_path):
+    """the design key covers the copper the script draws (tagged as load builds the board), not the routing added
+    after: the key of a routed board is the key of its script (the viewer's live edit and the next CLI run agree)"""
+    import pcb
+    import pcb_cli
+    (tmp_path / "s.py").write_text('''from pcb import Board
+def build():
+    b = Board("dk", [(0, 0), (24, 0), (24, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (5.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (19.0, 6.0), 0, "1k")
+    b.place("R3", "Resistor_SMD:R_0805_2012Metric", (12.0, 2.5), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")], amps=1.0)
+    b.net("B", [("R1", "1"), ("R3", "1")])
+    b.net("C", [("R2", "2"), ("R3", "2")])
+    b.track("A", "F", [b.pad("R1", "2"), b.pad("R2", "1")], 0.6)
+    return b
+''')
+    b, _ = pcb_cli.load(str(tmp_path / "s.py"))
+    k0 = pcb_cli.design_key(b)
+    pcb.route_board(b, "harness")
+    assert len(b.tracks) > 1 and pcb_cli.design_key(b) == k0
+
+
+def test_the_scripts_vias_stay_where_it_drew_them():
+    """a via the script draws against a pad of its own net is not moved by neck_vias, nor merged away by tidy"""
+    import pcb
+    b = pcb.Board("uv", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("C1", "Capacitor_SMD:C_0805_2012Metric", (8.0, 6.0), 0, "")
+    b.place("C2", "Capacitor_SMD:C_0805_2012Metric", (14.0, 6.0), 0, "")
+    b.net("A", [("C1", "2"), ("C2", "2")])
+    x, y = b.pad("C1", "2")
+    b.via("A", (x + 0.75, y))
+    pcb.mark_user_copper(b)
+    pcb.neck_vias(b)
+    b.tidy()
+    assert [tuple(v["at"]) for v in b.vias] == [(x + 0.75, y)]
+
+
+def test_a_round_courtyard_drawn_with_arcs_is_round():
+    """a courtyard of two half-circle arcs is a circle (its area within 2 %), not the diamond of their end and mid
+    points"""
+    import pcb
+    tree = pcb._sx_parse('(footprint "x" (fp_arc (start -5 0) (mid 0 -5) (end 5 0) (layer "F.CrtYd")) '
+                         '(fp_arc (start 5 0) (mid 0 5) (end -5 0) (layer "F.CrtYd")))')
+    g = pcb._courtyard_poly(tree)
+    assert abs(g.area - math.pi * 25) < 0.02 * math.pi * 25
+
+
+def test_edge_marks_wait_for_a_placed_part():
+    """a part whose footprint marks the board edge is not judged against the edge before it is placed"""
+    import critic
+    import pcb
+    b = pcb.Board("em", [(0, 0), (40, 0), (40, 30), (0, 30)])
+    b.place("J1", "Connector_Audio:Jack_3.5mm_CUI_SJ1-3523N_Horizontal", None, 0, "")
+    assert not any(n["kind"] == "edge" and "marks where" in n["text"] for n in critic.review(b))
+
+
+def test_an_escape_stub_the_script_draws_is_cut_back_not_dropped():
+    """a stub the script draws out of a pin (for the router to take on from) that the routing joins part-way along
+    has its loose tip cut back to the join, as any spur; it stays the script's track, and a saved routing holding it
+    so is still the script's (its copper check accepts it)"""
+    import pcb
+    import pcb_cli
+    b = pcb.Board("es", [(0, 0), (20, 0), (20, 12), (0, 12)])
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (4.0, 6.0), 0, "")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (16.0, 9.0), 0, "")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    x1, y1 = b.pad("R1", "2")
+    b.track("A", "F", [(x1, y1), (x1 + 6.0, y1)], 0.3)          # (the stub, 6 mm out)
+    pcb_cli._own(b)
+    script = pcb.Board("es", [(0, 0), (20, 0), (20, 12), (0, 12)])
+    script.tracks = [dict(t) for t in b.tracks]
+    b.track("A", "F", [(x1 + 3.0, y1), (x1 + 3.0, 9.0), b.pad("R2", "1")], 0.3)   # (the route, from 3 mm along)
+    b.prune_spurs()
+    stub = [t for t in b.tracks if t.get("user")]
+    assert len(stub) == 1 and abs(stub[0]["pts"][-1][0] - (x1 + 3.0)) < 0.2
+    assert not any("dangling" in p for p in b.check())
+    assert pcb_cli._keeps_script_copper(script, b.tracks, b.vias)
+
+
+def test_a_wide_nets_way_out_of_a_fine_pitch_pin_is_no_wider_than_the_pin():
+    """the built-in router's stub out of a fine-pitch pad, for a net whose current wants a track wider than the pad,
+    is drawn as wide as the pad (a pin entry), not at the full width that runs into the neighbouring pins"""
+    import pcb
+    b = pcb.Board("sw", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("U1", "Package_SO:SSOP-28_3.9x9.9mm_P0.635mm", (12.0, 10.0), 90, "")
+    b.place("R1", "Resistor_SMD:R_1206_3216Metric", (12.0, 2.0), 0, "")
+    b.place("R2", "Resistor_SMD:R_1206_3216Metric", (24.0, 16.0), 0, "")
+    b.net("P", [("U1", "5"), ("R1", "1")], amps=2.0)                  # (needs ~0.51 mm; the pin is 0.4 mm wide)
+    b.net("Q", [("U1", "4"), ("R2", "1")])
+    b.net("S", [("U1", "6"), ("R2", "2")])
+    pcb.route(b, "P", width=b.net_width("P"))
+    pcb.route(b, "Q", width=0.2)
+    pcb.route(b, "S", width=0.2)
+    x, y = b.pad("U1", "5")
+    out = [t for t in b.tracks if t["net"] == "P" and any(math.dist(p, (x, y)) < 1e-3 for p in t["pts"])]
+    assert out and max(t["w"] for t in out) <= 0.4 + 1e-6
+    assert not [p for p in b.check() if "apart" in p or "short" in p]

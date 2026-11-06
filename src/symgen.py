@@ -116,7 +116,10 @@ def write(spec: dict, folder: str) -> Path:
 def preview(path: Path) -> Path:
     """KiCad's own drawing of the symbol (kicad-cli sym export svg), for the engineer to compare with the datasheet"""
     import shutil
-    exe = shutil.which("kicad-cli") or "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
+    mac = "/Applications/KiCad/KiCad.app/Contents/MacOS/kicad-cli"
+    exe = shutil.which("kicad-cli") or (mac if Path(mac).exists() else None)
+    if exe is None:
+        raise RuntimeError("kicad-cli is not installed (KiCad 9+: docs/setup.md)")
     out = path.parent.parent / "preview"
     r = subprocess.run([exe, "sym", "export", "svg", "-o", str(out), str(path)], capture_output=True, text=True)
     if r.returncode != 0:
@@ -129,6 +132,11 @@ def main(argv) -> int:
         print(__doc__.split("\n\n")[1].strip())
         return 2
     spec = json.loads(Path(argv[0]).read_text())
+    own = Path(argv[0]).resolve().parent / "footprints"  # (a footprint made for this board, fpgen.py: the symbol's
+    if own.is_dir():                                     #  footprint is looked up there first, as the run does)
+        import pcb
+        if own not in pcb.FP_DIRS:
+            pcb.FP_DIRS.insert(0, own)
     try:
         path = write(spec, str(Path(argv[0]).resolve().parent / "symbols"))
     except (ValueError, KeyError) as e:

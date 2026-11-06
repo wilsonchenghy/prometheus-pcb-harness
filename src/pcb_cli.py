@@ -43,12 +43,21 @@ def load(path: str):
     if callable(g.get("build")):
         got = g["build"]()
         if isinstance(got, tuple):
-            return got[0], list(got[1])
-        return got, None
+            return _own(got[0]), list(got[1])
+        return _own(got), None
     for name in ("board", "b", "PCB"):
         if isinstance(g.get(name), pcb.Board):
-            return g[name], g.get("PCB_ROUTE_PROBLEMS")
+            return _own(g[name]), g.get("PCB_ROUTE_PROBLEMS")
     raise SystemExit(f"{path}: defines no build() and no board / b / PCB")
+
+
+def _own(b):
+    """the copper the script drew itself, tagged ``user`` as it comes from the script (before any routing): the design
+    key hashes it and nothing else, and the routing leaves it as drawn"""
+    for it in list(b.tracks) + list(b.vias):
+        if not it.get("fan"):
+            it.setdefault("user", True)
+    return b
 
 
 def load_netlist(path: str, a):
@@ -62,7 +71,8 @@ def load_netlist(path: str, a):
         ref, xy = spec.split("=")
         at[ref] = tuple(float(v) for v in xy.split(",")[:3]) + tuple(xy.split(",")[3:4])
     amps = {n: float(v) for n, v in (s_.split("=") for s_ in (a.amps or []))}
-    return pcb.from_netlist(path, (w, h), at=at, amps=amps, rules=a.rules or "jlcpcb-2", layers=a.layers), None
+    return pcb.from_netlist(path, (w, h), at=at, amps=amps, layers=a.layers,
+                            rules=a.rules or ("jlcpcb-4" if (a.layers or 2) > 2 else "jlcpcb-2")), None
 
 
 # what an agent (or a person) can change for each kind of finding: the harness reports, the designer fixes
@@ -138,9 +148,15 @@ def update_notice() -> None:
             seen = {"at": time.time(), "latest": latest()}
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_text(json.dumps(seen))
-        have = installed()[2]
+        how, root, have = installed()
     except (OSError, ValueError, KeyError):             # (offline, or GitHub's rate limit: no notice, the run goes on)
         return
+    if how == "clone" and have and seen.get("latest") and have != seen["latest"]:
+        import subprocess                                # (a clone that already has GitHub's newest - a branch ahead
+        r = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", seen["latest"], have],
+                           capture_output=True)          #  of main, work not pushed yet - is not behind it)
+        if r.returncode == 0:
+            return
     if have and seen.get("latest") and have != seen["latest"]:
         print(f"Prometheus: a newer version is on GitHub ({have[:7]} -> {seen['latest'][:7]}): prometheus update",
               file=sys.stderr)
@@ -249,6 +265,12 @@ def design_key(b) -> str:
     d = {"comps": {r: [c["fp"]] + ([] if c.get("unplaced") else [c["at"], c["rot"], c.get("side", "F")])
                    for r, c in sorted(b.comps.items())},
          "nets": b.nets, "pours": b.pours, "holes": b.holes, "outline": b.outline.wkt}
+    mine_t = [(t["net"], t["layer"], [[round(c, 4) for c in p] for p in t["pts"]], round(t["w"], 4))
+              for t in b.tracks if t.get("user")]        # the copper the script drew itself (a hand-drawn feed, tagged
+    mine_v = [(v["net"], [round(c, 4) for c in v["at"]], v["drill"], v["dia"])   # by load): a change to it is
+              for v in b.vias if v.get("user")]          # another design; the router's copper is not the design
+    if mine_t or mine_v:                                 # (and left out when there is none: the keys of boards
+        d["copper"] = [mine_t, mine_v]                   #  without any stay as they were)
     return hashlib.sha1(json.dumps(d, sort_keys=True, default=str).encode()).hexdigest()[:16]
 
 
@@ -262,6 +284,25 @@ def save_state(b, out, key):
         pickle.dump(st, f)
 
 
+def _keeps_script_copper(b, tracks, vias) -> bool:
+    """a saved routing holds every track and via the script draws itself (a harness that once trimmed or dropped
+    them saved a routing without them: same design key, wrong copper)"""
+    from shapely.geometry import LineString
+    k_t = lambda t: (t["net"], t["layer"], tuple(tuple(round(c, 4) for c in p) for p in t["pts"]), round(t["w"], 4))
+    k_v = lambda v: (v["net"], tuple(round(c, 4) for c in v["at"]))
+    have_t, have_v = {k_t(t) for t in tracks}, {k_v(v) for v in vias}
+
+    def kept(t):                                         # (as drawn, or its loose tip cut back to where the routing
+        if k_t(t) in have_t:                             #  joined it: one end where it was, the rest along it)
+            return True
+        line = LineString(t["pts"]).buffer(1e-3)
+        return any(s["net"] == t["net"] and s["layer"] == t["layer"] and abs(s["w"] - t["w"]) < 1e-4
+                   and (tuple(s["pts"][0]) in (tuple(t["pts"][0]), tuple(t["pts"][-1]))
+                        or tuple(s["pts"][-1]) in (tuple(t["pts"][0]), tuple(t["pts"][-1])))
+                   and line.contains(LineString(s["pts"])) for s in tracks if len(s["pts"]) >= 2)
+    return all(kept(t) for t in b.tracks) and all(k_v(v) in have_v for v in b.vias)
+
+
 def load_state(b, out, key) -> bool:
     import pickle
     p = os.path.join(out, STATE)
@@ -271,6 +312,9 @@ def load_state(b, out, key) -> bool:
         st = pickle.load(f)
     if st.get("key") != key:
         print(f"note: {p} is from another version of the design: not reused")
+        return False
+    if not _keeps_script_copper(b, st["tracks"], st["vias"]):
+        print(f"note: {p} lacks copper the script draws: not reused")
         return False
     for r, c in st["place"].items():
         if r in b.comps:
@@ -299,6 +343,9 @@ def load_store(b, store, key) -> bool:
         return False
     raw = open(p, "rb").read()
     d, r = json.loads(gzip.decompress(raw)), pcb._routes_load(raw)
+    if not _keeps_script_copper(b, r["tracks"], r["vias"]):
+        print(f"note: {os.path.relpath(p)} lacks copper the script draws (an older harness's routing): not reused")
+        return False
     for ref, c in d["place"].items():
         if ref in b.comps:
             b.comps[ref].update({"at": tuple(c["at"]), "rot": c["rot"], **({"side": c["side"]} if "side" in c else {})})
@@ -371,7 +418,8 @@ def main(argv=None) -> int:
     ap.add_argument("script")
     ap.add_argument("out")
     ap.add_argument("--boards", type=int, default=5, help="how many boards to buy parts for (default 5)")
-    ap.add_argument("--rules", default=None, help="fab preset for the house check (default: the board's, else jlcpcb-2)")
+    ap.add_argument("--rules", default=None, help="fab preset for the house check (default: the board's, else jlcpcb-2, or jlcpcb-4 for more "
+                    "than two layers)")
     ap.add_argument("--step", action="store_true", help="also write the assembled board as STEP (needs build123d)")
     ap.add_argument("--size", help="a netlist's board size, WxH mm (e.g. 50x40)")
     ap.add_argument("--layers", type=int, default=2, help="a netlist's board: 2 or 4 layers (default 2)")
@@ -448,12 +496,14 @@ def main(argv=None) -> int:
     if spec.get("near"):                                 # (the placer holds these parts within their distance)
         b.near = list(getattr(b, "near", [])) + [tuple(x) for x in spec["near"]]
     key = design_key(b)
-    if stage in ("critic", "check", "export") and not b.tracks and load_state(b, a.out, key):
+    script_cu = bool(b.tracks or b.vias)                 # (copper drawn by the script: the router finishes the rest)
+    loaded = stage in ("critic", "check", "export") and load_state(b, a.out, key)
+    if loaded:
         print(f"from the last run in {a.out}: {sum(1 for c in b.comps.values())} parts placed, "
               f"{len(b.tracks)} tracks, {len(b.vias)} vias ({b.router_used})")
     route_ok = stage in ("route", "all")
     timings = {}
-    store = _store(a.script) if route_ok and not b.tracks else None
+    store = _store(a.script) if route_ok else None
     from_store = bool(store) and load_store(b, store, key)
     if from_store:
         print(f"from {os.path.relpath(store)}: {len(b.tracks)} tracks, {len(b.vias)} vias (PCB_REROUTE=1 routes again)")
@@ -481,7 +531,8 @@ def main(argv=None) -> int:
              "--stage place or all places them"]
     if place and stage not in ("place", "critic"):         # (those stages print it with their results)
         print("placement:", *place, sep="\n  ")
-    if route_ok and probs is None and not b.tracks:
+    unjoined = lambda: any(len(d["pins"]) > 1 and len(b.islands(n)) > 1 for n, d in b.nets.items())
+    if route_ok and probs is None and not from_store and (not b.tracks or (script_cu and unjoined())):
         t = time.perf_counter()
         prog.stage("route")
         try:
@@ -570,9 +621,13 @@ def main(argv=None) -> int:
             major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
             if major >= 9:
                 prog.stage("kicad drc")
-                d = pcb.kicad_drc(kpaths[0])
-                kchk = d["errors"] + d["unconnected"]
-                kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+                try:
+                    d = pcb.kicad_drc(kpaths[0])
+                    kchk = d["errors"] + d["unconnected"]
+                    kicad = {"run": True, "version": ver, "warnings": d["warnings"]}
+                except RuntimeError as e:                # (the exported board does not open in KiCad: a finding,
+                    kchk = [f"the exported board does not open in KiCad {ver}: {e}"]     # never a clean run)
+                    kicad = {"run": False, "version": ver, "error": str(e)}
                 sch = [k for k in kpaths if k.endswith(".kicad_sch")]
                 if sch:                                  # (the schematic, read back by KiCad: its nets are the board's)
                     import kicad_sch
@@ -594,7 +649,7 @@ def main(argv=None) -> int:
         timings["export"] = round(time.perf_counter() - t, 2)
     sections = [("routing", probs), ("placement" if stage in ("place", "critic") else "design check", chk),
                 ("house check", fchk)] + ([("KiCad DRC", kchk)] if kicad["run"] or kchk else []) + (
-                [("schematic", schk)] if kicad["run"] else [])
+                [("schematic", schk)] if kicad["run"] or schk else [])   # (read back even when the board would not open)
     if stage in ("place", "critic"):
         sections = [s_ for s_ in sections if s_[0] != "house check"]
     if not b.tracks and not probs:                       # (nothing routed yet: no routing to call clean)
