@@ -2083,7 +2083,9 @@ def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
         mark_user_copper(board)                          # (first routing call: what is there, the script drew)
     if router == "harness":
         board.router_used = "harness"
-        return autoroute(board, **kw)
+        probs = autoroute(board, **kw)
+        neck_vias(board)                                 # (a via its route left against a pad of its own net moved a
+        return probs                                     #  neck away, as after FreeRouting: solder wicks down it)
     if router != "freerouting":
         raise ValueError("router: freerouting or harness")
     import freerouting
