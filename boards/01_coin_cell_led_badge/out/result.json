@@ -1,0 +1,122 @@
+{
+ "board": "coin_cell_led_badge",
+ "script": "/home/user/prometheus-pcb-harness/boards/01_coin_cell_led_badge/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": false,
+  "skipped": "KiCad (kicad-cli) is not installed",
+  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+ },
+ "router": "harness",
+ "skipped": [
+  {
+   "what": "FreeRouting",
+   "why": "KiCad or Java is not installed: routed with the built-in router",
+   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
+  }
+ ],
+ "environment": {
+  "kicad": false,
+  "kicad_python": false,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 8,
+ "nets": 6,
+ "layers": 2,
+ "seconds": 5.5,
+ "timings": {
+  "route": 0.36,
+  "critic": 0.002,
+  "check": 0.02,
+  "export": 0.4
+ },
+ "placement": {
+  "BT1": [
+   15.0,
+   13.0,
+   0,
+   "B"
+  ],
+  "SW1": [
+   15.0,
+   27.2,
+   0,
+   "F"
+  ],
+  "D1": [
+   7.0,
+   12.0,
+   90,
+   "F"
+  ],
+  "R1": [
+   7.0,
+   7.0,
+   90,
+   "F"
+  ],
+  "D2": [
+   15.0,
+   12.0,
+   90,
+   "F"
+  ],
+  "R2": [
+   15.0,
+   7.0,
+   90,
+   "F"
+  ],
+  "D3": [
+   23.0,
+   12.0,
+   90,
+   "F"
+  ],
+  "R3": [
+   23.0,
+   7.0,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "3 of 8 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "BT1",
+    "D2",
+    "D3"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "SW1": "C221841",
+  "D1": "C84256",
+  "R1": "C22775",
+  "R2": "C22859",
+  "R3": "C22859"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/01_coin_cell_led_badge/out/kicad8.zip"
+ }
+}
