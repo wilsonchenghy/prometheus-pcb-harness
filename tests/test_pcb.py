@@ -1279,6 +1279,23 @@ def test_datasheet_rows_with_a_number_per_package_and_a_slash_name():
     assert parts._numbers({"HOLD"}, "7 /HOLD or /RESET (IO3) I/O Hold", 0) == ["7"]
 
 
+def test_drop_loops_takes_away_a_second_run_of_a_net():
+    """two parallel tracks joining the same two pads: one goes, the pads stay joined; a net's only track stays"""
+    import pcb
+    b = pcb.Board("loops", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5, 10), 0, "10k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (15, 10), 0, "10k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    b.net("B", [("R1", "1"), ("R2", "2")])
+    a, c = (5.825, 10.0), (14.175, 10.0)
+    b.tracks += [{"net": "A", "layer": "F", "pts": [a, c], "w": 0.2, "amps": 0.1},
+                 {"net": "A", "layer": "F", "pts": [a, (6.5, 11.0), (13.5, 11.0), c], "w": 0.2, "amps": 0.1},
+                 {"net": "B", "layer": "F", "pts": [(4.175, 10.0), (4.175, 14.0), (15.825, 14.0), (15.825, 10.0)],
+                  "w": 0.2, "amps": 0.1}]
+    assert b.drop_loops() == 1
+    assert [t["net"] for t in b.tracks] == ["A", "B"] and len(b.islands("A")) == 1 and b.check() == []
+
+
 def test_nudge_vias_parts_two_nets_drills():
     """two nets' vias 0.45 mm apart (drill wall to wall) under a 0.5 mm rule: the one with the fewer tracks moves away
     by the shortfall, its track's end with it, and nothing else changes"""
