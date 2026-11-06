@@ -1,0 +1,418 @@
+{
+ "board": "usb_hub_fe11s",
+ "script": "/home/user/prometheus-pcb-harness/boards/23_usb_hub_fe11s/board.py",
+ "stage": "all",
+ "clean": false,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 28,
+ "nets": 24,
+ "layers": 2,
+ "seconds": 164.0,
+ "timings": {
+  "place+route": 159.05,
+  "critic": 0.022,
+  "check": 0.18,
+  "export": 3.96
+ },
+ "placement": {
+  "J1": [
+   39.0,
+   42.8,
+   180,
+   "F"
+  ],
+  "J2": [
+   7.0,
+   12.0,
+   0,
+   "F"
+  ],
+  "J3": [
+   25.5,
+   12.0,
+   0,
+   "F"
+  ],
+  "J4": [
+   44.0,
+   12.0,
+   0,
+   "F"
+  ],
+  "J5": [
+   62.5,
+   12.0,
+   0,
+   "F"
+  ],
+  "U1": [
+   39.0,
+   30.0,
+   90,
+   "F"
+  ],
+  "Y1": [
+   35.45,
+   24.15,
+   180,
+   "F"
+  ],
+  "F1": [
+   63.75,
+   26.25,
+   270,
+   "F"
+  ],
+  "R1": [
+   46.9,
+   39.85,
+   90,
+   "F"
+  ],
+  "R2": [
+   31.25,
+   38.2,
+   270,
+   "F"
+  ],
+  "R3": [
+   46.0,
+   27.6,
+   0,
+   "F"
+  ],
+  "R4": [
+   46.35,
+   32.35,
+   90,
+   "F"
+  ],
+  "R5": [
+   51.3,
+   27.3,
+   180,
+   "F"
+  ],
+  "R6": [
+   50.85,
+   23.8,
+   270,
+   "F"
+  ],
+  "R7": [
+   37.15,
+   19.5,
+   180,
+   "F"
+  ],
+  "R8": [
+   56.25,
+   27.35,
+   0,
+   "F"
+  ],
+  "C1": [
+   37.2,
+   34.7,
+   0,
+   "F"
+  ],
+  "C2": [
+   44.6,
+   24.4,
+   90,
+   "F"
+  ],
+  "C3": [
+   39.9,
+   35.7,
+   90,
+   "F"
+  ],
+  "C4": [
+   62.55,
+   31.55,
+   180,
+   "F"
+  ],
+  "C5": [
+   49.1,
+   33.35,
+   90,
+   "F"
+  ],
+  "C6": [
+   42.6,
+   24.3,
+   90,
+   "F"
+  ],
+  "C7": [
+   33.2,
+   34.6,
+   0,
+   "F"
+  ],
+  "C10": [
+   63.4,
+   19.6,
+   270,
+   "F"
+  ],
+  "C11": [
+   25.65,
+   18.65,
+   90,
+   "F"
+  ],
+  "C12": [
+   44.5,
+   18.15,
+   180,
+   "F"
+  ],
+  "C13": [
+   50.4,
+   18.1,
+   0,
+   "F"
+  ],
+  "D1": [
+   57.8,
+   23.85,
+   90,
+   "F"
+  ]
+ },
+ "findings": [
+  {
+   "stage": "routing",
+   "kind": "split",
+   "text": "net VBUS is split in 2: C3.1 | J1.A4, J1.A9, J1.B4, J1.B9, U1.20, F1.1",
+   "pins": [
+    "C3.1",
+    "F1.1",
+    "J1.A4",
+    "J1.A9",
+    "J1.B4",
+    "J1.B9",
+    "U1.20"
+   ],
+   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
+   "why": "A net in pieces is an open circuit between them."
+  },
+  {
+   "stage": "routing",
+   "kind": "clearance",
+   "text": "F.Cu: GND and VBM 0.17 mm apart (clearance 0.2) at (40.9, 33.2)",
+   "pins": [],
+   "hint": "copper of two nets too close: move or re-route, or check the clearance",
+   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "at": [
+    40.9,
+    33.2
+   ]
+  },
+  {
+   "stage": "routing",
+   "kind": "clearance",
+   "text": "F.Cu: GND and VBUS 0.18 mm apart (clearance 0.2) at (40.2, 33.2)",
+   "pins": [],
+   "hint": "copper of two nets too close: move or re-route, or check the clearance",
+   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "at": [
+    40.2,
+    33.2
+   ]
+  },
+  {
+   "stage": "routing",
+   "kind": "dangling",
+   "text": "track VBUS (F.Cu) ends at (39.95, 34.25) on nothing of its net (dangling, or only touching a pad's edge: KiCad reads it unconnected)",
+   "pins": [],
+   "hint": "remove the stub or end it on copper of its net",
+   "why": "A track or via that leads nowhere does nothing but add an antenna and take room.",
+   "at": [
+    39.95,
+    34.25
+   ]
+  },
+  {
+   "stage": "design",
+   "kind": "split",
+   "text": "net VBUS is split in 2: C3.1 | J1.A4, J1.A9, J1.B4, J1.B9, U1.20, F1.1",
+   "pins": [
+    "C3.1",
+    "F1.1",
+    "J1.A4",
+    "J1.A9",
+    "J1.B4",
+    "J1.B9",
+    "U1.20"
+   ],
+   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
+   "why": "A net in pieces is an open circuit between them."
+  },
+  {
+   "stage": "design",
+   "kind": "clearance",
+   "text": "F.Cu: GND and VBM 0.17 mm apart (clearance 0.2) at (40.9, 33.2)",
+   "pins": [],
+   "hint": "copper of two nets too close: move or re-route, or check the clearance",
+   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "at": [
+    40.9,
+    33.2
+   ]
+  },
+  {
+   "stage": "design",
+   "kind": "clearance",
+   "text": "F.Cu: GND and VBUS 0.18 mm apart (clearance 0.2) at (40.2, 33.2)",
+   "pins": [],
+   "hint": "copper of two nets too close: move or re-route, or check the clearance",
+   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "at": [
+    40.2,
+    33.2
+   ]
+  },
+  {
+   "stage": "design",
+   "kind": "dangling",
+   "text": "track VBUS (F.Cu) ends at (39.95, 34.25) on nothing of its net (dangling, or only touching a pad's edge: KiCad reads it unconnected)",
+   "pins": [],
+   "hint": "remove the stub or end it on copper of its net",
+   "why": "A track or via that leads nowhere does nothing but add an antenna and take room.",
+   "at": [
+    39.95,
+    34.25
+   ]
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1751 mm) (Track [VBUS] on F.Cu, length 0.5800 mm; Track [GND] on F.Cu, length 1.1000 mm)",
+   "pins": [
+    "W0.52mm"
+   ],
+   "hint": "read the text",
+   "why": ""
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1751 mm) (Track [GND] on F.Cu, length 1.1000 mm; Track [VBUS] on F.Cu, length 1.0619 mm)",
+   "pins": [
+    "W0.52mm"
+   ],
+   "hint": "read the text",
+   "why": ""
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1750 mm) (Track [GND] on F.Cu, length 1.1000 mm; Pad 18 [VBM] of U1 on F.Cu)",
+   "pins": [
+    "W0.52mm"
+   ],
+   "hint": "read the text",
+   "why": ""
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "unconnected_items: Missing connection between items (Track [VBUS] on F.Cu, length 0.6230 mm; Track [VBUS] on F.Cu, length 0.5800 mm)",
+   "pins": [],
+   "hint": "read the text",
+   "why": ""
+  }
+ ],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "6 of 28 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "J2",
+    "J3",
+    "J4",
+    "J5",
+    "U1",
+    "D1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "Y1": "C9002",
+  "F1": "C210837",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C13167",
+  "R4": "C25804",
+  "R5": "C25804",
+  "R6": "C4184",
+  "R7": "C25804",
+  "R8": "C21190",
+  "C1": "C15850",
+  "C2": "C15850",
+  "C3": "C14663",
+  "C4": "C15850",
+  "C5": "C15849",
+  "C6": "C14663",
+  "C7": "C14663",
+  "C10": "C76659",
+  "C11": "C76659",
+  "C12": "C76659",
+  "C13": "C76659"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "R3",
+   "what": "REXT",
+   "value": "2.7k 1%",
+   "url": "https://cdn-shop.adafruit.com/product-files/2991/FE1.1s+Data+Sheet+(Rev.+1.0).pdf",
+   "page": 5,
+   "quote": "resister should be connected to VSS",
+   "found": null
+  },
+  {
+   "ref": "C1",
+   "what": "VD33_O cap",
+   "value": "10u",
+   "url": "https://cdn-shop.adafruit.com/product-files/2991/FE1.1s+Data+Sheet+(Rev.+1.0).pdf",
+   "page": 5,
+   "quote": "decoupling capacitor is required",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/23_usb_hub_fe11s/out/kicad8.zip"
+ }
+}

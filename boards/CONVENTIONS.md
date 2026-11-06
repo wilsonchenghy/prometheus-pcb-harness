@@ -18,8 +18,9 @@ Rules learned so far:
 - Unused IC pins: `b.nc(ref, "PIN", ...)`. USB-C SBU pins: `b.nc("J1", "SBU1", "SBU2")`.
 - Place connectors, switches, holes and the chip itself; give decoupling caps a fixed spot by their supply pin
   (the critic wants a cap within 4 mm of each supply pin). Let the placer do the rest (`at=None`).
-- KiCad is not installed here: the built-in router runs (`router: harness`) and there is no KiCad DRC. "via neck"
-  warnings from the built-in router are tolerated; errors are not. A board is done only when `clean` is true.
+- KiCad 9, Java and FreeRouting are installed: runs route with FreeRouting (or reuse `routes/`) and KiCad's DRC
+  judges every board (`kicad_drc.run: true`). "via neck" warnings are tolerated; errors are not. A board is done
+  only when `clean` is true.
 - Pours: GND on B (and F) over the outline.
 - To find a KiCad symbol's exact name, list its library on GitLab:
   `curl -s "https://gitlab.com/api/v4/projects/kicad%2Flibraries%2Fkicad-symbols/repository/tree?path=Relay.kicad_symdir&per_page=100&page=1"`
@@ -94,3 +95,16 @@ Rules learned so far:
 - The built-in router routes signal nets most-local-first, so a long USB pair comes last and gets walled in. Put the
   USB connector near the MCU's D+/D- pins (a ~10 mm pair) and keep a free corner between them; it then routes clean.
 - Set `PCB_WORKERS=2` on the shared machine: place_and_route otherwise forks up to 4 tries at once.
+
+## Fixed in the harness on this branch (no workaround needed any more)
+
+- A script that draws copper with `b.track()` is cached in `routes/`. `--stage check/export/critic` start from its
+  saved board, and with every part placed the run still routes the rest. Its copper is left exactly as drawn: no
+  spur trim, chamfer or rip-up. The placer keeps parts off it.
+- A mounting hole on a pad, or inside a courtyard, is a finding. Courtyards are KiCad's shapes, and any overlap
+  counts.
+- KiCad 10 `(point ...)` items and footprint Edge.Cuts marks no longer break the exported board.
+- `req.json` `"holes": 4` (just the count) works.
+- The fan-out keeps out of keep-outs.
+- Mounting-hole references never collide with parts named H1, H2 ...
+- A 4-layer board without a preset is house-checked against jlcpcb-4.
