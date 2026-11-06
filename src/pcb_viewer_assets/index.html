@@ -427,7 +427,13 @@ function drawLayout() {
   if (layerOn.court) { const g = el("g", { fill: "none", stroke: "rgba(255,255,255,.45)", "stroke-width": 0.06, "stroke-dasharray": "0.3 0.25" }, svg);
     for (const c of B.comps) if (c.courtyard.length && (c.side || "F") === topL()) el("path", { d: polyPath(c.courtyard) }, g); }
   if (layerOn.silk) { const g = el("g", { fill: made ? "#eef3e8" : xray ? "#f2eda1" : "rgba(255,255,255,.8)", "font-size": 0.95, "text-anchor": "middle", "dominant-baseline": "middle", style: `pointer-events:none;font-family:'${FONT}';font-weight:500` }, svg);
-    for (const c of B.comps) if ((c.side || "F") === topL()) el("text", { x: X(c.at[0]), y: Y(c.at[1]) }, g).textContent = c.ref; }
+    for (const c of B.comps) { if ((c.side || "F") !== topL()) continue;
+      const lab = made && Array.isArray(c.silk) ? c.silk : null;   // (made: the label where the fab prints it, or none)
+      if (made && c.silk === null) continue;
+      const t = lab ? el("text", { x: X(lab[0]), y: Y(lab[1]), "font-size": lab[3] * 1.4,   /* (KiCad's size is the capital height; a font's is the em) */
+                                   transform: lab[2] ? `rotate(${-lab[2]} ${X(lab[0])} ${Y(lab[1])})` : "" }, g)
+                    : el("text", { x: X(c.at[0]), y: Y(c.at[1]) }, g);
+      t.textContent = c.ref; } }
   // findings as numbered pins on the board
   window._pins = [];
   if (layerOn.pins) { const g = el("g", {}, svg);
