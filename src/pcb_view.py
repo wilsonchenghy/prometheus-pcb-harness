@@ -150,6 +150,46 @@ def kind_of(ref: str, fp: str) -> str:
     return "other"
 
 
+_PAGES: dict = {}                                        # (datasheet url -> its pages' text, read once per viewer)
+
+
+def _pages(url: str):
+    import parts
+    if url not in _PAGES:
+        _PAGES[url] = parts.datasheet_text(url)
+    return _PAGES[url]
+
+
+def _evidence(cache, out, ref: str = "", cites: bool = False) -> dict:
+    """on demand, for the Evidence tab: a part's wired pins, each with its net, the parts on that net and its datasheet
+    row (page, quote, status); or the board's citations, each checked against its page (``found``)"""
+    import types
+    import parts
+    comps = cache.board().get("comps", [])
+    if cites:
+        p = out / "result.json"
+        ev = json.loads(p.read_text()).get("evidence", []) if p.exists() else []
+        shim = types.SimpleNamespace(evidence=[dict(e) for e in ev], comps={})
+        return {"cites": parts.evidence(shim, read=_pages)}
+    c = next((c for c in comps if c["ref"] == ref and c.get("symbol")), None)
+    if not c:
+        return {"error": "no symbol"}
+    on = {}                                              # (net -> the other parts on it)
+    for o in comps:
+        for q in o["pads"]:
+            if q.get("net"):
+                on.setdefault(q["net"], set()).add(o["ref"])
+    net = {q["num"]: q["net"] for q in c["pads"] if q.get("net")}
+    try:
+        d = parts.datasheet_check(c["symbol"]["name"], _pages(c["symbol"]["datasheet"]))
+    except Exception as e:
+        return {"error": f"{type(e).__name__}: {str(e)[:120]}", "datasheet": c["symbol"].get("datasheet")}
+    pins = [{**q, "net": net[q["num"]], "with": sorted(on.get(net[q["num"]], set()) - {ref}),
+             "page": q.get("page") or d.get("page")} for q in d.get("pins", []) if q["num"] in net]
+    return {"ref": ref, "datasheet": d.get("datasheet"), "page": d.get("page"), "pins": pins,
+            "agree": sum(q["status"] == "agrees" for q in pins), "total": len(pins)}
+
+
 def _datasheet_pdf(cache, out, ref: str, url: str):
     """the datasheet PDF (from the parts cache, fetched once) of a part by its ref, or one the board cites by url;
     only links the board itself names are fetched (this page is not a proxy)"""
@@ -390,6 +430,36 @@ def _model(out: Path, script: str) -> dict:
     return {"glb": "/files/board.glb?t=%d" % int(glb.stat().st_mtime)}
 
 
+def _sch_pins(path) -> list:
+    """each part's pin ends on a KiCad schematic sheet, sheet mm (y down, as its SVG): [{ref, num, x, y}]; the power
+    symbols left out. A symbol's pins are in its own frame, y up: turned by its angle and mirrored as it is placed"""
+    import pcb
+    t = pcb._sx_parse(Path(path).read_text())
+    find = lambda n, k: [x for x in n if isinstance(x, list) and x and x[0] == k]
+    libs = {x[1].strip('"'): x for x in find((find(t, "lib_symbols") or [[]])[0], "symbol")}
+    out = []
+    for inst in find(t, "symbol"):
+        lid = find(inst, "lib_id")
+        if not lid or lid[0][1].strip('"').startswith("power:") or lid[0][1].strip('"') not in libs:
+            continue
+        at = find(inst, "at")[0]
+        X, Y, A = float(at[1]), float(at[2]), math.radians(float(at[3]) if len(at) > 3 else 0.0)
+        mir = (find(inst, "mirror") or [[None, ""]])[0][1]
+        unit = int(find(inst, "unit")[0][1]) if find(inst, "unit") else 1
+        ref = next((q[2].strip('"') for q in find(inst, "property") if q[1].strip('"') == "Reference"), "")
+        for sub in find(libs[lid[0][1].strip('"')], "symbol"):
+            m = re.search(r"_(\d+)_\d+$", sub[1].strip('"'))
+            if m and int(m.group(1)) not in (0, unit):
+                continue
+            for q in find(sub, "pin"):
+                pa = find(q, "at")[0]
+                x, y = float(pa[1]) * (-1 if mir == "y" else 1), -float(pa[2]) * (-1 if mir == "x" else 1)
+                out.append({"ref": ref, "num": find(q, "number")[0][1].strip('"'),
+                            "x": round(X + x * math.cos(A) + y * math.sin(A), 3),
+                            "y": round(Y - x * math.sin(A) + y * math.cos(A), 3)})
+    return out
+
+
 def _schematic(out: Path, script: str = "") -> dict:
     """the board's KiCad schematic as KiCad draws it (``kicad-cli sch export svg``): the sheet, or the cover and each
     page of a larger design; cached as out/kicad/<name>[-<page>].svg until the schematic changes"""
@@ -417,7 +487,14 @@ def _schematic(out: Path, script: str = "") -> dict:
         with open(f, "rb") as fh:
             vb = re.search(rb'viewBox="([\d.\s-]+)"', fh.read(4096))
         sizes.append([float(v) for v in vb.group(1).split()[2:4]] if vb else [0.0, 0.0])
-    return {"svgs": ["/files/kicad/%s?t=%d" % (quote(f.name), int(f.stat().st_mtime)) for f in sheets], "sizes": sizes}
+    # (each sheet's part pins, for the pin marks: the root, then its pages in their order)
+    src = [schs[0]] + (sorted(schs[1:], key=lambda f: int((re.search(r"_(\d+)$", f.stem) or [0, 0])[1])) if len(schs) > 1 else [])
+    try:
+        pins = [_sch_pins(f) for f in src] if len(src) == len(sheets) else [[] for _ in sheets]
+    except Exception:                                    # (marks are an aid: a sheet they cannot read keeps none)
+        pins = [[] for _ in sheets]
+    return {"svgs": ["/files/kicad/%s?t=%d" % (quote(f.name), int(f.stat().st_mtime)) for f in sheets], "sizes": sizes,
+            "pins": pins}
 
 
 def make_handler(out_dir: str):
@@ -486,6 +563,10 @@ def make_handler(out_dir: str):
                         return self._json(_schematic(out))
                 if path in ("/pdf.min.js", "/pdf.worker.min.js"):        # (PDF.js, for the datasheet panel)
                     return self._send(200, (PAGE.parent / path[1:]).read_bytes(), "text/javascript")
+                if path == "/api/evidence":             # (?ref=U1: its wired pins; ?cites=1: the citations)
+                    import urllib.parse as up
+                    q = up.parse_qs(self.path.split("?", 1)[-1])
+                    return self._json(_evidence(cache, out, q.get("ref", [""])[0], bool(q.get("cites"))))
                 if path == "/api/datasheet.pdf":        # (?ref=U1, or ?url= one the board cites: the PDF itself)
                     import urllib.parse as up
                     q = up.parse_qs(self.path.split("?", 1)[-1])
