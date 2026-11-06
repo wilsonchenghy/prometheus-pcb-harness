@@ -2872,14 +2872,16 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
     return left
 
 
-def neck_vias(board: Board, neck: float = 0.2, width: float = 0.2, reach: float = 1.0) -> List[str]:
-    """vias against an SMD pad of their own net (closer than ``neck`` to it, and not a via-in-pad: the ring wholly on
+def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, reach: float = 1.0) -> List[str]:
+    """vias against an SMD pad of their own net (closer than ``neck``, default fab.VIA_PAD_NECK, to it, and not a via-in-pad: the ring wholly on
     the pad), as a router leaves them: solder wicks down the hole and a small part tombstones. The via moves off the
     pad until ``neck`` of track lies between them (at most ``reach``), its tracks' ends with it and a track from the pad
     to it, where every clearance and drill gap still holds. Returns the vias it could not move."""
     import math
     from shapely.geometry import LineString, Point
     from shapely.ops import unary_union
+    from fab import VIA_PAD_NECK                         # (the critic's own: what it warns of, this keeps clear)
+    neck = VIA_PAD_NECK if neck is None else neck
     pn = board.pad_net()
     smd = [(r, n, L, g) for r, n, L, g, d in board.pad_shapes() if not d and L in ("F", "B")]
     holes = [{"at": h["at"], "drill": h["d"], "net": pn.get(tuple(h["name"].split(" pad "))) if " pad " in h["name"]
