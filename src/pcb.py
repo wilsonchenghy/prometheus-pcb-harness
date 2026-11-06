@@ -787,14 +787,19 @@ class Board:
     def fanout(self, width: float = 0.2, reach: float = 0.5):
         """a straight stub off the outer end of every fine-pitch pad on a net, before any routing, so no route runs
         where another pad's way out must go"""
+        from shapely.geometry import LineString, Polygon
         self._fan = getattr(self, "_fan", set())
         pn = self.pad_net()
+        ko = {L: [Polygon(k) for k in self.keepout_zones(L)] for L in "FB"}
         for (ref, num), n in pn.items():
             if (ref, num) in self._fan or ref not in self.comps or num not in self.comps[ref]["pads"]:
                 continue
             e = _escape(self, ref, num, reach)
-            if e:
-                self.track(n, "B" if self.comps[ref].get("side", "F") == "B" else "F", [e[0], e[1]], width, 0.01)
+            L = "B" if self.comps[ref].get("side", "F") == "B" else "F"
+            if e and any(LineString([e[0], e[1]]).buffer(width / 2).intersects(k) for k in ko[L]):
+                continue                                 # (no stub into a keep-out: an antenna's; the router
+            if e:                                        #  leaves that pad another way)
+                self.track(n, L, [e[0], e[1]], width, 0.01)
                 self.tracks[-1]["fan"] = (ref, num)
                 self._fan.add((ref, num))
 
@@ -1066,7 +1071,8 @@ class Board:
             again = True
             while again:
                 again = False
-                for t in sorted((t for t in self.tracks if t["net"] == net and length(t) >= 0.5), key=length,
+                for t in sorted((t for t in self.tracks if t["net"] == net and length(t) >= 0.5
+                                 and not t.get("user")), key=length,
                                 reverse=True):          # (a run, not a corner's or a pin's escape piece)
                     i = next(k for k, u in enumerate(self.tracks) if u is t)
                     del self.tracks[i]
@@ -1094,6 +1100,8 @@ class Board:
             pad_at.setdefault((pn.get((r, n)), L if not d else "*"), []).append(g)
         cut, groups = 0, {}                              # (each net's pieces by KiCad's end rule, before any cut)
         for k, t in enumerate(self.tracks):
+            if t.get("user"):                            # (the script's own copper: as it drew it)
+                continue
             for end in (0, -1):
                 if len(t["pts"]) < 2:                    # (cut to nothing by its other end)
                     break
@@ -1139,6 +1147,8 @@ class Board:
         from shapely.geometry import LineString, Point
         ends = {}
         for k, t in enumerate(self.tracks):
+            if t.get("user"):                            # (the script's own copper: as it drew it)
+                continue
             for i in (0, -1):
                 ends.setdefault((t["net"], t["layer"], tuple(round(c, 4) for c in t["pts"][i])), []).append((k, i))
         joined, gone = [], set()                         # (two segments end to end: one polyline)
@@ -1163,6 +1173,8 @@ class Board:
             lands[(u["net"], u["layer"])].append(u["pts"][-1])
         n = 0
         for t in tracks:
+            if t.get("user"):
+                continue
             others = [g for (nt, l), g in fixed.items() if l == t["layer"] and nt != t["net"]]
             near = lands.get((t["net"], t["layer"]), []) + [v["at"] for v in self.vias if v["net"] == t["net"]] + \
                 [(g.centroid.x, g.centroid.y) for g in pad_pts]
@@ -1201,8 +1213,8 @@ class Board:
         from shapely.geometry import LineString, Point
         from shapely.ops import substring, unary_union
         changed = 0
-        idx = set(range(len(self.tracks)) if tracks is None else tracks)
-        orig, before = None, {}
+        idx = set((k for k, t in enumerate(self.tracks) if not t.get("user")) if tracks is None else tracks)
+        orig, before = None, {}                          # (the script's own copper is left as it drew it)
         for _ in range(rounds):
             loose = [(k, e) for k, e in self.loose_ends(only=sorted(i for i in idx if i < len(self.tracks)))]
             if not loose:
@@ -2052,10 +2064,23 @@ def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     return probs
 
 
+def mark_user_copper(board: Board) -> None:
+    """the copper on the board before any routing is the script's own (a hand-drawn feed): tagged ``user``, so the
+    clean-up passes (spurs, loops, overshoots, chamfers) and the rip-up leave it as drawn"""
+    if getattr(board, "_user_marked", False):         # (once: later calls find the router's copper there too)
+        return
+    board._user_marked = True
+    for t in board.tracks:
+        if not t.get("fan"):
+            t.setdefault("user", True)
+
+
 def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     """route the whole board with ``router``: "freerouting" (FreeRouting through KiCad, as KiCad users route:
     ``freerouting.route_kicad``; needs KiCad, Java and the FreeRouting jar, and says which is missing) or "harness"
     (``autoroute``, this file's grid router, chosen explicitly). Sets ``board.router_used``"""
+    if not getattr(board, "_fan", None):
+        mark_user_copper(board)                          # (first routing call: what is there, the script drew)
     if router == "harness":
         board.router_used = "harness"
         return autoroute(board, **kw)
@@ -2816,6 +2841,8 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     if move is None:
         move = [r for r, c in board.comps.items() if c.get("unplaced")] or \
                [r for r, c in board.comps.items() if not c["overhang"]]
+    if not getattr(board, "_fan", None):
+        mark_user_copper(board)                          # (the script's own copper, before any try routes)
     tracks0, vias0, fan0 = list(board.tracks), list(board.vias), set(getattr(board, "_fan", set()))
     tries = max(1, tries)
     if workers is None:
@@ -3363,7 +3390,8 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         if pin in fan_geo:
             tree[fan_geo[pin][0]].append(fan_geo[pin][1])
     if getattr(board, "prune", True):                    # the dead ends (a way-out stub or fan-out the route joined
-        mine = [k for k, t in enumerate(board.tracks) if t["net"] == net]    # part-way along): the whole net's once
+        mine = [k for k, t in enumerate(board.tracks) if t["net"] == net and not t.get("user")]   # (part-way
+        #                                                  along): the whole net's once (not the script's own copper)
         if not probs and len(board.islands(net)) == 1:   # it is whole, else only this call's (a stub of a pin not
             board.prune_spurs(mine)                      # reached yet is its way out, kept for the next call)
         else:
@@ -4119,6 +4147,10 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
                 out.append([k, v[1], -float(v[2]) if back else v[2]] + v[3:])
             elif k == "angle" and back:
                 out.append(["angle", -float(v[1])])
+            elif k == "layer" and owner.startswith("fp_") and len(v) > 1 and str(v[1]) == "Edge.Cuts":
+                out.append([k, _Q("Dwgs.User")])        # (a part's mark of where the board edge should run - a
+            #                                              jack's notch: the board's outline is the script's, and a
+            #                                              second, open outline is a malformed board to KiCad)
             elif k in ("layer", "layers") and back:
                 out.append([k] + [flipL(s) if isinstance(s, _Q) else s for s in v[1:]])
             elif k == "effects" and back and owner in ("property", "fp_text"):
@@ -4325,7 +4357,7 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
             poured_ = {pz["net"] for pz in board.pours}
             torn -= poured_                              # (a ground's pins drop through vias: leave it be)
             redo = fails | torn
-            board.tracks = [t for t in board.tracks if t["net"] not in redo or t.get("fan")]
+            board.tracks = [t for t in board.tracks if t["net"] not in redo or t.get("fan") or t.get("user")]
             board.vias = [v for v in board.vias if v["net"] not in redo or v["net"] in poured_]
             order = [j for j in jobs if j[0] in fails] + [j for j in jobs if j[0] in torn]
             got = []

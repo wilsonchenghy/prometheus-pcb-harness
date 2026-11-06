@@ -18,7 +18,7 @@ info is worth knowing. The requirements file (JSON) may give any of:
       "near": [["C1", "U1", 3.0]],           this part within this distance (pad to pad, mm) of that one (or of
                                              one pin: "U1.9", "U1.VDDA")
       "edge": ["J1", "J2"],                  these parts at the board edge (within 2 mm)
-      "holes": {"count": 4, "d": 3.2},       mounting holes
+      "holes": {"count": 4, "d": 3.2},       mounting holes (or just the count: "holes": 4)
       "assembly": true,                      every part needs an LCSC number (JLCPCB assembly)
       "max_parts": 60
     }
@@ -165,6 +165,10 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
                                        "edge; the requirement is at the edge", [r], hint=f"move {r} to the edge"))
     if "holes" in spec:
         want = spec["holes"]
+        if isinstance(want, (int, float)) and not isinstance(want, bool):   # ("holes": 4, the count alone)
+            want = {"count": int(want)}
+        elif isinstance(want, (list, tuple)):            # ("holes": [[x, y, d], ...]: where they must be)
+            want = {"count": len(want)}
         have = board.holes
         if len(have) < want.get("count", 0):
             notes.append(_note("error", "holes", f"{len(have)} mounting holes; the requirement is {want['count']}",
@@ -241,6 +245,35 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
         if re.search(r"RF_Module|ESP32|ESP8266|nRF52|WROOM|Antenna", c["fp"], re.I) and not getattr(board, "keepouts", []):
             notes.append(_note("warning", "antenna", f"{r} is a radio module but the board has no copper keep-out "
                                "under its antenna", [r], hint="b.keepout(polygon, \"FB\", \"antenna\")"))
+    # a part whose footprint marks where the board edge should run (a jack's notch, a panel-mount pot's edge line):
+    # the outline is the board's own, so a mark away from it is a part not where its maker meant it
+    import math as _m
+    import pcb as _pcb
+    from shapely.geometry import LineString as _LSe
+    for r, c in board.comps.items():
+        try:
+            tree = _pcb._sx_parse(_pcb._fp_file(c["fp"]).read_text())
+        except (OSError, ValueError, AttributeError):
+            continue
+        segs = []
+        for ln in _pcb._find(tree, "fp_line"):
+            if any(isinstance(q, list) and q[0] == "layer" and str(q[1]) == "Edge.Cuts" for q in ln):
+                st, en = _pcb._find(ln, "start"), _pcb._find(ln, "end")
+                if st and en:
+                    segs.append([(float(st[0][1]), -float(st[0][2])), (float(en[0][1]), -float(en[0][2]))])
+        if not segs:
+            continue
+        a_ = _m.radians(c["rot"])
+        mir = -1.0 if c.get("side", "F") == "B" else 1.0
+        put = lambda q: (c["at"][0] + mir * q[0] * _m.cos(a_) - q[1] * _m.sin(a_),
+                         c["at"][1] + mir * q[0] * _m.sin(a_) + q[1] * _m.cos(a_))
+        edge_ = board.outline.exterior
+        off = min(edge_.distance(_LSe([put(q) for q in sg])) for sg in segs)     # (a notch: one side on it)
+        if off > 0.5:
+            notes.append(_note("warning", "edge", f"{r}'s footprint ({c['fp'].split(':')[1]}) marks where the board "
+                               f"edge should run, {off:.1f} mm from the outline (the KiCad file keeps the mark on "
+                               "Dwgs.User): the part sits off the edge its maker drew it for", [r],
+                               hint=f"move {r} so its edge mark lies on the outline, or shape the outline to it"))
     # a ground plane on a board with a processor
     if ics and not any(GROUND.match(p["net"]) for p in board.pours):
         notes.append(_note("warning", "ground", "no ground pour: return currents and decoupling want one",

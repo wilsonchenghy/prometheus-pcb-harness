@@ -138,9 +138,15 @@ def update_notice() -> None:
             seen = {"at": time.time(), "latest": latest()}
             f.parent.mkdir(parents=True, exist_ok=True)
             f.write_text(json.dumps(seen))
-        have = installed()[2]
+        how, root, have = installed()
     except (OSError, ValueError, KeyError):             # (offline, or GitHub's rate limit: no notice, the run goes on)
         return
+    if how == "clone" and have and seen.get("latest") and have != seen["latest"]:
+        import subprocess                                # (a clone that already has GitHub's newest - a branch ahead
+        r = subprocess.run(["git", "-C", str(root), "merge-base", "--is-ancestor", seen["latest"], have],
+                           capture_output=True)          #  of main, work not pushed yet - is not behind it)
+        if r.returncode == 0:
+            return
     if have and seen.get("latest") and have != seen["latest"]:
         print(f"Prometheus: a newer version is on GitHub ({have[:7]} -> {seen['latest'][:7]}): prometheus update",
               file=sys.stderr)

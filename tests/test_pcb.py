@@ -2168,3 +2168,70 @@ def build():
     (d / "board.py").write_text(src % "0.8")                # (the hand-drawn feed widened: not the saved board)
     pcb_cli.main([str(d / "board.py"), out, "--stage", "check", "--kicad-drc", "off"])
     assert "another version of the design" in capsys.readouterr().out
+
+
+def test_critic_takes_the_hole_count_alone():
+    """req.json "holes": 4 (the count, no diameter) is read as {"count": 4}, not a crash"""
+    import critic
+    import pcb
+    b = pcb.Board("c", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.hole((3, 3), d=3.2)
+    notes = critic.review(b, {"holes": 2})
+    assert any(n["kind"] == "holes" and n["severity"] == "error" for n in notes)
+    assert not any(n["kind"] == "holes" and n["severity"] == "error" for n in critic.review(b, {"holes": 1}))
+
+
+def test_fanout_keeps_out_of_a_keepout():
+    """the fan-out's stubs stay out of a keep-out (an antenna's): a pad whose way out runs into one gets no stub;
+    the others keep theirs"""
+    import pcb
+    b = pcb.Board("f", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("U1", "Package_SO:SSOP-28_3.9x9.9mm_P0.635mm", (15.0, 10.0), 90, "")   # (pin 1 at (10.9, 7.4), its
+    b.net("A", [("U1", "1"), ("U1", "28")])                                          #  pad down to y 6.8)
+    b.net("B", [("U1", "5"), ("U1", "24")])
+    b.keepout([(9.0, 0), (12.0, 0), (12.0, 6.6), (9.0, 6.6)], "FB", "antenna")      # (just past pin 1's end)
+    b.fanout()
+    fanned = {t.get("fan") for t in b.tracks}
+    assert ("U1", "1") not in fanned and ("U1", "5") in fanned
+    assert not any("keep-out" in p for p in b.check())
+
+
+def test_the_scripts_own_copper_is_left_as_drawn():
+    """copper the script draws (a feed with right angles, its tip inside the pad) comes out of routing exactly as
+    drawn: the spur trim, loop removal, overshoot cut and chamfer leave it be; the router finishes the rest (and a
+    dangling end the script draws is the script's to fix: a finding, not trimmed away)"""
+    import pcb
+    b = pcb.Board("user_copper", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (6.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (24.0, 14.0), 0, "1k")
+    b.place("R3", "Resistor_SMD:R_0805_2012Metric", None, 0, "1k")
+    b.net("P", [("R1", "2"), ("R2", "1")], amps=0.5)
+    b.net("Q", [("R1", "1"), ("R3", "1")])
+    b.net("S", [("R2", "2"), ("R3", "2")])
+    (x1, y1), (x2, y2) = b.pad("R1", "2"), b.pad("R2", "1")
+    drawn = [(x1, y1), (x1 + 5.0, y1), (x1 + 5.0, y2), (x2, y2), (x2, y2 + 0.4)]   # (right angles; a tip in R2.1)
+    b.track("P", "F", drawn, 0.5)
+    probs = pcb.place_and_route(b, router="harness")
+    assert not probs
+    mine = [t for t in b.tracks if t["net"] == "P" and t["layer"] == "F" and t["w"] == 0.5]
+    assert any([tuple(p) for p in t["pts"]] == drawn for t in mine) and all(t.get("user") for t in mine)
+
+
+def test_schematic_keeps_facing_pins_apart(tmp_path):
+    """a dual pot's units lie end to end, pin 3 facing pin 4: their stubs, and the wire joining the ground pins on
+    one side, must not touch the other net (KiCad's netlist of the sheet had the left input shorted to GND)"""
+    import shutil
+    import kicad_sch
+    import pcb
+    b = pcb.Board("dp", [(0, 0), (40, 0), (40, 30), (0, 30)])
+    b.place("RV1", "Potentiometer_THT:Potentiometer_Alps_RK097_Dual_Horizontal", (30.0, 10.0), 270, "10k",
+            symbol="Device:R_Potentiometer_Dual")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (5.0, 20.0), 0, "")
+    b.net("GND", [("RV1", "1"), ("RV1", "4"), ("J1", "1")])
+    b.net("AINL", [("RV1", "3"), ("J1", "2")])
+    b.net("WL", [("RV1", "2"), ("J1", "3")])
+    b.net("WR", [("RV1", "5"), ("RV1", "6"), ("J1", "4")])
+    path = kicad_sch.write(b, str(tmp_path))
+    if not shutil.which("kicad-cli"):
+        pytest.skip("no kicad-cli to read the sheet back")
+    assert kicad_sch.check(b, path) == []
