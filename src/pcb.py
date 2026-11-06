@@ -2001,7 +2001,7 @@ def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     freerouting.escape_fine_pitch(board)                 # (fine-pitch pins' first stretch drawn by the harness)
     board.router_used = "freerouting (through KiCad)"    # (FreeRouting does not know the drill gap: its vias are
     probs = freerouting.route_kicad(board, **kw)         #  parted from the others after)
-    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw)) + nudge_vias(board)
+    return _second_pass(board, probs, lambda: freerouting.route_kicad(board, **kw)) + nudge_vias(board) + neck_vias(board)
 
 
 def tune_pairs(board: Board, tries_per_seg: int = 6) -> List[str]:
@@ -2841,8 +2841,8 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
                           for L in board.layers}
 
                 def lands(at):                           # every clearance and every drill gap holds there
-                    if not all(Point(at).buffer(v["dia"] / 2).distance(others[L]) >= board.clear - 1e-6
-                               for L in board.layers):
+                    if any(Point(at).buffer(v["dia"] / 2).distance(others[L]) < board.clear - 1e-6
+                           for L in board.layers if not others[L].is_empty):   # (an empty layer's distance: nan)
                         return False
                     for t, i in ends(v):
                         pts = list(t["pts"]); pts[i] = at
@@ -2869,6 +2869,67 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
                     break
             if not moved:
                 left.append(f"vias {a['net']} at {a['at']} and {b['net']} at {b['at']}: no room to part them")
+    return left
+
+
+def neck_vias(board: Board, neck: float = 0.2, width: float = 0.2, reach: float = 1.0) -> List[str]:
+    """vias against an SMD pad of their own net (closer than ``neck`` to it, and not a via-in-pad: the ring wholly on
+    the pad), as a router leaves them: solder wicks down the hole and a small part tombstones. The via moves off the
+    pad until ``neck`` of track lies between them (at most ``reach``), its tracks' ends with it and a track from the pad
+    to it, where every clearance and drill gap still holds. Returns the vias it could not move."""
+    import math
+    from shapely.geometry import LineString, Point
+    from shapely.ops import unary_union
+    pn = board.pad_net()
+    smd = [(r, n, L, g) for r, n, L, g, d in board.pad_shapes() if not d and L in ("F", "B")]
+    holes = [{"at": h["at"], "drill": h["d"], "net": pn.get(tuple(h["name"].split(" pad "))) if " pad " in h["name"]
+              else None} for h in board.drill_list() if not h["name"].startswith("via ") and not h["slot"]]
+    left: List[str] = []
+
+    def against(v, at):                                  # the own-net SMD pads too near a via at ``at``
+        ring = Point(at).buffer(v["dia"] / 2, 16)
+        return [(r, n, L, g) for r, n, L, g in smd if pn.get((r, n)) == v["net"] and not g.contains(ring)
+                and ring.distance(g) < neck - 1e-6]
+
+    for v in list(board.vias):
+        near = against(v, v["at"])
+        if not near:
+            continue
+        r0, n0, L0, g0 = near[0]
+        fixed = board.copper(pours=False)
+        others = {L: unary_union([g for (nt, l), g in fixed.items() if l == L and nt != v["net"]] or [Point(0, 0).buffer(0)])
+                  for L in board.layers}
+        ends = [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)
+                if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < 0.02]
+        pad_at = g0.representative_point().coords[0]
+
+        def lands(at):
+            if against(v, at) or any(Point(at).buffer(v["dia"] / 2).distance(others[L]) < board.clear - 1e-6
+                                     for L in board.layers if not others[L].is_empty):
+                return False
+            segs = [(L0, LineString([pad_at, at]), width)]
+            for t, i in ends:
+                pts = list(t["pts"]); pts[i] = at
+                segs.append((t["layer"], LineString(pts[-2:] if i == -1 else pts[:2]), t["w"]))
+            if any(not others[L].is_empty and sg.buffer(w / 2).distance(others[L]) < board.clear - 1e-6
+                   for L, sg, w in segs):
+                return False
+            return all(math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - v["drill"] / 2 - w["drill"] / 2
+                       >= (board.hole_gap if w["net"] != v["net"] else 0.254) - 1e-6
+                       for w in board.vias + holes if w is not v)
+        a0 = math.atan2(v["at"][1] - pad_at[1], v["at"][0] - pad_at[0])   # straight off the pad first, then turning
+        tries = [(round(v["at"][0] + r * math.cos(a0 + da), 4), round(v["at"][1] + r * math.sin(a0 + da), 4))
+                 for r in [reach * k / 20 for k in range(1, 21)]
+                 for da in [math.radians(t) for t in (0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180)]]
+        at = next((p_ for p_ in tries if lands(p_)), None)
+        if at is None:
+            left.append(f"via {v['net']} at {v['at']}: against {r0}.{n0}, no room to move it a neck away")
+            continue
+        for t, i in ends:
+            t["pts"] = list(t["pts"]); t["pts"][i] = at
+        board.tracks.append({"net": v["net"], "layer": L0, "pts": [tuple(round(c, 4) for c in pad_at), at], "w": width, "amps": None})
+        v["at"] = at
+        board.__dict__.pop("_cu_memo", None)
     return left
 
 
