@@ -1293,6 +1293,30 @@ function drawRats(svg) {                                // (a net the quick re-r
     el("circle", { cx: X(pad.at[0]), cy: Y(pad.at[1]), r: .45, fill: "none", stroke: "#e2b45c", "stroke-width": .14 }, g); }
 }
 
+// ---------- live reload: the server rebuilds the board when board.py is saved; the page redraws it in place ----------
+let liveRev = null;
+async function pollLive() {
+  const L = await getJ("/api/live");
+  if (L && L.rev != null) {
+    if (liveRev === null) liveRev = L.rev;
+    else if (L.rev > liveRev) { liveRev = L.rev;
+      if (L.ok) { const b = await getJ("/api/board"); if (b && !b.error) { B = b; R = (await getJ("/api/result")) || R;
+          SHEETS = null; for (const k in EV) delete EV[k]; EVC = null; EDIT = null;               // (the script is the truth now)
+          drawHeader(); drawLayers(); drawNets(); drawChecks(); drawRun(); drawFiles(); drawEvidence(); drawLayout();   // (no fit:
+          if (activeView() === "schem") drawSchem(); if (activeView() === "parts") drawParts(); if (threeReady) build3d(); } } //  the view stays)
+      liveCard(L); } }
+  setTimeout(pollLive, L ? 500 : 4000);                  // (an older server without /api/live: rarely)
+}
+function liveCard(L) {
+  const box = $("#editcard"); box.classList.add("on"); const un = L.unrouted || [], ck = (L.check || []).filter(t => !un.includes(t));
+  if (!L.ok) { box.innerHTML = `<div class="hd"><b style="color:var(--red)">board.py not loaded</b><span class="sp"></span><button class="btn" id="ecx">✕</button></div><div class="mute">${esc(L.error || "the script did not build")}. The drawing is the last good board.</div>`; }
+  else box.innerHTML = `<div class="hd"><b>board.py saved</b><span class="mute">${L.seconds != null ? L.seconds.toFixed(2) + " s" : ""}${L.rerouted && L.rerouted.length ? " · re-routed " + esc(L.rerouted.join(", ")) : ""}${L.placed && L.placed.length ? " · placed " + esc(L.placed.join(", ")) : ""}</span><span class="sp"></span><button class="btn" id="ecx">✕</button></div>` +
+    (un.length ? `<ul>${un.slice(0, 4).map(t => `<li>${esc(t)}</li>`).join("")}${un.length > 4 ? `<li>${un.length - 4} more</li>` : ""}</ul><div class="row2"><button class="btn primary" id="ecroute">Route properly</button></div>` : `<div class="mute" style="margin-top:4px">Every net the edit touched is routed.</div>`) +
+    (ck.length ? `<ul class="bad">${ck.slice(0, 3).map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : "");
+  $("#ecx").onclick = () => box.classList.remove("on"); if ($("#ecroute")) $("#ecroute").onclick = routeEdit;
+  if (L.ok) { EDIT = { unrouted: un }; drawLayout(); }   // (the nets left: dashed, as after a drag)
+}
+
 // ---------- data ----------
 async function getJ(u) { try { return await (await fetch(u, { cache: "no-store" })).json(); } catch (e) { return null; } }
 async function loadAll() {
@@ -1308,7 +1332,7 @@ async function poll() {
   if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; await loadAll(); }
   setTimeout(poll, P && !P.done ? 1000 : 4000);
 }
-(async () => { P = await getJ("/api/progress"); await loadAll(); poll(); })();
+(async () => { P = await getJ("/api/progress"); await loadAll(); poll(); pollLive(); })();
 window.addEventListener("resize", fitLayout);
 let pW = 0; new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width);     // (the cards fit the panel as it
   if (w && w !== pW && activeView() === "parts") { pW = w; drawParts(); } }).observe($("#psvg"));   // settles, not a frame late)
