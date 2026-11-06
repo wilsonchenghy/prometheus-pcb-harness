@@ -21,12 +21,12 @@
  "parts": 20,
  "nets": 18,
  "layers": 2,
- "seconds": 18.6,
+ "seconds": 10.8,
  "timings": {
-  "place+route": 14.81,
-  "critic": 0.023,
-  "check": 0.1,
-  "export": 2.72
+  "place+route": 7.3,
+  "critic": 0.036,
+  "check": 0.08,
+  "export": 2.61
  },
  "placement": {
   "J1": [
@@ -72,14 +72,14 @@
    "F"
   ],
   "C1": [
-   17.4,
-   29.0,
-   0,
+   16.2,
+   22.55,
+   270,
    "F"
   ],
   "C2": [
-   15.9,
-   24.45,
+   15.55,
+   17.05,
    0,
    "F"
   ],
@@ -102,9 +102,9 @@
    "F"
   ],
   "C6": [
-   33.35,
-   22.4,
-   90,
+   38.35,
+   15.45,
+   0,
    "F"
   ],
   "C8": [
@@ -114,94 +114,44 @@
    "F"
   ],
   "R1": [
-   39.35,
-   7.25,
+   37.6,
+   6.95,
    180,
    "F"
   ],
   "R2": [
-   39.25,
+   37.25,
    9.75,
    180,
    "F"
   ],
   "R3": [
-   37.35,
-   20.75,
-   0,
-   "F"
-  ],
-  "R4": [
-   28.35,
-   23.55,
+   36.95,
+   19.15,
    90,
    "F"
   ],
-  "R5": [
-   21.9,
-   10.7,
+  "R4": [
+   24.75,
+   7.85,
    180,
    "F"
   ],
+  "R5": [
+   28.6,
+   10.75,
+   90,
+   "F"
+  ],
   "D1": [
-   38.15,
-   17.5,
+   39.5,
+   19.2,
    90,
    "F"
   ]
  },
  "findings": [],
  "critic": [
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via GND at (28.25, 14.50) is 0.00 mm from U1.15 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VBUS at (42.25, 10.50) is 0.00 mm from J1.A9 (keep 0.2 mm of track between them)",
-   "refs": [
-    "J1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VBUS at (42.25, 10.50) is 0.00 mm from J1.B4 (keep 0.2 mm of track between them)",
-   "refs": [
-    "J1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VBUS at (25.75, 19.50) is 0.00 mm from U1.4 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VBUS at (25.50, 13.50) is 0.00 mm from U1.13 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
   {
    "severity": "info",
    "kind": "assembly",

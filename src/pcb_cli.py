@@ -271,6 +271,15 @@ def save_state(b, out, key):
         pickle.dump(st, f)
 
 
+def _keeps_script_copper(b, tracks, vias) -> bool:
+    """a saved routing holds every track and via the script draws itself (a harness that once trimmed or dropped
+    them saved a routing without them: same design key, wrong copper)"""
+    k_t = lambda t: (t["net"], t["layer"], tuple(tuple(round(c, 4) for c in p) for p in t["pts"]), round(t["w"], 4))
+    k_v = lambda v: (v["net"], tuple(round(c, 4) for c in v["at"]))
+    have_t, have_v = {k_t(t) for t in tracks}, {k_v(v) for v in vias}
+    return all(k_t(t) in have_t for t in b.tracks) and all(k_v(v) in have_v for v in b.vias)
+
+
 def load_state(b, out, key) -> bool:
     import pickle
     p = os.path.join(out, STATE)
@@ -280,6 +289,9 @@ def load_state(b, out, key) -> bool:
         st = pickle.load(f)
     if st.get("key") != key:
         print(f"note: {p} is from another version of the design: not reused")
+        return False
+    if not _keeps_script_copper(b, st["tracks"], st["vias"]):
+        print(f"note: {p} lacks copper the script draws: not reused")
         return False
     for r, c in st["place"].items():
         if r in b.comps:
@@ -308,6 +320,9 @@ def load_store(b, store, key) -> bool:
         return False
     raw = open(p, "rb").read()
     d, r = json.loads(gzip.decompress(raw)), pcb._routes_load(raw)
+    if not _keeps_script_copper(b, r["tracks"], r["vias"]):
+        print(f"note: {os.path.relpath(p)} lacks copper the script draws (an older harness's routing): not reused")
+        return False
     for ref, c in d["place"].items():
         if ref in b.comps:
             b.comps[ref].update({"at": tuple(c["at"]), "rot": c["rot"], **({"side": c["side"]} if "side" in c else {})})

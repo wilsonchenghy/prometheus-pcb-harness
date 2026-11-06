@@ -2429,3 +2429,29 @@ def test_freerouting_gives_the_same_tracks_twice(monkeypatch):
         pcb.route_board(b, "freerouting")
         runs.append([(t["net"], t["layer"], [tuple(p) for p in t["pts"]], t["w"]) for t in b.tracks])
     assert runs[0] == runs[1]
+
+
+def test_a_saved_routing_without_the_scripts_copper_is_not_reused(tmp_path):
+    """routes/ and board_state.pkl are reused only when they still hold every track the script draws: an older
+    harness that trimmed or dropped them saved a routing under the same design key"""
+    import gzip
+    import pcb
+    import pcb_cli
+    b = pcb.Board("sc", [(0, 0), (20, 0), (20, 12), (0, 12)])
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (5.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (15.0, 6.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    drawn = [b.pad("R1", "2"), b.pad("R2", "1")]
+    b.track("A", "F", drawn, 0.5)
+    key = pcb_cli.design_key(b)
+    store = tmp_path / "routes"
+    store.mkdir()
+    def save(tracks):
+        b2 = pcb.Board("sc", [(0, 0), (20, 0), (20, 12), (0, 12)])
+        b2.comps = b.comps
+        b2.tracks, b2.vias = tracks, []
+        pcb_cli.save_store(b2, str(store), key)
+    save([{"net": "A", "layer": "F", "pts": drawn, "w": 0.3, "amps": None}])          # (narrowed: not the script's)
+    assert not pcb_cli.load_store(b, str(store), key)
+    save([{"net": "A", "layer": "F", "pts": drawn, "w": 0.5, "amps": None}])
+    assert pcb_cli.load_store(b, str(store), key)

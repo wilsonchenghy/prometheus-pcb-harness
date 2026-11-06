@@ -1106,9 +1106,9 @@ class Board:
                     ks = at(g.centroid)
                     for a, b in zip(ks, ks[1:]):
                         parent[find(a)] = find(b)
-            links = {}                                   # (the vias between each pair of island groups)
-            for v in vs:
-                ks = at(Point(v["at"]))
+            links = {}                                   # (the vias between each pair of island groups: by the via's
+            for v in vs:                                 #  ring, as copper joins - its centre may be just off a track)
+                ks = at(Point(v["at"]).buffer(v["dia"] / 2 - 0.01, 12))
                 for a, b in zip(ks, ks[1:]):
                     links.setdefault(tuple(sorted((find(a), find(b)))), []).append(v)
             pins = {}                                    # (the current-carrying pins on each island group)
