@@ -879,7 +879,7 @@ def netlist(path: str) -> Dict[str, set]:
                            timeout=300)
         if r.returncode != 0 or not os.path.exists(out):
             raise RuntimeError("kicad-cli could not read the schematic: " + (r.stderr or r.stdout)[-400:])
-        tree = pcb._sexpr(open(out).read())
+        tree = pcb._sx_parse(open(out).read())
     nets = {}
     for n in pcb._find(next(iter(pcb._find(tree, "nets")), []), "net"):
         name = next((x[1] for x in n if isinstance(x, list) and x[0] == "name"), "")

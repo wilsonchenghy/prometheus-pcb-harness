@@ -1,6 +1,6 @@
 """``prometheus view out/``: a local page to look at a board - its layout (layers to switch on and off), a 3D view,
 a net-label schematic, every finding (click one: the board zooms to it) - and, while a run is going
-(``prometheus board.py out/ --view``), its stage, the try it is on and about how long is left.
+(every ``prometheus board.py out/`` opens it), its stage, the try it is on and about how long is left.
 
 Python's standard library only (http.server); the 3D view's three.js (r128, MIT) ships beside the page.
 """
@@ -536,7 +536,7 @@ def main(argv) -> int:
     ap.add_argument("--no-open", action="store_true", help="do not open a browser (print the address)")
     a = ap.parse_args(argv)
     if not (Path(a.out) / "result.json").exists() and not (Path(a.out) / "progress.json").exists():
-        print(f"{a.out}: no run here yet: prometheus board.py {a.out} first (or add --view to that run)", file=sys.stderr)
+        print(f"{a.out}: no run here yet: prometheus board.py {a.out} first", file=sys.stderr)
         return 2
     serve(a.out, a.port, not a.no_open)
     return 0

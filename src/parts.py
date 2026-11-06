@@ -88,7 +88,7 @@ def symbol(name: str) -> dict:
         return _SYM[name]
     import pcb
     lib, sym = name.split(":", 1)
-    tree = pcb._sexpr(_fetch(f"{lib}.kicad_symdir/{sym}.kicad_sym"))
+    tree = pcb._sx_parse(_fetch(f"{lib}.kicad_symdir/{sym}.kicad_sym"))
     top = next((s for s in pcb._find(tree, "symbol") if len(s) > 1 and s[1] == sym), None)
     if top is None:
         raise SymbolNotFound(f"symbol {name} is not in KiCad's library")
@@ -445,6 +445,9 @@ def _fmt(x: float, unit: str) -> str:
     return f"{x:g}"
 
 
+JLC_DOWN = ""                                             # (why JLCPCB's search last failed)
+
+
 def _jlc(q: str) -> List[dict]:
     import json
     import time
@@ -459,7 +462,9 @@ def _jlc(q: str) -> List[dict]:
             req = urllib.request.Request(JLCSEARCH, body, {"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 rows = json.loads(r.read())["data"]["componentPageInfo"]["list"] or []
-        except Exception:
+        except Exception as e:                           # (JLCPCB unreachable: said once by fill_lcsc)
+            global JLC_DOWN
+            JLC_DOWN = f"{type(e).__name__}: {str(e)[:120]}"
             continue
         out = [{"lcsc": int(c["componentCode"].lstrip("C")), "mfr": c.get("componentModelEn") or "",
                 "package": c.get("componentSpecificationEn"), "description": c.get("describe") or "",

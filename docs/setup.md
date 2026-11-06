@@ -1,9 +1,10 @@
 # Setting up a machine (or an AI agent's environment) for the harness
 
-Routing needs KiCad, Java and FreeRouting: FreeRouting (the router KiCad users use) routes through KiCad, and KiCad's
-own design-rule check judges every board. A run without them stops and says what is missing; `--router harness`
-routes with the built-in grid router instead, chosen explicitly (fine for simple boards, not for dense fine-pitch
-ones). Check what a machine has at any time:
+The harness works with Python alone: every run gives a board you can order. KiCad, Java and FreeRouting make it as
+good as it gets: FreeRouting (the router KiCad users use) routes through KiCad, and KiCad's own design-rule check
+judges every board. Without them a run routes with the built-in grid router (fine for simple boards, not for dense
+0.4 mm pitch chips) and says so: whatever a run leaves out is listed, with why and how to add it, in its summary
+and in `result.json` (`"skipped"`), never quietly. Check what a machine has at any time:
 
 ```
 prometheus doctor
@@ -12,8 +13,8 @@ prometheus doctor
 | Piece | What it gives | Without it |
 |---|---|---|
 | Python 3.10+ and `pip install prometheus-pcb` | everything: parts, placement, routing, the design check, the house check, Gerbers, KiCad project, BOM, cart | (required) |
-| KiCad 9+ (`kicad-cli`, and its Python `pcbnew`) | FreeRouting through KiCad's Specctra export; KiCad's own DRC on every run | routing stops and says so (or `--router harness`); no KiCad DRC |
-| Java 17+ and FreeRouting | the router: dense boards (0.4 mm pitch chips) route clean | routing stops and says so (or `--router harness`: the built-in grid router, fine for simple boards) |
+| KiCad 9+ (`kicad-cli`, and its Python `pcbnew`) | FreeRouting through KiCad's Specctra export; KiCad's own DRC on every run | the built-in router, said so; no KiCad DRC |
+| Java 17+ and FreeRouting | the router: dense boards (0.4 mm pitch chips) route clean | the built-in grid router (fine for simple boards), said so |
 | `pip install "prometheus-pcb[3d]"` (build123d) | STEP of the assembled board | no STEP |
 | `pip install "prometheus-pcb[schematic]"` | schematic sheets | no sheets |
 

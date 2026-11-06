@@ -22,7 +22,7 @@ Open [Claude Code](https://claude.com/claude-code) and type:
 That's it. Without an agent: `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/install.sh | bash`
 
 <sub>For the agent: run `curl -fsSL https://raw.githubusercontent.com/wilsonchenghy/prometheus-pcb-harness/main/install.sh | bash -s -- --skill`,
-then `prometheus doctor`; `prometheus update` at the start of each session. Routing needs KiCad and Java: ask before installing them (`docs/setup.md`).</sub>
+then `prometheus doctor`; `prometheus update` at the start of each session. KiCad and Java make routing and checks their best; without them a run still works and says what it skipped. Ask before installing them (`docs/setup.md`).</sub>
 
 ## Use
 
