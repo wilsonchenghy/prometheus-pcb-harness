@@ -256,6 +256,63 @@ class _Cache:
         self.out = Path(out_dir)
         self.key, self.data, self.lock = None, None, threading.Lock()
         self.live, self.undo = None, []                  # (the board a live edit moves parts on, and what it was)
+        self.rev, self.last = 0, {}                      # (the script's saved edits shown so far; the last one's result)
+
+    def watch(self, every: float = 0.5) -> None:
+        """the board script, followed: each time it is saved, ``refresh`` (in the background, for the page's poll of
+        /api/live)"""
+        def run():
+            seen = None
+            while self.script() is None:                 # (the board before any edit: what an edit is measured from)
+                time.sleep(every)
+            with self.lock:
+                self._board()
+            while True:
+                try:
+                    script = self.script()
+                    m = Path(script).stat().st_mtime if script and not script.endswith(".net") else None
+                    if m and seen and m != seen:
+                        self.refresh()
+                    seen = m or seen
+                except Exception as e:                   # (a script mid-save, or one that does not run yet: said)
+                    self.last = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}", "rev": self.rev}
+                time.sleep(every)
+        threading.Thread(target=run, daemon=True).start()
+
+    def refresh(self) -> dict:
+        """the board script as just saved, on the page in a second or two: the parts it does not place where they were,
+        a new one placed, and only the nets the edit touched routed again (the harness's router; the rest keep their
+        copper). A change to the outline or the layers needs a run: said, not attempted"""
+        import pcb
+        import pcb_cli
+        with self.lock:
+            t0 = time.perf_counter()
+            was = self._board()
+            b, _ = pcb_cli.load(self.script())
+            if b.layers != was.layers or not b.outline.equals(was.outline):
+                self.last = {"ok": False, "rev": self.rev, "error": "the outline or the layers changed: run it again "
+                             "(prometheus board.py out/) to place and route it as a whole"}
+                return self.last
+            for r, c in b.comps.items():                 # (a part the script leaves to the placer: where it was)
+                if c.get("unplaced") and r in was.comps and was.comps[r]["fp"] == c["fp"]:
+                    w = was.comps[r]
+                    c.update(at=w["at"], rot=w["rot"])
+                    c.pop("unplaced", None)
+            new = [r for r, c in b.comps.items() if c.get("unplaced")]
+            if new:
+                pcb.autoplace(b, move=new)
+            old = {"placement": pcb.placement(was), "tracks": [dict(t, pts=list(t["pts"])) for t in was.tracks],
+                   "vias": [dict(v) for v in was.vias]}
+            b.tracks, b.vias = [t for t in b.tracks], [v for v in b.vias]
+            redo = [n for n in pcb.reuse_routes(b, old) if n in b.nets]
+            redo += [n for n in b.nets if n not in redo and len(b.islands(n)) > 1]   # (a net that gained a pin)
+            probs = pcb.route_jobs(b, [(n, b.net_width(n), None) for n in sorted(redo)]) if redo else []
+            self.live, self.live_key, self.undo = b, pcb_cli.design_key(b), []
+            got = self._after(b, t0, redo, probs)
+            got.update(rev=self.rev + 1, placed=new)
+            self.last = {k: v for k, v in got.items() if k != "board"}
+            self.rev += 1                                # (last: the page reads rev and its result together)
+            return got
 
     def _board(self):
         """the run's board, built once for live edits (the script, the run's placement and copper)"""
@@ -598,6 +655,7 @@ def _schematic(out: Path, script: str = "") -> dict:
 def make_handler(out_dir: str):
     out = Path(out_dir).resolve()
     cache = _Cache(str(out))
+    cache.watch()
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):                       # (quiet: the run's own output stays readable)
@@ -657,6 +715,8 @@ def make_handler(out_dir: str):
                     return self._json(json.loads(p.read_text()) if p.exists() else {})
                 if path == "/api/board":
                     return self._json(cache.board())
+                if path == "/api/live":                 # (the script's saved edits: rev goes up with each one shown)
+                    return self._json({"rev": cache.rev, **cache.last})
                 if path == "/api/datasheet":            # (?ref=U1: its pins against its datasheet)
                     import urllib.parse as up
                     ref = up.parse_qs(self.path.split("?", 1)[-1]).get("ref", [""])[0]

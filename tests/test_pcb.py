@@ -1327,8 +1327,19 @@ def test_live_edit_moves_a_part_reroutes_its_nets_and_undoes(tmp_path):
     assert not cache.move("R9", (5, 5))["ok"]
     back = cache.undo_move()
     assert back["ok"] and cache.live.comps["R3"]["at"] == (15, 4) and json.loads((out / "moves.json").read_text()) == []
+    # the script saved with R3 elsewhere: shown with only B routed again, A's copper kept; an outline change refused
+    cache.live = None
+    cache._board()
+    a_kept = sorted(tuple(map(tuple, t["pts"])) for t in cache.live.tracks if t["net"] == "A")
+    script.write_text(script.read_text().replace("(15, 4)", "(14, 6)"))
+    got = cache.refresh()
+    assert got["ok"] and got["rerouted"] == ["B"] and got["check"] == [] and cache.rev == 1
+    assert cache.live.comps["R3"]["at"] == (14, 6)
+    assert sorted(tuple(map(tuple, t["pts"])) for t in cache.live.tracks if t["net"] == "A") == a_kept
+    script.write_text(script.read_text().replace("(30, 0), (30, 20)", "(32, 0), (32, 20)"))
+    assert not cache.refresh()["ok"] and cache.rev == 1
     cache.undo.append((None, None, None, [], []))                     # (a "route properly" undone: its copper only)
-    assert cache.undo_move()["ok"] and cache.live.tracks == [] and cache.live.comps["R3"]["at"] == (15, 4)
+    assert cache.undo_move()["ok"] and cache.live.tracks == [] and cache.live.comps["R3"]["at"] == (14, 6)
 
 
 def test_nudge_vias_parts_two_nets_drills():
