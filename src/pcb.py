@@ -4263,8 +4263,9 @@ def export_kicad8(src_dir: str, out_dir: str) -> List[str]:
         if node and node[0] == "sheet":                  # (a page's box: KiCad 9 gave it these flags)
             node = [x for x in node if not (isinstance(x, list) and x and x[0] in
                                             ("exclude_from_sim", "in_bom", "on_board", "dnp"))]
-        if node and node[0] in ("pin_names", "pin_numbers") and ["hide", "yes"] in node:
-            node = [x for x in node if x != ["hide", "yes"]] + ["hide"]            # (KiCad 8: a bare flag there)
+        if node and node[0] in ("pin_names", "pin_numbers", "pin") and ["hide", "yes"] in node:
+            node = [x for x in node if x != ["hide", "yes"]] + ["hide"]            # (KiCad 8: a bare flag there; a
+                                                                                   #  hidden pin's too, or the page fails)
         return node
     out = []
     for f in sorted(os.listdir(src_dir)):
