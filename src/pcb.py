@@ -68,21 +68,6 @@ _FP: Dict[str, Dict] = {}
 
 
 # ---- footprints ------------------------------------------------------------------------------------------------------
-def _sexpr(text: str):
-    toks = re.findall(r'\(|\)|"(?:[^"\\]|\\.)*"|[^\s()]+', text)
-    stack, cur = [], []
-    for t in toks:
-        if t == "(":
-            stack.append(cur)
-            cur = []
-        elif t == ")":
-            done, cur = cur, stack.pop()
-            cur.append(done)
-        else:
-            cur.append(t[1:-1] if t.startswith('"') else t)
-    return cur[0] if cur else []
-
-
 def _find(node, key):
     return [c for c in node if isinstance(c, list) and c and c[0] == key]
 
@@ -231,7 +216,7 @@ def footprint(name: str) -> Dict:
     if not f0.exists() or f0.stat().st_size < 200:
         _prefetch_callers()
     dst = _download_fp(name)
-    tree = _sexpr(dst.read_text())
+    tree = _sx_parse(dst.read_text())
     pads: Dict[str, List[Dict]] = {}
     for p in _find(tree, "pad"):
         num, kind, shape = p[1], p[2], p[3]
@@ -539,6 +524,11 @@ class Board:
         self.nets[name] = {"pins": list(dict.fromkeys(out)), "amps": amps, "volts": volts}
         if width is not None:
             self.nets[name]["width"] = width
+
+    def skip(self, what: str, why: str, how: str = ""):
+        """an output or a step left out of this run (no network, an extra not installed): said in the run's summary,
+        its result.json ("skipped") and the viewer, never quietly, and the rest of the run goes on"""
+        self.__dict__.setdefault("skipped", []).append({"what": what, "why": why, "how": how})
 
     def nc(self, ref: str, *pins: str):
         """pins left unconnected on purpose (an unused input, a debug pin), by number or by symbol name: the ERC no
@@ -1698,8 +1688,9 @@ class Board:
                 if c["model"]:
                     try:
                         m = kicad(c["model"])
-                    except Exception:
+                    except Exception as e:                # (the STEP without this part's body: said so)
                         m = None
+                        self.skip(f"{ref}'s 3D model in the STEP", f"{type(e).__name__}: {str(e)[:120]}")
                 if m is None and c["body"] is not None:
                     m = c["body"]
                 if m is None:
@@ -2063,7 +2054,7 @@ def from_netlist(path: str, outline, name: Optional[str] = None, at: Optional[Di
     ``pour``: the net poured on the bottom ("auto": GND, if there is one; None: none). Parts with no footprint
     (power symbols aside, which are not in a netlist) are listed in ``board.import_notes`` and left out"""
     from pathlib import Path as _P
-    tree = _sexpr(_P(path).read_text(encoding="utf-8"))
+    tree = _sx_parse(_P(path).read_text(encoding="utf-8"))
     if isinstance(outline, (tuple, list)) and len(outline) == 2 and not isinstance(outline[0], (tuple, list)):
         w, h = outline
         outline = [(0.0, 0.0), (float(w), 0.0), (float(w), float(h)), (0.0, float(h))]
@@ -4455,8 +4446,7 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
         import kicad_sch
         out.append(kicad_sch.write(board, out_dir))
     except Exception as e:                               # (no symbols offline: the board is still written)
-        import sys
-        print(f"KiCad schematic: not written ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr)
+        board.skip("the KiCad schematic", f"{type(e).__name__}: {str(e)[:200]}", "KiCad's symbols are fetched online")
     return out
 
 

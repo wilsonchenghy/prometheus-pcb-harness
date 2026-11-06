@@ -83,32 +83,6 @@ def vendor_step(path: str):
     return bd.import_step(str(fetch(path)))
 
 
-# makers' own models (public downloads), fetched once into the cache
-MAKER_MODELS = {
-    "rpi5": ("https://datasheets.raspberrypi.com/rpi5/RaspberryPi5-step.zip", "rpi-5b_no_graphics.step", "MIT"),
-}
-
-
-def maker_step(key: str):
-    """the maker's official STEP for a catalogue board (MAKER_MODELS), downloaded once and cached"""
-    import io
-    import urllib.request
-    import zipfile
-    import build123d as bd
-    url, member, _lic = MAKER_MODELS[key]
-    dst = CACHE / "makers" / key / member
-    if not dst.exists():
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        data = urllib.request.urlopen(req, timeout=300).read()
-        if url.endswith(".zip"):
-            with zipfile.ZipFile(io.BytesIO(data)) as z:
-                dst.write_bytes(z.read(member))
-        else:
-            dst.write_bytes(data)
-    return bd.import_step(str(dst))
-
-
 KICAD_RAW = "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/"
 _SHAPES: dict = {}
 
