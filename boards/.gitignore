@@ -1,0 +1,8 @@
+# keep only the order files and the summary of each run
+*/out/*
+!*/out/gerbers.zip
+!*/out/bom_jlc.csv
+!*/out/cpl.csv
+!*/out/layers.png
+!*/out/result.json
+*/err.txt
