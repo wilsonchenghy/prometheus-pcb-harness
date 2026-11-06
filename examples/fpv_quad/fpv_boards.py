@@ -293,6 +293,7 @@ def fc_board():
                                ("C4", (3.25, -4.2), 90, "100n"), ("C5", (4.2, 2.25), 0, "1u"), ("C6", (-2.5, 4.2), 90, "2u2"),
                                ("C7", (-4.2, -2.25), 0, "2u2"), ("C8", (4.75, -2.75), 0, "100n")):
         b.place(ref, C04, at, rot_, val, "X7R 0402", model=c04m, side="B")
+    b.place("C25", C04, (5.0, -0.6), 0, "100n", "X7R 0402", model=c04m, side="B", note="NRST (ST: 100 nF to GND)")
     b.place("R1", R04, (0.0, -7.6), 0, "10k", "RC0402FR-0710KL", model=r04m)           # BOOT0 pull-down
     b.place("SW1", "Button_Switch_SMD:SW_Push_1P1T_NO_CK_KMR2", (4.5, -13.5), 0, "BOOT", "C&K KMR211NGLFS",
             model="Button_Switch_SMD.3dshapes/SW_Push_1P1T_NO_CK_KMR2.step")
@@ -346,7 +347,7 @@ def fc_nets(b):
     n = lambda name, pins, amps=0.01, volts=3.3: b.net(name, pins, amps=amps, volts=volts)
     n("GND", [(U, F4["VSS1"]), (U, F4["VSS2"]), (U, F4["VSSA"]), ("U2", "6"), ("C20", "2"), ("C21", "2"), ("C22", "2"),
               ("C23", "2"), ("U3", "4"), ("C24", "2")] + [(c, "2") for c in ("C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8")]
-      + [("R1", "2"), ("R5", "2"), ("U4", "1"), ("C9", "2"), ("C11", "2"), ("R7", "2"), ("U5", "2"), ("C12", "2"),
+      + [("C25", "2"), ("R1", "2"), ("R5", "2"), ("U4", "1"), ("C9", "2"), ("C11", "2"), ("R7", "2"), ("U5", "2"), ("C12", "2"),
          ("C13", "2"), ("J1", "A1"), ("J1", "B12"), ("J1", "A12"), ("J1", "B1"), ("R8", "2"), ("R9", "2"), ("J2", "1"),
          ("J3", "1"), ("J4", "2"), ("J4", "5"), ("D1", "1"), ("D2", "1")], amps=1.5, volts=25.0)
     n("3V3", [(U, F4["VBAT"]), (U, F4["VDD1"]), (U, F4["VDD2"]), (U, F4["VDD3"]), (U, F4["VDD4"]), (U, F4["VDDA"]),
@@ -363,6 +364,7 @@ def fc_nets(b):
     n("VCAP1", [(U, F4["VCAP1"]), ("C6", "1")])
     n("VCAP2", [(U, F4["VCAP2"]), ("C7", "1")])
     n("BOOT0", [(U, F4["BOOT0"]), ("R1", "1"), ("SW1", "2")])
+    n("NRST", [(U, F4["NRST"]), ("C25", "1")])
     n("OSC_IN", [(U, F4["OSC_IN"]), ("Y1", "1"), ("C22", "1")])
     n("OSC_OUT", [(U, F4["OSC_OUT"]), ("Y1", "3"), ("C23", "1")])
     n("GYRO_SCK", [(U, F4["PA5"]), ("U2", "13")])
@@ -399,7 +401,7 @@ def fc_route(b):
     b.via("GND", (10.4, -4.25), 0.3, 0.6)
     order = ["GYRO_SCK", "GYRO_MISO", "GYRO_MOSI", "GYRO_CS", "GYRO_INT", "M1", "M2", "M3", "M4", "OSC_IN", "OSC_OUT", "USB_DM", "USB_DP",
              "FL_SCK", "FL_MISO", "FL_MOSI", "FL_CS", "VCAP1", "VCAP2", "RX_TX", "RX_RX",
-             "VTX_TX", "VTX_RX", "VSENSE", "LED1", "LED1K", "LED2K", "BOOT0", "CC1", "CC2", "CB", "FB"]
+             "VTX_TX", "VTX_RX", "VSENSE", "LED1", "LED1K", "LED2K", "BOOT0", "NRST", "CC1", "CC2", "CB", "FB"]
     # negotiated passes (pcb.route_jobs): a net that fails is routed first on the next pass, the best pass kept
     jobs = [(nm, 0.1, None) for nm in order[:9]] + [("3V3", 0.2, None)] + [(nm, 0.1, None) for nm in order[9:]] + \
         [("SW", 0.5, None), ("VBUS", 0.3, None),
