@@ -33,7 +33,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: |
-          for i in 1 2 3; do timeout 120 sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases && break; sleep 10; done
+          sudo curl -fsS --retry 3 --max-time 60 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x245D5502FAD7A805" -o /etc/apt/keyrings/kicad.asc
+          echo "deb [signed-by=/etc/apt/keyrings/kicad.asc] https://ppa.launchpadcontent.net/kicad/kicad-9.0-releases/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) main" | sudo tee /etc/apt/sources.list.d/kicad.list
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends kicad
           kicad-cli version
@@ -50,7 +51,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: |
-          for i in 1 2 3; do timeout 120 sudo add-apt-repository -y ppa:kicad/kicad-8.0-releases && break; sleep 10; done
+          sudo curl -fsS --retry 3 --max-time 60 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x245D5502FAD7A805" -o /etc/apt/keyrings/kicad.asc
+          echo "deb [signed-by=/etc/apt/keyrings/kicad.asc] https://ppa.launchpadcontent.net/kicad/kicad-8.0-releases/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) main" | sudo tee /etc/apt/sources.list.d/kicad.list
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends kicad
           kicad-cli version
@@ -69,7 +71,8 @@ jobs:
           distribution: temurin
           java-version: "21"
       - run: |
-          for i in 1 2 3; do timeout 120 sudo add-apt-repository -y ppa:kicad/kicad-9.0-releases && break; sleep 10; done
+          sudo curl -fsS --retry 3 --max-time 60 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x245D5502FAD7A805" -o /etc/apt/keyrings/kicad.asc
+          echo "deb [signed-by=/etc/apt/keyrings/kicad.asc] https://ppa.launchpadcontent.net/kicad/kicad-9.0-releases/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) main" | sudo tee /etc/apt/sources.list.d/kicad.list
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends kicad
           mkdir -p ~/.cache/prometheus/freerouting
