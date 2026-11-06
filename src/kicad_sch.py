@@ -198,7 +198,8 @@ def _lib_symbol(name: str) -> list:
 
     def clean(node):                                     # (KiCad 10's own tokens out: KiCad 9 opens the file too)
         return [clean(x) if isinstance(x, list) else x for x in node
-                if not (isinstance(x, list) and x[:1] in (["in_pos_files"], ["extends"]))]
+                if not (isinstance(x, list) and x[:1] in (["in_pos_files"], ["extends"], ["do_not_autoplace"],
+                                                          ["duplicate_pin_numbers_are_jumpers"], ["show_name"]))]
     return ["symbol", _Q(name)] + clean(top)[2:]
 
 
