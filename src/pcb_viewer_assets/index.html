@@ -273,7 +273,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     </div>
     <div class="float tools" id="tools">
       <button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">−</button><button id="fit" title="Fit">⤢</button>
-      <div class="sep"></div><button id="flip" title="View from below">⇅</button><button id="loupeb" title="Loupe (L)">◎</button><button id="moveb" title="Move parts (M): drag a part, R turns it, drop to re-route its nets">✥</button><button id="explode" title="Exploded view (E)" style="display:none">⇡</button><button id="krender" title="KiCad photoreal render" style="display:none">◐</button>
+      <div class="sep"></div><button id="flip" title="View from below">⇅</button><button id="loupeb" title="Loupe (L)">◎</button><button id="moveb" title="Move parts (press M): turn it on, then drag a part; R turns it; dropping it re-routes its nets">✥</button><button id="explode" title="Exploded view (E)" style="display:none">⇡</button><button id="krender" title="KiCad photoreal render" style="display:none">◐</button>
     </div>
     <div class="float looks" id="looks"><button class="on" data-m="board">As made</button><button data-m="glow">Light</button><button data-m="xray">Layers</button></div>
     <div class="float editcard" id="editcard"></div>
@@ -1212,7 +1212,11 @@ function drawSchemMarks() {
 
 // ---------- live edits: drag a part (✥ or M), R turns it, drop: the server moves it and routes only its nets ----------
 let moveOn = false, drag = null, EDIT = null, editBusy = false;
-function setMove(on) { moveOn = on; $("#moveb").classList.toggle("on", on); $("#lsvg").classList.toggle("moving", on); }
+function setMove(on) { moveOn = on; $("#moveb").classList.toggle("on", on); $("#lsvg").classList.toggle("moving", on);
+  const box = $("#editcard");                           // (what the tool does, said once it is on: dragging without it pans)
+  if (on && !editBusy) { box.classList.add("on"); box.innerHTML = `<div class="hd"><b>Move parts</b><span class="mute">drag a part · R turns it · Esc cancels · M again to stop</span><span class="sp"></span><button class="btn" id="ecx">✕</button></div>`;
+    $("#ecx").onclick = () => box.classList.remove("on"); }
+  else if (!on && box.querySelector(".hd b") && box.querySelector(".hd b").textContent === "Move parts") box.classList.remove("on"); }
 $("#moveb").onclick = () => setMove(!moveOn);
 async function postJ(u, body) {
   try { const r = await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); return await r.json(); }
