@@ -10,7 +10,10 @@ symbol pin has a pad and every pad a pin - and an ERC can run on the netlist bef
 """
 from __future__ import annotations
 
+import functools
+import os
 import re
+from pathlib import Path
 import urllib.parse
 import urllib.request
 from typing import Dict, List, Optional, Sequence, Tuple
@@ -120,6 +123,60 @@ def symbol(name: str) -> dict:
     return out
 
 
+def _symbol_names() -> List[str]:
+    """every symbol in the installed KiCad's library, "Lib:Name" (read from its symbols folder once, then cached)"""
+    import json
+    import shutil
+    from vendor_parts import CACHE
+    cache = CACHE / "kicad_symbol_names.json"
+    if cache.exists():
+        return json.loads(cache.read_text())
+    exe = Path(shutil.which("kicad-cli") or "").resolve()
+    dirs = [Path(os.environ[k]) for k in ("KICAD10_SYMBOL_DIR", "KICAD9_SYMBOL_DIR") if os.environ.get(k)] + \
+           [exe.parent.parent / "SharedSupport" / "symbols", exe.parent.parent / "share" / "kicad" / "symbols",
+            Path("/usr/share/kicad/symbols")]
+    d = next((p for p in dirs if p.is_dir()), None)
+    if d is None:
+        raise FileNotFoundError("KiCad's symbol library not found: install KiCad (docs/setup.md) or set KICAD9_SYMBOL_DIR")
+    names = []
+    for f in sorted(d.glob("*.kicad_sym")):              # (top-level symbols only: their units are nested deeper)
+        names += [f"{f.stem}:{n}" for n in re.findall(r'\n\t\(symbol "([^"]+)"', f.read_text(errors="ignore"))]
+    for f in sorted(d.glob("*.kicad_symdir/*.kicad_sym")):   # (KiCad 10: a file per symbol)
+        names.append(f"{f.parent.name[:-len('.kicad_symdir')]}:{f.stem}")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_text(json.dumps(names))
+    return names
+
+
+@functools.lru_cache(maxsize=None)
+def _symbol_patterns():
+    norm = lambda s: re.sub(r"[^A-Z0-9]", "", s.upper())
+    return [(n, norm(n.split(":", 1)[1]), re.compile("^" + re.sub(r"X", "[A-Z0-9]", norm(n.split(":", 1)[1]))))
+            for n in _symbol_names()]
+
+
+def suggest_symbol(comp: dict) -> Optional[str]:
+    """KiCad's symbol for a placed part, found by its value or part number (KiCad's lower-case x a wildcard) and
+    kept only when its pins are the footprint's pads exactly; of several, the one named as the part is, else the
+    longest that matches. None when KiCad has none that fits"""
+    norm = lambda s: re.sub(r"[^A-Z0-9]", "", s.upper())
+    toks = [norm(t) for t in [comp.get("value", "")] + (comp.get("mpn") or "").split() if len(norm(t)) >= 4]
+    if not toks:
+        return None
+    pads = {n for n in comp["pads"] if n}
+    fits = []
+    for name, sym, pat in _symbol_patterns():
+        if not any(pat.match(t) or sym.startswith(t) for t in toks):
+            continue
+        try:
+            if {p["num"] for p in symbol(name)["pins"]} == pads:
+                fits.append(name)
+        except SymbolNotFound:
+            continue
+    exact = [n for n in fits if norm(n.split(":", 1)[1]) in toks]
+    return (exact or sorted(fits, key=lambda n: -len(n)) or [None])[0]
+
+
 def resolve(comp: dict, pin: str) -> List[str]:
     """the pad numbers a net's pin names: a pad number as it is, else a symbol pin name (all of that name's numbers:
     a chip's several GND pins), else [] (the check reports it)"""
@@ -174,6 +231,10 @@ def erc(board) -> List[dict]:
     for (ref, num), t in sorted(types.items(), key=lambda kv: (kv[0][0], len(kv[0][1]), kv[0][1])):
         net = pn.get((ref, num))
         label = f"{ref}.{num} ({names[(ref, num)]}, {t.replace('_', ' ')})"
+        if num in board.comps[ref].get("nc", ()):        # (left open on purpose: Board.nc)
+            if net:
+                note("warning", f"{label} is marked no-connect but is on net {net}", [ref])
+            continue
         if t == "no_connect" and net:
             note("warning", f"{label} is a no-connect pin but is on net {net}", [ref])
         elif not net and t in POWER_IN:
@@ -193,7 +254,7 @@ def erc(board) -> List[dict]:
             continue
         strong = [p for p, t in known if t in STRONG]
         same = len({r for r, _ in strong}) == 1 and len({names[p] for p in strong}) == 1   # (one chip's own pins of
-        if len(strong) > 1 and not same:                                                    # one name: VOUT, VOUT)
+        if len(strong) > 1 and not same and net not in getattr(board, "erc_allowed", {}):   # one name: VOUT, VOUT)
             note("error", f"net {net}: outputs {', '.join(f'{r}.{n}' for r, n in strong)} drive each other", [r for r, _ in strong])
         unknown = [p for p, t in zip(pins, ts) if not t]       # (a part with no symbol: a connector, a passive)
         if any(t in NEEDS_DRIVE for _, t in known) and not unknown and not any(t in DRIVERS for _, t in known):

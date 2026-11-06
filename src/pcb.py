@@ -540,6 +540,18 @@ class Board:
         if width is not None:
             self.nets[name]["width"] = width
 
+    def nc(self, ref: str, *pins: str):
+        """pins left unconnected on purpose (an unused input, a debug pin), by number or by symbol name: the ERC no
+        longer asks for them, as KiCad's no-connect flag does"""
+        import parts
+        c = self.comps[ref]
+        c.setdefault("nc", set()).update(n for p in pins for n in (parts.resolve(c, str(p)) or [str(p)]))
+
+    def erc_allow(self, net: str, why: str):
+        """an ERC conflict the design has on purpose on ``net`` (two tri-state outputs on one SPI MISO line, each
+        enabled by its own chip select): not reported, and ``why`` kept with the board, as KiCad's ERC exclusion"""
+        self.__dict__.setdefault("erc_allowed", {})[net] = why
+
     def net_width(self, name: str) -> float:
         """the width ``name`` is routed at: its own, else what its current needs on the outer layers (min 0.2 mm)"""
         d = self.nets[name]
