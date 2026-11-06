@@ -2363,3 +2363,27 @@ def test_mounting_holes_take_references_no_part_has(tmp_path):
     txt = next(p for p in pcb.export_kicad(b, str(tmp_path)) if p.endswith(".kicad_pcb"))
     refs = re.findall(r'\(property "Reference" "([^"]*)"', open(txt).read())
     assert len(refs) == len(set(refs)) == 4
+
+
+def test_via_current_warns_of_a_power_path_through_one_via():
+    """a 3 A net that changes layer through one 0.3 mm via (~1 A) is a critic warning; three of them in parallel
+    with a 0.4 mm drill (4 A) are not"""
+    import critic
+    import pcb
+    def board(n_vias, drill):
+        b = pcb.Board("vc", [(0, 0), (30, 0), (30, 12), (0, 12)], rules="jlcpcb-2")
+        b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (3.0, 7.0), 0, "")
+        b.place("R1", "Resistor_SMD:R_2512_6332Metric", (24.0, 6.0), 0, "0.1")
+        b.place("R2", "Resistor_SMD:R_2512_6332Metric", (24.0, 1.0), 0, "0.1")   # (closing the other end)
+        b.place("F2", "Fuse:Fuse_1206_3216Metric", (20.0, 10.0), 0, "")           # (the path's far side: a fuse)
+        b.net("P", [("J1", "1"), ("R1", "1"), ("F2", "1")], amps=3.0)
+        b.net("Q", [("J1", "2"), ("R1", "2"), ("R2", "1"), ("R2", "2")], amps=0.1)
+        (xj, yj), (xr, yr) = b.pad("J1", "1"), b.pad("R1", "1")
+        b.track("P", "B", [(xj, yj), (14.0, yj)], 2.0)
+        for k in range(n_vias):
+            b.via("P", (14.0, yj - 0.9 + 0.9 * k), drill, drill + 0.4)
+        b.track("P", "F", [(14.0, yj), (xr, yr)], 2.0)
+        b.track("P", "F", [b.pad("F2", "1"), (xr, yr)], 0.6)
+        return b
+    weak = lambda b: [n for n in critic.review(b) if n["kind"] == "via current"]
+    assert weak(board(1, 0.3)) and not weak(board(3, 0.4))

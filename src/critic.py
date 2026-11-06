@@ -65,6 +65,9 @@ WHY = {
              "more.",
     "layers": "You set the layer count: more layers cost more but give room for planes and routing.",
     "assembly": "JLCPCB assembles only the parts it stocks, named by their LCSC number.",
+    "via current": "A via's plated barrel is a few hundredths of a square millimetre of copper: one 0.3 mm via carries "
+                   "about an amp before it heats like an undersized track, and a power path that changes layer through "
+                   "one is as weak as that via.",
     "via neck": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a "
                  "small part can tombstone. A short neck of track between them keeps the solder on the pad.",
     "lcsc suggested": "A part found by its value and package, not its exact part number, can be a near miss (another "
@@ -278,6 +281,16 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
     if ics and not any(GROUND.match(p["net"]) for p in board.pours):
         notes.append(_note("warning", "ground", "no ground pour: return currents and decoupling want one",
                            hint="b.pour(\"GND\", \"B\", outline)"))
+    if board.vias and placed:                           # (a power net through too few vias)
+        try:
+            weak = board.via_current()
+        except Exception:                                # (a check that cannot run says nothing)
+            weak = []
+        for net, ats, cap, amps in weak:
+            notes.append(_note("warning", "via current", f"{net} ({amps:g} A) changes layer through {len(ats)} "
+                               f"via{'s' if len(ats) > 1 else ''} near ({ats[0][0]:.1f}, {ats[0][1]:.1f}), good for "
+                               f"about {cap:g} A: the only way between its parts there", [net],
+                               hint=f"add vias there (each 0.3 mm drill ~1 A), or keep {net} on one layer"))
     if board.vias:                                       # (a via against an SMD pad of its own net: solder wicks)
         from shapely.geometry import Point
         from fab import VIA_PAD_NECK

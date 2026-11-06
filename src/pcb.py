@@ -1056,6 +1056,93 @@ class Board:
                 good[sel] |= shapely.dwithin(g, pts[sel], 0.005)
         return [(k, tuple(e)) for (k, e), ok in zip(ends, good) if not ok]
 
+    VIA_AMPS_PER_MM = 1.0 / 0.3      # A per mm of drill: a 0.3 mm via, 25 um of plating, ~1 A (IPC-2152, a short
+    #                                  barrel; a conservative figure, as the house calculators give for 10-20 C)
+
+    def via_current(self, min_amps: float = 1.0) -> List[Tuple[str, List[Tuple[float, float]], float, float]]:
+        """where a net carrying current changes layer through too few vias: for each net of at least ``min_amps``
+        and no pour (a plane spreads it over its many drops), the vias that are the only way between two parts of
+        its copper each holding a part on the net's power path (a connector, fuse, inductor, transistor, diode,
+        relay or battery: a branch to a chip, a resistor or a capacitor draws its own share, unknown, and is not
+        judged), whose drills together carry less than the net's current (``VIA_AMPS_PER_MM`` per mm of drill). [(net, via centres, their amps, the
+        net's)]"""
+        from shapely.geometry import Point
+        out = []
+        pads = self.pad_shapes()
+        pn = self.pad_net()
+        vias0 = list(self.vias)
+        try:
+            self.vias = []                               # (each layer's copper of each net without its vias)
+            self.__dict__.pop("_cu_memo", None)
+            cu = self.copper()
+        finally:
+            self.vias = vias0
+            self.__dict__.pop("_cu_memo", None)
+        poured = {pz["net"] for pz in self.pours}
+        for net, d in self.nets.items():
+            amps = d.get("amps") or 0.0
+            vs = [v for v in self.vias if v["net"] == net]
+            if amps < min_amps or not vs or net in poured:   # (a plane spreads the current over its many drops:
+                continue                                      #  each carries its own pin's share, not the net's)
+            isl = []                                     # (layer, polygon) islands of the net
+            for L in self.layers:
+                g = cu.get((net, L))
+                if g is not None and not g.is_empty:
+                    isl += [(L, q) for q in getattr(g, "geoms", [g])]
+            if len(isl) < 2:
+                continue
+            parent = list(range(len(isl)))
+
+            def find(a):
+                while parent[a] != a:
+                    parent[a] = parent[parent[a]]
+                    a = parent[a]
+                return a
+
+            def at(pt, L=None):
+                return [k for k, (L_, q) in enumerate(isl) if (L is None or L_ == L) and q.intersects(pt)]
+            for r, n, L, g, dr in pads:                  # (a plated hole joins the layers: no via needed there)
+                if dr and pn.get((r, n)) == net:
+                    ks = at(g.centroid)
+                    for a, b in zip(ks, ks[1:]):
+                        parent[find(a)] = find(b)
+            links = {}                                   # (the vias between each pair of island groups)
+            for v in vs:
+                ks = at(Point(v["at"]))
+                for a, b in zip(ks, ks[1:]):
+                    links.setdefault(tuple(sorted((find(a), find(b)))), []).append(v)
+            pins = {}                                    # (the current-carrying pins on each island group)
+            for r, n, L, g, dr in pads:
+                if pn.get((r, n)) == net and not r.upper().startswith("C"):
+                    for k in at(g.centroid, None if dr else L):
+                        pins.setdefault(find(k), set()).add((r, n))
+            for (a, b), lst in links.items():
+                if a == b:
+                    continue
+                par = {k: k for k in set(find(k) for k in range(len(isl)))}   # (the net joined without these vias)
+
+                def f2(x):
+                    while par[x] != x:
+                        x = par[x]
+                    return x
+                for (c, e), l2 in links.items():
+                    if l2 is not lst and c != e:
+                        par[f2(c)] = f2(e)
+                if f2(a) == f2(b):
+                    continue                             # (another way round: not the only way)
+                side_a = {k for k in par if f2(k) == f2(a)}
+                pa_ = set().union(*[pins.get(k, set()) for k in side_a])
+                pb_ = set().union(*[pins.get(k, set()) for k in par if k not in side_a])
+                power = lambda ps: any(re.match(r"(J|P|F|L|Q|K|BT|D)\d", r_.upper())
+                                       and "LED" not in self.comps[r_]["fp"].upper() for r_, _ in ps)
+                if not power(pa_) or not power(pb_):     # (the path of the net's current runs between connectors,
+                    continue                             #  fuses, inductors, switches, diodes: a branch to a chip or a
+                    #                                      resistor draws its own share, unknown, not judged here)
+                cap = sum(v["drill"] * self.VIA_AMPS_PER_MM for v in lst)
+                if cap + 1e-9 < amps:
+                    out.append((net, [tuple(v["at"]) for v in lst], round(cap, 2), amps))
+        return out
+
     def tidy(self) -> int:
         """dead vias taken away: a via that meets its own net's copper on fewer than two layers joins nothing (KiCad
         warns "via dangling"); the track ends meeting in it are brought to its centre first, so they still meet. And

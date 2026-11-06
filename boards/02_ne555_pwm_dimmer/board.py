@@ -46,6 +46,10 @@ def build():
     b.net("LED-", [("Q1", "3"), ("J2", "2")], amps=2.0, volts=12.0)
     b.net("PLED", [("R4", "2"), ("D3", "2")])
     b.pour("GND", "B", OUT)
+    # the strip's 2 A from J1 to J2 by hand on the bottom (both are through-hole: no via in its way, where the router
+    # had put it through one 0.3 mm via, ~1 A)
+    (x1, y1), (x2, y2) = b.pad("J1", "1"), b.pad("J2", "1")
+    b.track("12V", "B", [(x1, y1), (x1 + 4.0, y1), (x2 - 6.0, y2), (x2, y2)], 1.0)
     return b
 
 
