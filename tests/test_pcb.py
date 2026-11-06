@@ -1880,3 +1880,17 @@ def test_schematic_pin_marks_sit_on_the_wires_and_labels(tmp_path):
     pins = pcb_view._sch_pins(sch)
     assert len(pins) > 40 and {p["ref"] for p in pins} >= {"U1", "U2", "J1"}
     assert all((round(p["x"], 2), round(p["y"], 2)) in ends for p in pins)
+
+
+def test_a_regulators_input_and_output_capacitors_are_drawn_with_it():
+    """a capacitor from a supply to ground is drawn in the block of the nearest chip with a power pin on that supply:
+    the BNO085 board's LDO keeps its 1 uF input (VBUS) and output (3V3), the IMU its 100 nF"""
+    import kicad_sch
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "imu_bno085" / "imu_bno085.py"))
+    import pcb
+    pcb.autoplace(b)
+    grp = {t: set(rs) for t, rs in kicad_sch.blocks(b)}
+    ldo = next(v for t, v in grp.items() if "(U2)" in t)
+    imu = next(v for t, v in grp.items() if "(U1)" in t)
+    assert {"C1", "C2"} <= ldo and {"C3", "C4"} <= imu
