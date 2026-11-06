@@ -106,7 +106,7 @@ P("R1", R06, (43.5, 27.0), 0, "47k", "RC0603FR-0747KL", "Q1 gate pull-down")
 P("D1", "Diode_SMD:D_SMB", (49.2, 28.0), 0, "SMBJ33A", "Littelfuse SMBJ33A", "input TVS")
 P("RS1", "Resistor_SMD:R_2512_6332Metric", (48.4, 33.34), 0, "2m", "Bourns CSS2H-2512K-2L00F", "current shunt")
 P("U1", "Package_SO:MSOP-10_3x3mm_P0.5mm", (48.4, 32.8), 0, "INA226", "TI INA226AIDGSR",
-  "V / I monitor, I2C 0x40; under the shunt (bottom): Kelvin vias into each shunt pad's pour", side="B")
+  "V / I monitor, I2C 0x40; under the shunt (bottom): Kelvin vias into each shunt pad's pour", side="B", symbol="Sensor_Energy:INA226")
 P("C1", C06, (44.0, 30.6), 90, "100n", "GRM188R71H104KA93D", "INA226 VS", side="B")
 # 5 V buck (row along the top-left): TI TPS54360B datasheet design, 600 kHz
 P("U2", HSOP8, (30.0, 44.0), 0, "TPS54360B", "TI TPS54360BDDAR", "5 V / 3.5 A buck",
@@ -131,7 +131,7 @@ P("D3", "Diode_SMD:D_SMB", (20.6, 8.6), 0, "SMBJ10A", "Littelfuse SMBJ10A", "BEC
 P("Q2", D2PAK, (31.6, 15.0), 180, "SQM40031EL", "Vishay SQM40031EL-GE3", "BEC reverse-polarity P-FET")
 P("R8", R06, (40.0, 8.4), 0, "10k", "RC0603FR-0710KL", "Q2 gate pull-down")
 P("U3", HSOP8, (50.0, 21.0), 180, "TPS54560B", "TI TPS54560BDDAR", "6.0 V / 5 A servo buck (Mode A)",
-  min_drill=0.3)                       # (its thermal vias at the board house's 0.3 mm minimum)
+  min_drill=0.3, symbol="Regulator_Switching:TPS54560BDDA")                       # (its thermal vias at the board house's 0.3 mm minimum)
 P("D6", PDI5, (46.5, 15.5), 180, "PDS540", "Diodes PDS540-13", "6 V buck catch diode")
 P("L2", XAL, (47.5, 8.5), 0, "6u8", "Coilcraft XAL6060-682MEB", "6.8 uH; leave off for Mode B")
 P("C9", C06, (52.3, 16.4), 90, "100n", "GRM188R71H104KA93D", "U3 boot")
@@ -189,7 +189,7 @@ P("D8", "Diode_SMD:D_SOD-323", (77.0, 44.6), 0, "BAT54", "Diodes BAT54WS-7-F", "
 P("R19", R06, (77.0, 42.4), 0, "330R", "RC0603FR-07330RL", "continuity injection", side="B")
 # servo outputs: 74HCT244 on +5 V under the module, 100R per channel, the 3 x 6 block on the bottom edge
 P("U14", "Package_SO:TSSOP-20_4.4x6.5mm_P0.65mm", (80.0, 23.0), 0, "74HCT244", "Nexperia 74HCT244PW,118",
-  "servo buffer, 3.3 V in -> 5 V out")
+  "servo buffer, 3.3 V in -> 5 V out", symbol="74xx:74HCT244")
 for i in range(6):       # (pull-downs beside the buffer pins they hold: 1A0-1A3 on its left, 2A0 / 2A1 on its right)
     P(f"RP{i + 1}", R06, (71.5, 26.0 - 1.8 * i) if i < 4 else (86.4, 24.2 - 1.8 * (i - 4)), 180 if i < 4 else 0, "100k",
       "RC0603FR-07100KL", "servo input pull-down (reset)")
@@ -213,14 +213,14 @@ P("J9", "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical", (108.712, 
 P("U5", "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y", DATUM, 0, "ICM-42688-P", "TDK ICM-42688-P",
   "primary IMU (SPI0); its centre is the sensor datum")
 P("U6", "Package_LGA:Bosch_LGA-16_4.5x3mm_P0.5mm_LayoutBorder7x1y_ClockwisePinNumbering", (130.0, 33.0), 0, "BMI088",
-  "Bosch BMI088", "redundant IMU (SPI0)")
+  "Bosch BMI088", "redundant IMU (SPI0)", symbol="Sensor_Motion:BMI088")
 P("U7", "Package_LGA:LGA-14_3x5mm_P0.8mm_LayoutBorder1x6y", (124.6, 25.0), 0, "ADXL375", "ADI ADXL375BCCZ",
   "+-200 g accelerometer (SPI0)")
 P("U10", "Package_LGA:LGA-16_3x3mm_P0.5mm", (135.8, 25.0), 0, "MMC5983MA", "MEMSIC MMC5983MA", "magnetometer (I2C)")
 P("U8", "Prometheus_Sensor:Bosch_BMP390_LGA-10_2x2mm_P0.5mm", (126.0, 38.0), 0, "BMP390", "Bosch BMP390",
   "barometer 1 (I2C 0x77)", model=False)
 P("U9", "Prometheus_Sensor:TE_MS5607-02BA03_QFN-8_5x3mm_P1.25mm", (133.5, 38.0), 90, "MS5607", "TE MS560702BA03-50",
-  "barometer 2 (I2C 0x76)", model=False)
+  "barometer 2 (I2C 0x76)", model=False, symbol="Sensor_Pressure:MS5607-02BA")
 for ref, fp, at, rot, val, mpn in [
         ("C20", C06, (127.5, 21.0), 0, "100n", "GRM188R71H104KA93D"),
         ("C21", C06, (130.6, 21.0), 0, "2u2", "GRM188R61A225KE34D"),
@@ -244,7 +244,7 @@ P("U4", SOT235, (125.0, 15.0), 0, "TPS7A2033", "TI TPS7A2033PDBVR", "3V3A: IMUs,
 P("C33", C06, (125.0, 18.5), 0, "2u2", "GRM188R61A225KE34D", "U4 output")
 P("C34", C08, (128.8, 18.5), 0, "10u", "GRM21BR61A106KE19L", "3V3A bulk")
 # CAN-FD: TCAN332G on CAN3 (the Teensy's only FD port), 120R terminator behind a solder jumper
-P("U13", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (126.5, 10.2), 0, "TCAN332G", "TI TCAN332GDR", "CAN-FD transceiver")
+P("U13", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (126.5, 10.2), 0, "TCAN332G", "TI TCAN332GDR", "CAN-FD transceiver", symbol="Interface_CAN_LIN:TCAN332G")
 P("C35", C06, (136.0, 11.0), 0, "100n", "GRM188R71H104KA93D", "U13")
 P("R21", R06, (132.2, 11.6), 0, "120R", "RC0603FR-07120RL", "CAN termination")
 P("JP1", "Jumper:SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm", (132.6, 8.6), 0, "TERM", "", "bridge to terminate",
@@ -261,7 +261,7 @@ P("C36", "Capacitor_Tantalum_SMD:CP_EIA-7343-31_Kemet-D", (147.0, 39.5), 0, "220
   "TELEM1 bulk: the radio's 1 A transmit bursts")
 P("J8", GH6, (147.0, 3.6), 0, "GPS1", "JST BM06B-GHS-TBT", "GPS1: 5V TX RX SCL SDA GND")
 P("U11", "RF_Module:HOPERF_RFM9XW_SMD", (150.0, 25.0), 0, "RFM95W", "HopeRF RFM95W-915S2", "LoRa 915 MHz beacon (SPI1)",
-  model=False)
+  model=False, symbol="RF_Module:RFM95W-915S2")
 P("J10", "Connector_Coaxial:U.FL_Hirose_U.FL-R-SMT-1_Vertical", (162.3, 18.0), 0, "u.FL", "Hirose U.FL-R-SMT-1(10)",
   "LoRa antenna")
 P("U12", SOT235, (145.0, 11.5), 0, "TPS7A2033", "TI TPS7A2033PDBVR", "3V3R: LoRa module")
@@ -725,6 +725,7 @@ def build(do_route=True, solids=False):
         b.hole(h, 3.2, keepout=3.5)
     place_all(b, solids)
     fc_nets(b)
+    b.erc_allow("MISO", "the BMI088's accel and gyro SDO share the SPI MISO line: each is tri-stated by its own CS")
     fc_pours(b)
     b.silk_text = [("TWILIGHT FC  REV A", (30.0, 22.0), 1.6, 0.0)]          # (clear of parts, not under the Teensy)
     probs = cached_route(b, fc_route, tag="twilight-r24", store=ROUTES) if do_route else []

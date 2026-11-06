@@ -26,10 +26,10 @@ def build():
     b.place("J3", "Connector_JST:JST_PH_S2B-PH-K_1x02_P2.00mm_Horizontal", (16.0, 25.0), 180, "battery", "JST S2B-PH-K-S")
     for x, y in ((4.0, 4.0), (W - 4.0, 4.0), (4.0, H - 4.0), (W - 4.0, H - 4.0)):
         b.hole((x, y), 2.7)
-    b.place("U1", "Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm", None, 0, "TP4056", "NanJing Top Power TP4056")
-    b.place("U2", "Package_TO_SOT_SMD:SOT-23-6", None, 0, "DW01A", "Fortune DW01A")
+    b.place("U1", "Package_SO:SOIC-8-1EP_3.9x4.9mm_P1.27mm_EP2.29x3mm", None, 0, "TP4056", "NanJing Top Power TP4056", symbol="Battery_Management:TP4056-42-ESOP8")
+    b.place("U2", "Package_TO_SOT_SMD:SOT-23-6", None, 0, "DW01A", "Fortune DW01A", symbol="Battery_Management:DW01A")
     b.place("Q1", "Package_SO:TSSOP-8_4.4x3mm_P0.65mm", None, 0, "FS8205A", "Fortune FS8205A")
-    b.place("U3", "Package_TO_SOT_SMD:SOT-23-6", None, 0, "MT3608", "Aerosemi MT3608")
+    b.place("U3", "Package_TO_SOT_SMD:SOT-23-6", None, 0, "MT3608", "Aerosemi MT3608", symbol="Regulator_Switching:MT3608")
     b.place("L1", "Inductor_SMD:L_Bourns_SRN6045TA", None, 0, "22u", "Bourns SRN6045TA-220M")
     b.place("D3", "Diode_SMD:D_SOD-123", None, 0, "SS34", "SS34 Schottky")
     for ref, fp, val in (("C1", C08, "10u"), ("C2", C08, "10u"), ("C3", C06, "100n"), ("C4", C12, "22u"),

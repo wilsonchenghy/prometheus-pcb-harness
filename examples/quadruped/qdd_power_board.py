@@ -79,7 +79,7 @@ def power_board():
         b.place(ref, "Package_TO_SOT_SMD:TDSON-8-1", (-14.0, y), 180, "60V 1m45", "Infineon BSC014N06NS",
                 model=P + "TDSON-8-1.step")
     b.place("U1", "Package_SO:MSOP-10_3x3mm_P0.5mm", (-28.0, -22.0), 0, "LM5069", "TI LM5069MM-2/NOPB",
-            model="Package_SO.3dshapes/MSOP-10_3x3mm_P0.5mm.step")
+            model="Package_SO.3dshapes/MSOP-10_3x3mm_P0.5mm.step", symbol="Power_Management:LM5069MM-1")
     R06, C06 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric"
     r06m, c06m = "Resistor_SMD.3dshapes/R_0603_1608Metric.step", "Capacitor_SMD.3dshapes/C_0603_1608Metric.step"
     for ref, at, val, mpn in (("R1", (-37.0, -16.0), "102k", "RC0603FR-07102KL"), ("R2", (-37.0, -19.0), "6k65", "RC0603FR-076K65L"),
@@ -121,7 +121,7 @@ def power_board():
     b.place("H2", "Connector_PinSocket_2.54mm:PinSocket_1x15_P2.54mm_Vertical", (-17.44, 41.45), 270, "socket 1x15",
             "Samtec SSW-115-01-T-S")
     b.place("U3", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (-25.0, 85.0), 0, "SN65HVD230", "TI SN65HVD230DR",
-            model="Package_SO.3dshapes/SOIC-8_3.9x4.9mm_P1.27mm.step")
+            model="Package_SO.3dshapes/SOIC-8_3.9x4.9mm_P1.27mm.step", symbol="Interface_CAN_LIN:SN65HVD230")
     b.place("RT", "Resistor_SMD:R_0805_2012Metric", (-16.0, 85.0), 90, "120R", "RC0805FR-07120RL",
             model="Resistor_SMD.3dshapes/R_0805_2012Metric.step")
     b.place("U4", "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y", (16.0, 44.0), 0, "ICM-42688-P", "TDK ICM-42688-P",

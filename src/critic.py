@@ -73,6 +73,9 @@ WHY = {
     "split": "A net in pieces is an open circuit between them.",
     "dangling": "A track or via that leads nowhere does nothing but add an antenna and take room.",
     "drill": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
+    "symbol": "A chip drawn as a box of pad numbers has no pin names: nothing checks that pin 15 really is AIN2, and the "
+              "ERC cannot see a power pin left open. Its KiCad symbol (or one drawn from the datasheet's pin table) "
+              "makes the schematic readable and every pin checked by name.",
     "erc": "Each pin's electrical type says how it must be driven: an input left open or two outputs tied together are "
            "faults no copper check can see.",
     "datasheet": "A symbol's pin numbers must match the manufacturer's: a wrong pin is the one mistake the board checks "
@@ -244,6 +247,19 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
             notes.append(_note("info", "assembly", f"{len(missing)} of {len(board.comps)} parts have no LCSC number "
                                "(JLCPCB assembly)", missing))
     order = {"error": 0, "warning": 1, "info": 2}
+    for r, c in board.comps.items():                     # (a chip without its symbol: drawn as pad numbers, unchecked)
+        if _is_ic(c) and not re.match(r"(J|P|CN|CON)\d", r) and not c["fp"].startswith("Connector") \
+                and not (c.get("symbol") and not c["symbol"].get("auto")):
+            import parts
+            try:
+                found = parts.suggest_symbol(c)
+            except (OSError, ValueError):                # (no KiCad library here: the warning still stands)
+                found = None
+            notes.append(_note("warning", "symbol", f"{r} ({c['value']}) has no KiCad symbol: the schematic draws its "
+                               "pad numbers and its pins are not checked by name" +
+                               (f"; KiCad has {found}" if found else "; KiCad has none that fits its pads"),
+                               refs=[r], hint=f'place(..., symbol="{found}")' if found else
+                               "draw its symbol from the datasheet's pin table (symbols/), and check it against the datasheet"))
     if any(cc.get("symbol") for cc in board.comps.values()):   # (the ERC, from the parts' symbols' pin types)
         import parts
         notes += parts.erc(board)
