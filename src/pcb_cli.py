@@ -62,7 +62,8 @@ def load_netlist(path: str, a):
         ref, xy = spec.split("=")
         at[ref] = tuple(float(v) for v in xy.split(",")[:3]) + tuple(xy.split(",")[3:4])
     amps = {n: float(v) for n, v in (s_.split("=") for s_ in (a.amps or []))}
-    return pcb.from_netlist(path, (w, h), at=at, amps=amps, rules=a.rules or "jlcpcb-2", layers=a.layers), None
+    return pcb.from_netlist(path, (w, h), at=at, amps=amps, layers=a.layers,
+                            rules=a.rules or ("jlcpcb-4" if (a.layers or 2) > 2 else "jlcpcb-2")), None
 
 
 # what an agent (or a person) can change for each kind of finding: the harness reports, the designer fixes
@@ -379,7 +380,8 @@ def main(argv=None) -> int:
     ap.add_argument("script")
     ap.add_argument("out")
     ap.add_argument("--boards", type=int, default=5, help="how many boards to buy parts for (default 5)")
-    ap.add_argument("--rules", default=None, help="fab preset for the house check (default: the board's, else jlcpcb-2)")
+    ap.add_argument("--rules", default=None, help="fab preset for the house check (default: the board's, else jlcpcb-2, or jlcpcb-4 for more "
+                    "than two layers)")
     ap.add_argument("--step", action="store_true", help="also write the assembled board as STEP (needs build123d)")
     ap.add_argument("--size", help="a netlist's board size, WxH mm (e.g. 50x40)")
     ap.add_argument("--layers", type=int, default=2, help="a netlist's board: 2 or 4 layers (default 2)")

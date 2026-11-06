@@ -2320,3 +2320,31 @@ def test_courtyards_are_kicads_shapes():
     c.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 6.0), 0, "")
     c.place("R2", "Resistor_SMD:R_0603_1608Metric", (5.0, 6.0 + 1.46 - 0.03), 0, "")  # (0.03 mm over R1's)
     assert any("overlap" in p for p in c.check_placement())
+
+
+def test_house_check_of_a_four_layer_board_without_a_preset():
+    """a 4-layer board made with no house preset is checked against JLCPCB's 4-layer process, not refused by the
+    2-layer one for its layer count"""
+    import fab
+    import pcb
+    b = pcb.Board("l4", [(0, 0), (20, 0), (20, 20), (0, 20)], layers=4)
+    assert not any("layers" in p for p in fab.fab_check(b))
+    assert any("layers" in p for p in fab.fab_check(b, "jlcpcb-2"))
+
+
+def test_a_via_moved_off_its_pad_takes_every_track_end_in_its_ring():
+    """neck_vias brings along each track end its via's ring holds, not only one at its centre (FreeRouting ends a
+    track 0.2 mm off a via's centre; left behind, the track dangled)"""
+    import pcb
+    b = pcb.Board("nv2", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("C1", "Capacitor_SMD:C_0805_2012Metric", (8.0, 6.0), 0, "10u")
+    b.place("C2", "Capacitor_SMD:C_0805_2012Metric", (14.0, 6.0), 0, "10u")
+    b.net("A", [("C1", "2"), ("C2", "2")])
+    x, y = b.pad("C1", "2")
+    (x2, y2) = b.pad("C2", "2")
+    b.via("A", (x + 0.75, y))                             # (against C1.2: it moves ~0.3 mm off)
+    b.track("A", "B", [(x + 0.75 - 0.15, y + 0.15), (x2 - 1.5, y2)], 0.25)   # (its end in the ring, off centre)
+    b.via("A", (x2 - 1.5, y2))
+    b.track("A", "F", [(x2 - 1.5, y2), (x2, y2)], 0.25)
+    assert not pcb.neck_vias(b)
+    assert not any("dangling" in p for p in b.check()) and len(b.islands("A")) == 1

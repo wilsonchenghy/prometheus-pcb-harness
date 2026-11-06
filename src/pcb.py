@@ -3092,8 +3092,9 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
         fixed = board.copper(pours=False)
         others = {L: unary_union([g for (nt, l), g in fixed.items() if l == L and nt != v["net"]] or [Point(0, 0).buffer(0)])
                   for L in board.layers}
-        ends = [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)
-                if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < 0.02]
+        ends = [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)   # (every end the via's ring
+                if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < v["dia"] / 2]  # holds:
+        #                                                    FreeRouting ends a track off the via's centre too)
         pad_at = g0.representative_point().coords[0]
         mrr = g0.minimum_rotated_rectangle.exterior.coords   # (the track off the pad: as wide as the net needs,
         minor = min(math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2]))   # up to the pad's own width - a 0.2 mm
