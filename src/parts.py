@@ -557,3 +557,46 @@ def fill_lcsc(board, boards: int = 5) -> Dict[str, str]:
                 got[ref] = c["lcsc"]
                 break
     return got
+
+
+def suggest_query(comp: dict) -> Optional[tuple]:
+    """(query, words a hit must carry) from a part's footprint and value, for a part its MPN found nothing for: a
+    pin header by its rows, pins and pitch; a crystal by its frequency and size. None for other parts"""
+    # ponytail: headers and crystals only (the misses seen so far); add a family when a board shows one
+    fp = comp["fp"].split(":")[-1]
+    m = re.search(r"PinHeader_(\d)x(\d+)_P([\d.]+)mm", fp)
+    if m:
+        n = f"{m[1]}x{int(m[2])}P"
+        return f"{n} {m[3]}mm pin header", [n.lower(), m[3] + "mm"]
+    m = re.match(r"Crystal_SMD_(\d{4})", fp)
+    val = (comp.get("value") or "").split()
+    if m and val:
+        f = val[0] if val[0].lower().endswith("hz") else val[0] + "Hz"
+        return f"{f} {m[1]}", [f.lower(), m[1]]      # (no "crystal" in it: JLCPCB then ranks other load caps first)
+    return None
+
+
+def suggest_lcsc(board, boards: int = 5) -> Dict[str, dict]:
+    """for each part still without an LCSC number, JLCPCB's likeliest part by its footprint and value (basic first,
+    then stock), marked on the part as ``lcsc_suggested``: never put in the BOM or the cart, the engineer adopts one
+    by giving ``lcsc=``, since a search this loose can find a near miss (a crystal of another load capacitance)"""
+    got: Dict[str, dict] = {}
+    for ref, c in board.comps.items():
+        q = None if c.get("lcsc") else suggest_query(c)
+        if not q:
+            continue
+        query, words = q
+        try:
+            found = _jlc(query)
+        except OSError:
+            continue
+        vertical = "Vertical" in c["fp"]
+        hits = [h for h in found if (h.get("stock") or 0) >= boards * 2
+                and all(w in f"{h.get('package', '')} {h['description']}".lower() for w in words)
+                and not (vertical and "right angle" in h["description"].lower())]
+        if hits:
+            h = max(hits, key=lambda h: (bool(h.get("is_basic")), h["stock"]))
+            c["lcsc_suggested"] = got[ref] = {"lcsc": f"C{h['lcsc']}", "part": h["mfr"], "query": query,
+                                              "stock": h["stock"], "basic": bool(h.get("is_basic")),
+                                              "why": "no match for its MPN; found by value and package"}
+    return got
