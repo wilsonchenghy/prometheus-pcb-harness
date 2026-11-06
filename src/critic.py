@@ -84,6 +84,8 @@ WHY = {
            "faults no copper check can see.",
     "datasheet": "A symbol's pin numbers must match the manufacturer's: a wrong pin is the one mistake the board checks "
                  "cannot catch.",
+    "label": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left "
+             "off the silkscreen has to be looked up in the drawings.",
     "evidence": "A choice cited to a datasheet must say what that page says: a quote not there is a value remembered, "
                 "not read.",
 }
@@ -271,6 +273,13 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
         if g and not c.get("lcsc"):
             notes.append(_note("info", "lcsc suggested", f"{r}: no LCSC number; JLCPCB has {g['lcsc']} ({g['part']}, by "
                                f"'{g['query']}'): add lcsc= if it is the right part", [r], hint=f"lcsc=\"{g['lcsc']}\""))
+    if placed:                                           # (a reference with no room beside its part)
+        import pcb
+        off = sorted(r for r, v in pcb.place_refs(board).items() if v is None)
+        if off:
+            notes.append(_note("warning", "label", f"no room on the silkscreen for {', '.join(off)}: left on the "
+                               "assembly layer", off, hint="move the part (or its neighbours) to leave a label's "
+                               "height clear beside it; autoplace keeps that room for the parts it places"))
     order = {"error": 0, "warning": 1, "info": 2}
     for r, c in board.comps.items():                     # (a chip without its symbol: drawn as pad numbers, unchecked)
         if _is_ic(c) and not re.match(r"(J|P|CN|CON)\d", r) and not c["fp"].startswith("Connector") \

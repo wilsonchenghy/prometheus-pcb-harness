@@ -1123,6 +1123,26 @@ def test_placer_holds_required_parts_near_and_is_repeatable():
     assert {r: v["at"] for r, v in a.comps.items()} == {r: v["at"] for r, v in c.comps.items()}
 
 
+def test_placer_lines_up_like_parts():
+    """autoplace's last step: like passives on the 0.5 mm grid, neighbours on one line (turned one way where it
+    is free)"""
+    import pcb
+    out = [(0, 0), (40, 0), (40, 30), (0, 30)]
+    b = pcb.Board("al", out, rules="jlcpcb-2")
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical", (4.0, 15.0), 0, "in")
+    b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", None, 0, "IC")
+    for k in range(5):
+        b.place(f"R{k + 1}", "Resistor_SMD:R_0603_1608Metric", None, 0, "1k")
+        b.net(f"S{k}", [("J1", str(k + 1)), (f"R{k + 1}", "1")])
+        b.net(f"T{k}", [(f"R{k + 1}", "2"), ("U1", str(k + 1))])
+    b.net("GND", [("J1", "6"), ("U1", "8")])
+    pcb.autoplace(b, seed=0)
+    rs = [b.comps[f"R{k + 1}"] for k in range(5)]
+    assert sum(all(abs(v / 0.5 - round(v / 0.5)) < 1e-6 for v in c["at"]) for c in rs) >= 3
+    assert max(sum(abs(o["at"][i] - c["at"][i]) < 1e-6 for o in rs) for c in rs for i in (0, 1)) >= 2
+    assert b.check_placement() == []
+
+
 def test_stage_check_starts_from_the_saved_board(tmp_path, capsys):
     """a route run saves the board; --stage check then reuses its placement and copper without routing"""
     import json
