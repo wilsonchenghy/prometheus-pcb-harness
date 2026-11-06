@@ -172,6 +172,12 @@ decoupling capacitors on one rail are drawn as a bank (one rail label, one groun
 - Never claim a board is done unless `clean` is true. Report the findings that remain, as they are.
 - The checks prove the copper joins the pins you named; they cannot know you named the right pins. Take pin
   numbers from the datasheet and say when one is assumed.
+- Cite the datasheet for every pin you assume and every value you choose from it (a decoupling capacitor, a
+  pull-up, a feedback divider): `place(..., cite={"page": 12, "quote": "Place a 0.1 µF capacitor"})`,
+  `net(..., cite=...)` or `b.cite(ref, what, value, page, quote, url=None)`. The quote is the datasheet's own
+  words on that (1-based) page. With `--datasheets` the run checks each quote is on its page (a warning if not);
+  result.json's `evidence` lists them and the viewer opens the datasheet there. A value with no page to cite is
+  an assumption: say so.
 - Fix a finding by changing the design (positions, widths, the outline), not by loosening the rules.
 - Place connectors, buttons and mounting holes yourself (the enclosure decides them); let the placer do the rest.
   For a dense fine-pitch board (0.4 mm QFN), place the chip and its decoupling yourself too.

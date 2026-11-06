@@ -1218,6 +1218,8 @@ def test_datasheet_pin_table_is_held_against_the_symbol():
             "nFAULT 16 8 OD Fault output\\nAISEN 2 3 IO\\nBISEN 5 6 IO\\nAOUT1 1 2 O\\nAOUT2 3 4 O\\nBOUT1 6 7 O\\nBOUT2 4 5 O\\n")
     r = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=["contents", page.replace("\\\\n", "\\n")])
     assert r["agree"] == r["total"] == 17 and r["page"] == 2, [p for p in r["pins"] if p["status"] != "agrees"]
+    ain2 = next(p for p in r["pins"] if p["name"] == "AIN2")       # (where each pin was read, and its words there)
+    assert ain2["page"] == 2 and ain2["quote"] == "AIN2 13 15", ain2
     bad = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=[page.replace("AIN1 14 16", "AIN1 14 99")])
     assert [(p["name"], p["status"]) for p in bad["pins"] if p["status"] != "agrees"] == [("AIN1", "differs")]
 
@@ -1229,6 +1231,7 @@ def test_datasheet_numbered_list_and_other_names():
     ams = "PIN CONNECTIONS\n3 PIN FIXED/ADJUSTABLE VERSION\n1- Ground/Adjust\n2- VOUT\n3- VIN\nSOT-223 Top View"
     r = parts.datasheet_check("Regulator_Linear:AMS1117-3.3", pages=["front page", ams])
     assert r["agree"] == r["total"] == 3 and r["page"] == 2, r["pins"]
+    assert {p["name"]: p["quote"] for p in r["pins"]}["VO"] == "2- VOUT"
     bad = parts.datasheet_check("Regulator_Linear:AMS1117-3.3", pages=[ams.replace("2- VOUT\n3- VIN", "2- VIN\n3- VOUT")])
     assert sorted(p["name"] for p in bad["pins"] if p["status"] == "differs") == ["VI", "VO"], bad["pins"]
     can = ("Pin Functions\n1D 8  RS \n2GND 7  CANH\n3VCC 6  CANL\n4R 5  Vref\nD 1 I Driver input\nGND 2 GND\n"
@@ -1238,6 +1241,29 @@ def test_datasheet_numbered_list_and_other_names():
     # no pin table (a pinout drawing only): nothing is called wrong
     r = parts.datasheet_check("Interface_CAN_LIN:SN65HVD230", pages=["Features\nD 1 GND 2 R 4\nTypical application"])
     assert r["page"] is None and {p["status"] for p in r["pins"]} == {"not checked"}
+
+
+def test_a_cited_choice_is_held_against_its_datasheet_page():
+    """place(cite=), net(cite=) and cite() collect the datasheet's page and words for a choice; each is found (or
+    not) on that page of the datasheet's text, its link the part's symbol's unless given, and a quote not on its page
+    is warned of"""
+    import parts
+    import pcb
+    import pytest
+    b = pcb.Board("cite", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.place("C1", "Capacitor_SMD:C_0603_1608Metric", (5, 5), 0, "100n",
+            cite={"what": "decoupling", "page": 2, "quote": "Place a 0.1 µF  capacitor"})
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (9, 5), 0, "10k")
+    b.net("SDA", [("R1", "1"), ("C1", "1")], cite={"page": 3, "quote": "pull-up of 10 kΩ"})
+    b.cite("R1", "pull-up", "10k", 3, "4.7 kΩ", url="https://x/ds.pdf")          # (page 1 says it, not 3)
+    with pytest.raises(ValueError):
+        b.cite("R1", "pull-up", "10k", 0, "")
+    b.comps["C1"]["symbol"] = {"datasheet": "https://x/ds.pdf"}
+    pages = ["Use 4.7kΩ pull-ups", "Placea0.1µF capacitor\nnear each pin", "SDA: pull-up of 10 kΩ"]
+    ev = parts.evidence(b, read=lambda u: pages)
+    assert [(e["ref"], e["what"], e["found"]) for e in ev] == [("C1", "decoupling", True), ("R1", "net SDA", None),
+                                                                ("R1", "pull-up", False)]
+    assert ev[0]["url"] == "https://x/ds.pdf" and ev[1]["url"] is None and ev[0]["quote"] == "Place a 0.1 µF capacitor"
 
 
 def test_nudge_vias_parts_two_nets_drills():

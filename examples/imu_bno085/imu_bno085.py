@@ -43,6 +43,9 @@ def build():
                                ("R5", R04, "4k7", "SDA up"), ("R6", R04, "4k7", "SCL up"),
                                ("R7", R04, "10k", "H_CSN up")):
         b.place(ref, fp, *FIXED.get(ref, (None, 0)), val, note=note)
+    ds = b.comps["U1"]["symbol"]["datasheet"]                            # (the values the datasheet gives: cited)
+    b.cite("C5", "capacitor on CAP", "100n", 10, "External capacitor (100nF to", url=ds)
+    b.cite("Y1", "crystal", "32.768k", 10, "an external 32.768 kHz", url=ds)
 
     u = lambda n: ("U1", PIN[n])
     b.net("VBUS", [("J1", p) for p in ("A4", "A9", "B4", "B9")] + [("U2", "VIN"), ("U2", "EN"), ("C1", "1")],

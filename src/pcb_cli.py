@@ -599,6 +599,7 @@ def main(argv=None) -> int:
         print(f"wrote {a.out}: review {files['report']}, parts {files['html']}")
     print(f"({time.perf_counter() - t0:.1f} s: " + ", ".join(f"{k} {v} s" for k, v in timings.items()) + ")")
     clean = not (probs or chk or fchk or kchk or schk or crit_err) and (routed or stage in ("place", "critic"))
+    import parts                                         # (the citations, read against the datasheets with --datasheets)
     result = {"board": b.name, "script": os.path.abspath(a.script), "stage": stage, "clean": clean, "kicad_drc": kicad,
               "router": getattr(b, "router_used", "none (routed by the script)"),
               "skipped": getattr(b, "skipped", []),      # (what this run left out, why, and how to add it)
@@ -610,6 +611,7 @@ def main(argv=None) -> int:
                                                           ("kicad", kchk), ("schematic", schk))
                            for p in ps],
               "critic": notes, "lcsc_auto": lcsc_auto, "lcsc_suggested": lcsc_suggested,
+              "evidence": parts.evidence(b, read=None if a.datasheets else (lambda u: None)),
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)

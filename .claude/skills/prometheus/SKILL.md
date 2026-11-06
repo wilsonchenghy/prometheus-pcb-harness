@@ -14,7 +14,8 @@ and let them choose; explain each fix with its finding's `why`. Build end to end
    approval: ask first, recommending they be installed. Only if they cannot be, or nobody answers, go on: a run still gives a board (the
    built-in router) and lists what it skipped in `result.json` (`skipped`); tell the user.
 2. Write `board.py` with a `build()` returning a `pcb.Board` (outline, parts with real KiCad footprints and pin
-   numbers from the datasheet, nets with their current, pours), or start from a KiCad netlist (`.net`); for a revision of a finished KiCad
+   numbers from the datasheet, each assumed pin and chosen value cited with `cite={"page", "quote"}` (AGENTS.md),
+   nets with their current, pours), or start from a KiCad netlist (`.net`); for a revision of a finished KiCad
    board, `prometheus import design.kicad_pcb rev2/` writes that board.py (AGENTS.md). Place
    every IC with its KiCad symbol (`symbol="Lib:Name"`; `prometheus part Lib:Name` shows it) and wire its pins by
    name: pins are then checked against pads both ways and an ERC runs. Place
