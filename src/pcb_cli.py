@@ -558,9 +558,10 @@ def main(argv=None) -> int:
                 print(f"revised design: {rv['file']} ({len(rv['moved'])} moved, {len(rv['added'])} added, "
                       f"{len(rv['removed'])} taken away, {len(rv['rerouted'])} nets routed again"
                       f"{': ' + ', '.join(rv['rerouted']) if rv['rerouted'] else ''}; {rv['kept']} nets as they were)")
-                if rv["added"] or rv["removed"]:
-                    print("  its schematic is the designer's, unchanged: add or take away "
-                          + ", ".join(rv["added"] + rv["removed"]) + " there too")
+                for n_ in rv["schematic"]:              # (what the revised schematic still differs in)
+                    print(f"  schematic: {n_}")
+                if (rv["added"] or rv["removed"]) and not rv["schematic"]:
+                    print("  schematic revised to match (KiCad's netlist of it is the board's)")
             except Exception as e:
                 b.skip("the revised design (the imported .kicad_pcb, written back)", f"{type(e).__name__}: {str(e)[:200]}",
                        "KiCad's pcbnew Python (docs/setup.md)")

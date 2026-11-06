@@ -151,8 +151,11 @@ anything. Then make the change they ask for in `board.py` (move a part, add one,
 again: nets whose parts did not move keep their copper exactly, the nets of moved parts are routed again. Each run
 also writes the design back revised, `out/revised/<name>.kicad_pcb` (KiCad's own pcbnew; the import keeps the
 original in `rev2/source/`): the designer's own file with only the moved, added or removed parts and the re-routed
-nets changed, the rest (arcs, zones, net classes, each footprint's link to the schematic) theirs. Their schematic
-is copied unchanged: a part added or taken away must be added or taken away there too (the run says which). The
+nets changed, the rest (arcs, zones, net classes, each footprint's link to the schematic) theirs. Their top
+sheet is revised with it: a part added is drawn there (a net label on each pin; a net the sheet does not name gets
+a label at one of its pins too), a part taken away goes with the wires that led only to it, and KiCad's netlist of
+the revised sheet is checked against the board (what still differs is printed, e.g. a net only on a sub-sheet: wire
+it by hand). Their other sheets are copied unchanged. The
 import prints what it left out (drawings on layers the board house does not make; boards over 4 layers are refused);
 keep the `.kicad_pro` beside the board, or its rules are unknown.
 

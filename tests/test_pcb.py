@@ -1658,6 +1658,48 @@ def test_kicad_layout_imports_as_a_board_script_and_a_revision_keeps_the_rest(tm
     assert pcb.kicad_drc(rv["file"])["errors"] == []
 
 
+def test_a_revision_adds_and_takes_parts_off_the_designers_schematic_too(tmp_path):
+    """an imported design with its schematic: a part added (R9), one taken away (R2), one moved (Q2); the revised
+    schematic's own netlist (KiCad's) is the board's, R9's footprint links to its new symbol, and the sheet has no
+    ERC finding the original did not"""
+    import re
+    import shutil
+    import subprocess
+    import pcb
+    import pcb_cli
+    import kicad_import
+    import freerouting
+    if not (freerouting.kicad_available() and shutil.which("kicad-cli")):
+        pytest.skip("KiCad (pcbnew and kicad-cli) not installed")
+    b = pcb.Board("syn", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("Q1", "Package_TO_SOT_SMD:SOT-23", (8.0, 10.0), 90, "Q")
+    b.place("Q2", "Package_TO_SOT_SMD:SOT-23", (22.0, 10.0), 30, "Q", side="B")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (15.0, 4.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (15.0, 16.0), 0, "1k")
+    b.net("A", [("Q1", "1"), ("Q2", "1")])
+    b.net("B", [("Q1", "3"), ("R1", "1"), ("R2", "1")])
+    b.net("GND", [("Q1", "2"), ("Q2", "2"), ("R1", "2"), ("R2", "2")])
+    assert not pcb.autoroute(b) and not b.check()
+    paths = pcb.export_kicad(b, str(tmp_path / "k"))
+    kicad_import.write(paths[0], str(tmp_path / "rev"))
+    script = tmp_path / "rev" / "board.py"
+    s = script.read_text().replace("(22.0, 10.0)", "(23.0, 12.0)").replace("b.place('R2'", "# b.place('R2'")
+    s = s.replace("b.net('B', [", "b.place('R9', 'Resistor_SMD:R_0603_1608Metric', (5.0, 16.0), 0, '4k7')\n"
+                  "b.net('B', [('R9', '1'), ").replace("b.net('GND', [", "b.net('GND', [('R9', '2'), ")
+    script.write_text(s.replace(", ('R2', '1')", "").replace(", ('R2', '2')", ""))
+    d, probs = pcb_cli.load(str(script))
+    assert not probs and d.check() == []
+    rv = kicad_import.revise(d, str(tmp_path / "out"))
+    assert (rv["moved"], rv["added"], rv["removed"], rv["schematic"]) == (["Q2"], ["R9"], ["R2"], [])
+    sch = pcb._sx_parse((tmp_path / "out" / "rev.kicad_sch").read_text())
+    r9 = next(x for x in sch if isinstance(x, list) and x[:1] == ["symbol"] and pcb._find(x, "lib_id")
+              and any(p[1] == "Reference" and p[2] == "R9" for p in pcb._find(x, "property")))
+    assert f'(path "/{pcb._find(r9, "uuid")[0][1]}")' in open(rv["file"]).read()     # (its footprint: linked to it)
+    erc = lambda f: sorted(re.findall(r"^\[(\w+)\]", subprocess.run(["kicad-cli", "sch", "erc", "-o", str(tmp_path / "e.rpt"), f],
+                                                                capture_output=True) and (tmp_path / "e.rpt").read_text(), re.M))
+    assert erc(str(tmp_path / "out" / "rev.kicad_sch")) == erc(str(tmp_path / "rev" / "source" / "rev.kicad_sch"))
+
+
 def test_import_carries_cutouts_slots_artwork_labels_and_rules(tmp_path):
     """what a revision must not lose: a cut-out (edge in the Gerber, both KiCad rings), a slot drilled as a slot
     (G85), a logo on the silkscreen and the mask, bottom text with its justify, each designator where it was put,
