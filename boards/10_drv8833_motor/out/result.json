@@ -1,0 +1,166 @@
+{
+ "board": "drv8833_motor",
+ "script": "/home/user/prometheus-pcb-harness/boards/10_drv8833_motor/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": false,
+  "skipped": "KiCad (kicad-cli) is not installed",
+  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+ },
+ "router": "harness",
+ "skipped": [
+  {
+   "what": "FreeRouting",
+   "why": "KiCad or Java is not installed: routed with the built-in router",
+   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
+  }
+ ],
+ "environment": {
+  "kicad": false,
+  "kicad_python": false,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 13,
+ "nets": 16,
+ "layers": 2,
+ "seconds": 3.7,
+ "timings": {
+  "place+route": 1.84,
+  "critic": 0.021,
+  "check": 0.19,
+  "export": 1.15
+ },
+ "placement": {
+  "J1": [
+   5.2,
+   14.325,
+   270,
+   "F"
+  ],
+  "J2": [
+   34.8,
+   4.3,
+   90,
+   "F"
+  ],
+  "J3": [
+   34.8,
+   16.2,
+   90,
+   "F"
+  ],
+  "J4": [
+   4.5,
+   2.5,
+   90,
+   "F"
+  ],
+  "U1": [
+   23.0,
+   14.0,
+   180,
+   "F"
+  ],
+  "C1": [
+   13.3,
+   12.85,
+   270,
+   "F"
+  ],
+  "C2": [
+   15.9,
+   13.549999999999999,
+   270,
+   "F"
+  ],
+  "C3": [
+   17.45,
+   15.1,
+   90,
+   "F"
+  ],
+  "C4": [
+   17.6,
+   12.1,
+   270,
+   "F"
+  ],
+  "R1": [
+   20.2,
+   6.85,
+   270,
+   "F"
+  ],
+  "R2": [
+   22.8,
+   6.75,
+   270,
+   "F"
+  ],
+  "R3": [
+   20.75,
+   19.25,
+   90,
+   "F"
+  ],
+  "D1": [
+   23.55,
+   19.3,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via BIN1 at (20.75, 16.50) is 0.00 mm from U1.9 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via nFAULT at (25.25, 16.50) is 0.00 mm from U1.8 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "J2": "C7509570",
+  "J3": "C7509570",
+  "C1": "C9807",
+  "C2": "C1590",
+  "C3": "C327204",
+  "C4": "C100082",
+  "R1": "C25804",
+  "R2": "C25804",
+  "R3": "C21190",
+  "D1": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/10_drv8833_motor/out/kicad8.zip"
+ }
+}

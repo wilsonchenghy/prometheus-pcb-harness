@@ -28,3 +28,17 @@ Rules learned so far:
   run with `PCB_REROUTE=1`.
 - USB-C receptacle at more than ~2 A: copper wider than ~0.52 mm does not fit beside its 0.5 mm-pitch pins; draw
   VBUS by hand (see 03_usbc_power_breakout) or rate the board lower.
+- A board with any `b.track()` in `build()` is never written to `routes/` (pcb_cli only caches boards it routed
+  from nothing: `store = ... if not b.tracks`); say so in the docstring and leave `routes/` empty.
+- 0.65 mm-pitch power ICs (DRV8833 HTSSOP): the built-in router cannot bring a multi-amp feed or the pump/VINT caps
+  in between the pins. Draw the power side by hand: the feed straight along the pin's own y, wide, necking to 0.4 mm
+  for its last <1.5 mm (`NECK_LEN`, the pin-entry exemption), caps with one pad sitting on the bus, short tracks
+  from the GND/ISEN pins into the exposed pad (also <1.5 mm long, or they count as too narrow for the net's amps),
+  and signal escapes as short stubs that clear the caps; the router finishes from the stubs.
+- A low-current pin on a high-current net (INA219 IN+ on the shunt's 3 A side) gets routed at the net's full width
+  and fails: give it its own net through the part that belongs there anyway (the 10 ohm input-filter resistor), and
+  make the high-current nets F pours (`b.pour("VIN+", "F", rect)`) with the GND F pour kept to the other half.
+- Terminal-block courtyards are deep (MKDS 5.08: ~5.7 mm behind the pads, PT 3.5: ~5 mm): check them with
+  `b.courtyard(ref).bounds` before placing parts beside them; on a left edge (rot 270) the PT 3.5 needs x >= 5.2.
+- Pin order decides crossings: pick the header pin order and which terminal pin is which from the IC's pin order
+  (e.g. motor B wired OUT2 -> pin 1) and say so in the docstring.

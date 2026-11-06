@@ -1,0 +1,9 @@
+Comment,Designator,Footprint,LCSC Part #
+100n,"C1,C2",C_0603_1608Metric,C14663
+1 VIN- / 2 VIN+,J1,"TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",C7509570
+I2C,J2,PinHeader_1x04_P2.54mm_Vertical,C2829861
+0R1 1% 3W,R1,R_2512_6332Metric,C840616
+10k,"R2,R3",R_0603_1608Metric,C25804
+0R,"R4,R5",R_0603_1608Metric,
+10R,"R6,R7",R_0603_1608Metric,C22859
+INA219,U1,SOIC-8_3.9x4.9mm_P1.27mm,C138706
