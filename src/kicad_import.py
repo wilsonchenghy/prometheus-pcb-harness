@@ -506,6 +506,40 @@ def revise(board, out_dir: str) -> dict:
     return got
 
 
+def _schematic_symbols(path: str) -> Dict[str, tuple]:
+    """{reference: (lib_id, {pins flagged no-connect})} of the parts on the design's schematic sheets beside
+    ``path`` (power symbols aside): the board file does not say which symbol a part is, nor which of its pins are
+    left open on purpose; its schematic does"""
+    out: Dict[str, tuple] = {}
+    for sch in sorted(Path(path).parent.glob("*.kicad_sch")):
+        try:
+            tree = _sx_parse(sch.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        libs = {str(x[1]): x for lb in _find(tree, "lib_symbols") for x in lb[1:] if isinstance(x, list)}
+        flags = [(float(a[1]), float(a[2])) for nc in tree if isinstance(nc, list) and nc[:1] == ["no_connect"]
+                 for a in _find(nc, "at")]
+        for s_ in tree:
+            if not (isinstance(s_, list) and s_[:1] == ["symbol"] and _find(s_, "lib_id")):
+                continue
+            lib_id = str(_find(s_, "lib_id")[0][1])
+            ref = next((str(p_[2]) for p_ in _find(s_, "property") if len(p_) > 2 and str(p_[1]) == "Reference"), "")
+            if not ref or ref.startswith("#") or lib_id.startswith("power:"):
+                continue
+            unit = int(_find(s_, "unit")[0][1]) if _find(s_, "unit") else 1
+            nc = set()
+            if lib_id in libs and flags:
+                for num, ends in _pin_ends(libs[lib_id]).items():
+                    for x, y, u, _ in ends:
+                        if u in (0, unit):
+                            q = _on_sheet(s_, x, y)
+                            if any(abs(q[0] - fx) < 0.01 and abs(q[1] - fy) < 0.01 for fx, fy in flags):
+                                nc.add(num)
+            prev = out.get(ref, (lib_id, set()))
+            out[ref] = (prev[0], prev[1] | nc)
+    return out
+
+
 def write(path: str, out_dir: str) -> dict:
     """``out_dir``/board.py, routes.json and footprints/ from the layout in ``path``; what was written and the notes"""
     out = Path(out_dir)
@@ -538,14 +572,29 @@ def write(path: str, out_dir: str) -> dict:
     for ring in b.outline.interiors:
         L.append(f"b.cutout({[(r(x), r(y)) for x, y in ring.coords[:-1]]!r})")
     L.append("")
+    syms = _schematic_symbols(path)
     for ref, c in b.comps.items():
         kw = "".join(f", {k}={v!r}" for k, v in (("mpn", c["mpn"]), ("lcsc", c["lcsc"])) if v)
         kw += ', side="B"' if c["side"] == "B" else ""
+        g = b.courtyard(ref)                             # (a part over the edge in the design: a connector placed so)
+        if g is not None and not b.outline.contains(g):
+            kw += ", overhang=True"
+        if ref in syms:                                  # (its symbol from the schematic, when it is KiCad's and its
+            try:                                         #  pins are the footprint's pads: pins by name, the ERC)
+                import parts
+                sym = parts.symbol(syms[ref][0])
+                if {q["num"] for q in sym["pins"]} == {n_ for n_ in c["pads"] if n_}:
+                    kw += f", symbol={syms[ref][0]!r}"
+            except Exception:                            # (a symbol of the project's own library, or offline)
+                pass
         kw += f", label={tuple(round(v, 4) for v in c['label'])!r}" if c.get("label") else ", label=False"
         L.append(f"b.place({ref!r}, {c['fp']!r}, ({r(c['at'][0])}, {r(c['at'][1])}), {r(c['rot'])}, {c['value']!r}{kw})")
     L.append("")
     for n, d in b.nets.items():
         L.append(f"b.net({n!r}, {d['pins']!r})")
+    for ref, (_, nc) in sorted(syms.items()):            # (the pins the schematic flags no-connect: open on purpose)
+        if ref in b.comps and nc:
+            L.append(f"b.nc({ref!r}, {', '.join(repr(n_) for n_ in sorted(nc, key=lambda v: (len(v), v)))})")
     if b.pours or getattr(b, "keepouts", None) or b.silk_text or b.holes:
         L.append("")
     for x, y, d in b.holes:

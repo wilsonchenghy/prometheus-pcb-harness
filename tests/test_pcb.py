@@ -2387,3 +2387,27 @@ def test_via_current_warns_of_a_power_path_through_one_via():
         return b
     weak = lambda b: [n for n in critic.review(b) if n["kind"] == "via current"]
     assert weak(board(1, 0.3)) and not weak(board(3, 0.4))
+
+
+def test_import_keeps_overhang_symbols_and_no_connects(tmp_path):
+    """a board exported and imported back (prometheus import) keeps an edge connector's overhang, each part's
+    symbol (read from the project's schematic, used when its pins are the footprint's pads) and the pins the
+    schematic flags no-connect"""
+    import kicad_import
+    import pcb
+    b = pcb.Board("rt", [(0, 0), (30, 0), (30, 18), (0, 18)], rules="jlcpcb-2")
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (3.2, 9.0), 270, "USB-C",
+            overhang=True, symbol="Connector:USB_C_Receptacle_USB2.0_16P")
+    b.place("U1", None, (18.0, 9.0), 0, "CH340C", symbol="Interface_USB:CH340C")
+    b.net("D+", [("J1", "A6"), ("J1", "B6"), ("U1", "UD+")])
+    b.net("D-", [("J1", "A7"), ("J1", "B7"), ("U1", "UD-")])
+    b.nc("U1", "nRI", "nDCD")
+    paths = pcb.export_kicad(b, str(tmp_path / "k"))
+    kpcb = next(p for p in paths if p.endswith(".kicad_pcb"))
+    kicad_import.write(kpcb, str(tmp_path / "rev"))
+    src = (tmp_path / "rev" / "board.py").read_text()
+    j1 = next(ln for ln in src.splitlines() if ln.startswith("b.place('J1'"))
+    u1 = next(ln for ln in src.splitlines() if ln.startswith("b.place('U1'"))
+    assert "overhang=True" in j1 and "symbol='Interface_USB:CH340C'" in u1
+    nc = next(ln for ln in src.splitlines() if ln.startswith("b.nc('U1'"))
+    assert "'11'" in nc and "'12'" in nc                 # (nRI, nDCD)
