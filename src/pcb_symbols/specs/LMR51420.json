@@ -1,0 +1,40 @@
+{
+ "lib": "Prometheus",
+ "name": "LMR51420",
+ "ref": "U",
+ "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+ "datasheet": "https://www.ti.com/lit/ds/symlink/lmr51420.pdf",
+ "description": "36 V 2 A step-down converter (TI LMR51420, pin functions)",
+ "pins": [
+  [
+   1,
+   "GND",
+   "power_in"
+  ],
+  [
+   2,
+   "SW",
+   "power_out"
+  ],
+  [
+   3,
+   "VIN",
+   "power_in"
+  ],
+  [
+   4,
+   "FB",
+   "input"
+  ],
+  [
+   5,
+   "EN",
+   "input"
+  ],
+  [
+   6,
+   "CB",
+   "passive"
+  ]
+ ]
+}

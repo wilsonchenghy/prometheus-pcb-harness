@@ -255,7 +255,7 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
                 found = parts.suggest_symbol(c)
             except (OSError, ValueError):                # (no KiCad library here: the warning still stands)
                 found = None
-            notes.append(_note("warning", "symbol", f"{r} ({c['value']}) has no KiCad symbol: the schematic draws its "
+            notes.append(_note("error", "symbol", f"{r} ({c['value']}) has no KiCad symbol: the schematic draws its "
                                "pad numbers and its pins are not checked by name" +
                                (f"; KiCad has {found}" if found else "; KiCad has none that fits its pads"),
                                refs=[r], hint=f'place(..., symbol="{found}")' if found else

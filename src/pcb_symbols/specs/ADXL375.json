@@ -1,0 +1,80 @@
+{
+ "lib": "Prometheus",
+ "name": "ADXL375",
+ "ref": "U",
+ "footprint": "Package_LGA:LGA-14_3x5mm_P0.8mm_LayoutBorder1x6y",
+ "datasheet": "https://www.analog.com/media/en/technical-documentation/data-sheets/ADXL375.pdf",
+ "description": "200 g 3-axis accelerometer, I2C / SPI (Analog Devices ADXL375, table 5)",
+ "pins": [
+  [
+   1,
+   "VDD_I/O",
+   "power_in"
+  ],
+  [
+   2,
+   "GND",
+   "power_in"
+  ],
+  [
+   3,
+   "RESERVED",
+   "passive"
+  ],
+  [
+   4,
+   "GND",
+   "power_in"
+  ],
+  [
+   5,
+   "GND",
+   "power_in"
+  ],
+  [
+   6,
+   "VS",
+   "power_in"
+  ],
+  [
+   7,
+   "CS",
+   "input"
+  ],
+  [
+   8,
+   "INT1",
+   "output"
+  ],
+  [
+   9,
+   "INT2",
+   "output"
+  ],
+  [
+   10,
+   "NC",
+   "no_connect"
+  ],
+  [
+   11,
+   "RESERVED",
+   "passive"
+  ],
+  [
+   12,
+   "SDO/ALT_ADDRESS",
+   "tri_state"
+  ],
+  [
+   13,
+   "SDA/SDI/SDIO",
+   "bidirectional"
+  ],
+  [
+   14,
+   "SCL/SCLK",
+   "input"
+  ]
+ ]
+}

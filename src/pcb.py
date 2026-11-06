@@ -2215,8 +2215,18 @@ def from_netlist(path: str, outline, name: Optional[str] = None, at: Optional[Di
         kw = {}
         if p is not None and len(p) > 3:
             kw["side"] = p[3]
-        b.place(ref, fp, None if p is None else (p[0], p[1]), p[2] if p is not None and len(p) > 2 else 0.0, value,
-                f"{maker} {mpn}".strip() if mpn else "", lcsc=lcsc, **kw)
+        src = _find(c, "libsource")                      # (the symbol the schematic placed it with: its pins by name)
+        lib_, part_ = (val(src[0], "lib"), val(src[0], "part")) if src else ("", "")
+        if lib_ and part_:
+            kw["symbol"] = f"{lib_}:{part_}"
+        try:
+            b.place(ref, fp, None if p is None else (p[0], p[1]), p[2] if p is not None and len(p) > 2 else 0.0, value,
+                    f"{maker} {mpn}".strip() if mpn else "", lcsc=lcsc, **kw)
+        except Exception as e:                           # (a symbol KiCad's library lacks now: the part without it,
+            kw.pop("symbol", None)                       #  and the critic says so)
+            b.import_notes.append(f"{ref}: its symbol {lib_}:{part_} not found ({type(e).__name__}): placed without it")
+            b.place(ref, fp, None if p is None else (p[0], p[1]), p[2] if p is not None and len(p) > 2 else 0.0, value,
+                    f"{maker} {mpn}".strip() if mpn else "", lcsc=lcsc, **kw)
         have.add(ref)
     for ns in _find(tree, "nets"):
         for n in _find(ns, "net"):

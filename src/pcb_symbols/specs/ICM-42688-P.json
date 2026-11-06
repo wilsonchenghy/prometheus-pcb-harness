@@ -1,0 +1,80 @@
+{
+ "lib": "Prometheus",
+ "name": "ICM-42688-P",
+ "ref": "U",
+ "footprint": "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y",
+ "datasheet": "https://invensense.tdk.com/wp-content/uploads/2020/04/ds-000347_icm-42688-p-datasheet.pdf",
+ "description": "6-axis IMU, I2C / I3C / SPI (TDK InvenSense ICM-42688-P, DS-000347 table 9)",
+ "pins": [
+  [
+   1,
+   "AP_SDO/AP_AD0",
+   "tri_state"
+  ],
+  [
+   2,
+   "RESV",
+   "passive"
+  ],
+  [
+   3,
+   "RESV",
+   "passive"
+  ],
+  [
+   4,
+   "INT1/INT",
+   "output"
+  ],
+  [
+   5,
+   "VDDIO",
+   "power_in"
+  ],
+  [
+   6,
+   "GND",
+   "power_in"
+  ],
+  [
+   7,
+   "RESV",
+   "passive"
+  ],
+  [
+   8,
+   "VDD",
+   "power_in"
+  ],
+  [
+   9,
+   "INT2/FSYNC/CLKIN",
+   "bidirectional"
+  ],
+  [
+   10,
+   "RESV",
+   "passive"
+  ],
+  [
+   11,
+   "RESV",
+   "passive"
+  ],
+  [
+   12,
+   "AP_CS",
+   "input"
+  ],
+  [
+   13,
+   "AP_SCL/AP_SCLK",
+   "input"
+  ],
+  [
+   14,
+   "AP_SDA/AP_SDIO/AP_SDI",
+   "bidirectional"
+  ]
+ ]
+}

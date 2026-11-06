@@ -30,7 +30,7 @@ def build():
             "GCT USB4105-GF-A", overhang=True, symbol="Connector:USB_C_Receptacle_USB2.0_16P")
     b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical", (2.65, H - 1.9), 90, "I2C",
             "2.54 mm header 1x06")
-    b.place("U1", "Package_LGA:LGA-28_5.2x3.8mm_P0.5mm", (11.5, 13.6), 180, "BNO085", "CEVA BNO085")
+    b.place("U1", "Package_LGA:LGA-28_5.2x3.8mm_P0.5mm", (11.5, 13.6), 180, "BNO085", "CEVA BNO085", symbol="Prometheus:BNO085")
     b.place("U2", "Package_TO_SOT_SMD:SOT-23-5", (3.6, 12.0), 0, "AP2112K-3.3", "Diodes AP2112K-3.3TRG1",
             symbol="Regulator_Linear:AP2112K-3.3")
     b.place("Y1", "Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm", (14.3, 9.7), 0, "32.768k", "Epson FC-135 32.768KA")

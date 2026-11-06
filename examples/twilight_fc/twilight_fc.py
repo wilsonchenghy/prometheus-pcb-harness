@@ -110,7 +110,7 @@ P("U1", "Package_SO:MSOP-10_3x3mm_P0.5mm", (48.4, 32.8), 0, "INA226", "TI INA226
 P("C1", C06, (44.0, 30.6), 90, "100n", "GRM188R71H104KA93D", "INA226 VS", side="B")
 # 5 V buck (row along the top-left): TI TPS54360B datasheet design, 600 kHz
 P("U2", HSOP8, (30.0, 44.0), 0, "TPS54360B", "TI TPS54360BDDAR", "5 V / 3.5 A buck",
-  min_drill=0.3)                       # (its thermal vias at the board house's 0.3 mm minimum)
+  min_drill=0.3, symbol="Prometheus:TPS54360B")                       # (its thermal vias at the board house's 0.3 mm minimum)
 P("L1", XAL, (39.5, 45.5), 0, "6u8", "Coilcraft XAL6060-682MEB", "6.8 uH, 8.6 A sat")
 P("D5", PDI5, (39.5, 39.5), 0, "PDS540", "Diodes PDS540-13", "5 V buck catch diode")
 P("C2", C1210, (20.5, 44.0), 90, "4u7 50V", "GRM32ER71H475KA88L", "5 V buck input")
@@ -152,7 +152,7 @@ P("D2", PDI5, (63.6, 36.7), 180, "PDS540", "Diodes PDS540-13", "pyro supply: the
 P("J15", TERM, (57.0, 44.8), 180, "ARM SW", "Phoenix 1984617", "external keyed arm switch, in series")
 P("C17", "Capacitor_SMD:CP_Elec_10x10.5", (73.0, 42.7), 90, "470u 35V", "Panasonic EEE-FK1V471P", "VPYRO bulk")
 P("Q3", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (63.5, 45.5), 90, "SQ4401EY", "Vishay SQ4401EY-T1_GE3",
-  "arm FET (high side)")
+  "arm FET (high side)", symbol="Prometheus:SQ4401EY")
 P("D7", LED06, (61.3, 40.4), 0, "red", "Kingbright APTD1608SURCK", "ARM: lit from VPYRO_ARMED itself")
 P("R15", R12, (65.2, 40.4), 180, "4k7", "RC1206FR-074K7L", "ARM LED (6 mA at 26 V)")
 
@@ -211,14 +211,14 @@ P("J9", "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical", (108.712, 
   "2x5 2.54 mm header", "5V 3V3 GND GND SDA SCL SCK1 MOSI1 MISO1 CS")
 # inertial island: ICM-42688-P at the sensor datum, BMI088 and ADXL375 beside it, magnetometer, the baro pair
 P("U5", "Package_LGA:LGA-14_3x2.5mm_P0.5mm_LayoutBorder3x4y", DATUM, 0, "ICM-42688-P", "TDK ICM-42688-P",
-  "primary IMU (SPI0); its centre is the sensor datum")
+  "primary IMU (SPI0); its centre is the sensor datum", symbol="Prometheus:ICM-42688-P")
 P("U6", "Package_LGA:Bosch_LGA-16_4.5x3mm_P0.5mm_LayoutBorder7x1y_ClockwisePinNumbering", (130.0, 33.0), 0, "BMI088",
   "Bosch BMI088", "redundant IMU (SPI0)", symbol="Sensor_Motion:BMI088")
 P("U7", "Package_LGA:LGA-14_3x5mm_P0.8mm_LayoutBorder1x6y", (124.6, 25.0), 0, "ADXL375", "ADI ADXL375BCCZ",
-  "+-200 g accelerometer (SPI0)")
-P("U10", "Package_LGA:LGA-16_3x3mm_P0.5mm", (135.8, 25.0), 0, "MMC5983MA", "MEMSIC MMC5983MA", "magnetometer (I2C)")
+  "+-200 g accelerometer (SPI0)", symbol="Prometheus:ADXL375")
+P("U10", "Package_LGA:LGA-16_3x3mm_P0.5mm", (135.8, 25.0), 0, "MMC5983MA", "MEMSIC MMC5983MA", "magnetometer (I2C)", symbol="Prometheus:MMC5983MA")
 P("U8", "Prometheus_Sensor:Bosch_BMP390_LGA-10_2x2mm_P0.5mm", (126.0, 38.0), 0, "BMP390", "Bosch BMP390",
-  "barometer 1 (I2C 0x77)", model=False)
+  "barometer 1 (I2C 0x77)", model=False, symbol="Prometheus:BMP390")
 P("U9", "Prometheus_Sensor:TE_MS5607-02BA03_QFN-8_5x3mm_P1.25mm", (133.5, 38.0), 90, "MS5607", "TE MS560702BA03-50",
   "barometer 2 (I2C 0x76)", model=False, symbol="Sensor_Pressure:MS5607-02BA")
 for ref, fp, at, rot, val, mpn in [

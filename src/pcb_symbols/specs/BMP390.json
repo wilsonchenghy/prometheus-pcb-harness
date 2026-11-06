@@ -1,0 +1,60 @@
+{
+ "lib": "Prometheus",
+ "name": "BMP390",
+ "ref": "U",
+ "footprint": "Prometheus_Sensor:Bosch_BMP390_LGA-10_2x2mm_P0.5mm",
+ "datasheet": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bmp390-ds002.pdf",
+ "description": "barometric pressure sensor, I2C / SPI (Bosch BMP390, table 52)",
+ "pins": [
+  [
+   1,
+   "VDDIO",
+   "power_in"
+  ],
+  [
+   2,
+   "SCK",
+   "input"
+  ],
+  [
+   3,
+   "VSS",
+   "power_in"
+  ],
+  [
+   4,
+   "SDI",
+   "bidirectional"
+  ],
+  [
+   5,
+   "SDO",
+   "tri_state"
+  ],
+  [
+   6,
+   "CSB",
+   "input"
+  ],
+  [
+   7,
+   "INT",
+   "output"
+  ],
+  [
+   8,
+   "VSS",
+   "power_in"
+  ],
+  [
+   9,
+   "VSS",
+   "power_in"
+  ],
+  [
+   10,
+   "VDD",
+   "power_in"
+  ]
+ ]
+}

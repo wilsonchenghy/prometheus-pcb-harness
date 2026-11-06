@@ -73,9 +73,11 @@ unless you give one), then `b.net("AIN2", [("U1", "AIN2"), ...])`; a name used b
 instant placement check then matches every symbol pin to a pad and every pad to a pin, and the critic runs an ERC
 on the pins' electrical types (an input left open, a power pin unconnected or unsupplied, two outputs tied, a
 no-connect pin wired). Prefer this for every IC: a wrong pin number is the one mistake the other checks cannot see.
-A chip placed without its symbol is a critic warning that names KiCad's symbol when one fits its pads exactly
-(`parts.suggest_symbol`): add it. When KiCad has none, draw the symbol from the datasheet's pin table and check it with
-the engineer. A pin left open on purpose is `b.nc("U1", "SWCLK")` (KiCad's no-connect flag); a conflict the design has
+A chip placed without its symbol is a critic error that names KiCad's symbol when one fits its pads exactly
+(`parts.suggest_symbol`): add it. When KiCad has none, write the datasheet's pin table into a spec and run
+`prometheus symbol spec.json` (symgen.py: the symbol in the board's `symbols/`, laid out as KiCad's are, and KiCad's
+drawing of it); show the drawing to the engineer beside the datasheet before the board uses it. The harness ships the
+ones made so far in `src/pcb_symbols/` (library `Prometheus`, each with its spec and the datasheet table it came from). A pin left open on purpose is `b.nc("U1", "SWCLK")` (KiCad's no-connect flag); a conflict the design has
 on purpose, such as two tri-state outputs on one SPI line, is `b.erc_allow("MISO", "why")`, with the reason kept.
 
 ## Requirements and one stage at a time

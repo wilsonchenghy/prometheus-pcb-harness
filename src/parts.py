@@ -38,7 +38,16 @@ def pin_key(name: str) -> str:
     return n.replace("~", "").strip()
 
 
+SYM_DIRS: List[Path] = [Path(__file__).parent / "pcb_symbols"]   # (project symbol folders, searched first: a
+                                                         #  board's own symbols/ (pcb_cli.load adds it), then the
+                                                         #  harness's own, for chips KiCad has none of: symgen.py)
+
+
 def _fetch(path: str) -> str:
+    for d in SYM_DIRS:
+        own = Path(d) / path
+        if own.exists():
+            return own.read_text()
     from vendor_parts import CACHE
     dst = CACHE / "kicad_sym" / path.replace("/", "__")
     if dst.exists() and dst.stat().st_size > 50:

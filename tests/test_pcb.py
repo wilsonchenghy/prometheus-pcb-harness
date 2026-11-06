@@ -1681,3 +1681,25 @@ def test_clean_corners_no_overshoot_no_right_angles():
         for a, c, d in zip(t["pts"], t["pts"][1:], t["pts"][2:]):
             u, v = (c[0] - a[0], c[1] - a[1]), (d[0] - c[0], d[1] - c[1])
             assert abs(u[0] * v[0] + u[1] * v[1]) > 1e-3 * math.hypot(*u) * math.hypot(*v)   # no right angle left
+
+
+def test_symbol_from_a_pin_table(tmp_path):
+    """symgen: a pin table becomes a KiCad symbol laid out as KiCad's are (supplies on top, grounds at the bottom,
+    inputs left), its pins checked against the footprint's pads, and the harness reads it back by name"""
+    import parts
+    import symgen
+    spec = {"lib": "T", "name": "LMR51420", "footprint": "Package_TO_SOT_SMD:SOT-23-6",
+            "pins": [[1, "GND", "power_in"], [2, "SW", "power_out"], [3, "VIN", "power_in"], [4, "FB", "input"],
+                     [5, "EN", "input"], [6, "CB", "passive"]]}
+    path = symgen.write(spec, str(tmp_path))
+    placed, _ = symgen.layout([tuple(p) for p in spec["pins"]])
+    side = {p["name"]: p["rot"] for p in placed}
+    assert side["GND"] == 90 and side["VIN"] == 270 and side["FB"] == 0     # (bottom, top, left: pins point inward)
+    parts.SYM_DIRS.insert(0, tmp_path)
+    try:
+        s = parts.symbol("T:LMR51420")
+        assert {p["num"]: p["name"] for p in s["pins"]}["4"] == "FB" and path.exists()
+    finally:
+        parts.SYM_DIRS.remove(tmp_path)
+    with pytest.raises(ValueError, match="pads"):
+        symgen.write(dict(spec, pins=spec["pins"][:5]), str(tmp_path))

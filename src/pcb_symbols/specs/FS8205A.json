@@ -1,0 +1,50 @@
+{
+ "lib": "Prometheus",
+ "name": "FS8205A",
+ "ref": "Q",
+ "footprint": "Package_SO:TSSOP-8_4.4x3mm_P0.65mm",
+ "datasheet": "",
+ "description": "dual N-channel MOSFET, common drain, TSSOP-8 (Fortune FS8205A): the 8205A family's TSSOP-8 pinout, check it against the maker's TSSOP-8 datasheet",
+ "pins": [
+  [
+   1,
+   "D",
+   "passive"
+  ],
+  [
+   2,
+   "S1",
+   "passive"
+  ],
+  [
+   3,
+   "S1",
+   "passive"
+  ],
+  [
+   4,
+   "G1",
+   "passive"
+  ],
+  [
+   5,
+   "G2",
+   "passive"
+  ],
+  [
+   6,
+   "S2",
+   "passive"
+  ],
+  [
+   7,
+   "S2",
+   "passive"
+  ],
+  [
+   8,
+   "D",
+   "passive"
+  ]
+ ]
+}
