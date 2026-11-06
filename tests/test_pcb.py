@@ -2411,3 +2411,21 @@ def test_import_keeps_overhang_symbols_and_no_connects(tmp_path):
     assert "overhang=True" in j1 and "symbol='Interface_USB:CH340C'" in u1
     nc = next(ln for ln in src.splitlines() if ln.startswith("b.nc('U1'"))
     assert "'11'" in nc and "'12'" in nc                 # (nRI, nDCD)
+
+
+def test_freerouting_gives_the_same_tracks_twice(monkeypatch):
+    """the same placed board routed by FreeRouting twice gives the same tracks in the same order (KiCad's session
+    import hands segments back in no fixed order: different Gerbers for the same copper)"""
+    import runpy
+    import freerouting
+    import pcb
+    if not (freerouting.available() and freerouting.kicad_available()):
+        pytest.skip("FreeRouting through KiCad is not installed")
+    monkeypatch.setenv("PCB_REROUTE", "1")
+    here = Path(__file__).parent.parent
+    runs = []
+    for _ in range(2):
+        b = runpy.run_path(str(here / "bench" / "blinker.py"))["build"]()
+        pcb.route_board(b, "freerouting")
+        runs.append([(t["net"], t["layer"], [tuple(p) for p in t["pts"]], t["w"]) for t in b.tracks])
+    assert runs[0] == runs[1]
