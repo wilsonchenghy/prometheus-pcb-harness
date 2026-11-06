@@ -273,6 +273,11 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     if r.returncode != 0 or not os.path.exists(routed):
         raise RuntimeError("KiCad's Specctra import failed:\n" + (r.stdout + r.stderr)[-2000:])
     segs, vias = _read_kicad_copper(routed, board)
+    # (KiCad's session import hands the segments back in no fixed order: each is put its lower end first and the
+    #  lot sorted, so the same routing gives the same tracks, joined the same way, and the same Gerbers)
+    segs = sorted(((n_, L_, list(p_) if tuple(p_[0]) <= tuple(p_[-1]) else list(p_)[::-1], w_)
+                   for n_, L_, p_, w_ in segs), key=lambda s_: (s_[0], s_[1], [tuple(q) for q in s_[2]], s_[3]))
+    vias = sorted(vias, key=lambda v_: (v_[0], tuple(v_[1]), v_[2], v_[3]))
     t0, v0 = len(board.tracks), len(board.vias)
     have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"]))) for t in board.tracks}
     have_v = {(v["net"], tuple(round(c, 3) for c in v["at"])) for v in board.vias}
