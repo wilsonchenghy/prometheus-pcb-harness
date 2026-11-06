@@ -282,6 +282,46 @@ def load_state(b, out, key) -> bool:
     return True
 
 
+def _store(script):
+    """the board script's routes/ folder, kept in git, when it has one: its routing is reused there (pcb.cached_route's
+    store for a script that routes itself)"""
+    d = os.path.join(os.path.dirname(os.path.abspath(script)), "routes")
+    return d if os.path.isdir(d) and not os.environ.get("PCB_REROUTE") else None
+
+
+def load_store(b, store, key) -> bool:
+    """the placement and copper a clean run of this same design left in ``store`` (``<board>_<key>.json.gz``)"""
+    import gzip
+    import json
+    import pcb
+    p = os.path.join(store, f"{b.name}_{key}.json.gz")
+    if not os.path.exists(p):
+        return False
+    raw = open(p, "rb").read()
+    d, r = json.loads(gzip.decompress(raw)), pcb._routes_load(raw)
+    for ref, c in d["place"].items():
+        if ref in b.comps:
+            b.comps[ref].update({"at": tuple(c["at"]), "rot": c["rot"], **({"side": c["side"]} if "side" in c else {})})
+            b.comps[ref].pop("unplaced", None)
+    b.tracks, b.vias, b._fan = r["tracks"], r["vias"], r["fan"]
+    b.router_used = (d.get("router") or "saved") + " (routes/)"
+    return True
+
+
+def save_store(b, store, key):
+    """a clean run's placement and copper into ``store``, the board's older ones removed (one per board in git)"""
+    import glob
+    import gzip
+    import json
+    for old in glob.glob(os.path.join(store, f"{b.name}_*.json.gz")):
+        os.remove(old)
+    d = {"place": {r: {k: c[k] for k in ("at", "rot", "side") if k in c} for r, c in b.comps.items()},
+         "router": getattr(b, "router_used", None), "tracks": b.tracks, "vias": b.vias,
+         "fan": sorted(map(list, getattr(b, "_fan", set()))), "probs": []}
+    with open(os.path.join(store, f"{b.name}_{key}.json.gz"), "wb") as f:
+        f.write(gzip.compress(json.dumps(d, separators=(",", ":"), sort_keys=True).encode(), mtime=0))
+
+
 def _repeatable(argv) -> None:
     """the same board for the same input: Python orders sets of names by a per-process hash, and the router's
     choices follow some of those orders, so a run started without PYTHONHASHSEED starts again with it fixed"""
@@ -413,6 +453,11 @@ def main(argv=None) -> int:
               f"{len(b.tracks)} tracks, {len(b.vias)} vias ({b.router_used})")
     route_ok = stage in ("route", "all")
     timings = {}
+    store = _store(a.script) if route_ok and not b.tracks else None
+    from_store = bool(store) and load_store(b, store, key)
+    if from_store:
+        print(f"from {os.path.relpath(store)}: {len(b.tracks)} tracks, {len(b.vias)} vias (PCB_REROUTE=1 routes again)")
+        timings["routes/"] = 0.0
     if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()):
         t = time.perf_counter()
         prog.stage("place+route" if route_ok else "place")
@@ -453,6 +498,9 @@ def main(argv=None) -> int:
             print(f"tidied: {n_} via{'s' if n_ > 1 else ''} that joined nothing")
     if stage in ("place", "route", "all") and timings:
         save_state(b, a.out, key)
+        if store and not from_store and not probs and not b.check():     # (only clean copper into git)
+            save_store(b, store, key)
+            print(f"routing kept in {os.path.relpath(store)} (commit it: a fresh clone then need not route)")
         if viewing:                                      # (the placed and routed board, before the checks and export)
             prog.snapshot(b, os.path.abspath(a.script))
     lcsc_auto, lcsc_suggested = {}, {}

@@ -1785,3 +1785,23 @@ def test_a_via_against_its_own_pad_is_warned_a_via_in_pad_or_a_neck_is_not():
     b.vias.clear()
     b.via("GND", (x2 + 0.2, 5), 0.3, 0.6)                     # centre on the pad, ring half off it: the worst case
     assert len(neck()) == 1
+
+
+def test_a_routes_folder_beside_the_script_keeps_the_routing(tmp_path, monkeypatch):
+    """a script with routes/ beside it: a clean run writes its placement and copper there, and the next run of the
+    same design loads them instead of placing and routing"""
+    import shutil
+    import pcb_cli
+    here = Path(__file__).resolve().parent.parent
+    shutil.copy(here / "bench" / "blinker.py", tmp_path / "blinker.py")
+    (tmp_path / "routes").mkdir()
+    monkeypatch.delenv("PCB_REROUTE", raising=False)
+    args = [str(tmp_path / "blinker.py"), str(tmp_path / "out"), "--router", "harness", "--kicad-drc", "off",
+            "--no-lcsc", "--no-view"]
+    assert pcb_cli.main(args) == 0
+    kept = list((tmp_path / "routes").glob("*.json.gz"))
+    assert len(kept) == 1
+    first = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert pcb_cli.main(args) == 0
+    again = json.loads((tmp_path / "out" / "result.json").read_text())
+    assert again["clean"] and "routes/" in again["router"] and again["placement"] == first["placement"]
