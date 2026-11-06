@@ -1612,3 +1612,28 @@ def test_update_notice_says_when_github_is_ahead(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(pcb_cli, "latest", offline)
     pcb_cli.update_notice()
     assert capsys.readouterr().err == ""
+
+
+def test_erc_no_connect_and_allowed_conflict_and_symbol_search():
+    """a pin left open on purpose (Board.nc) is not an ERC error, an allowed conflict (Board.erc_allow) is not
+    reported, and the symbol search finds KiCad's symbol whose pins are the footprint's pads"""
+    import critic
+    import parts
+    import pcb
+    b = pcb.Board("nc", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("U1", None, (15, 10), 0, symbol="Driver_Motor:DRV8833PWP")
+    b.place("U2", None, (25, 10), 0, symbol="Driver_Motor:DRV8833PWP")
+    erc = lambda: [n["text"] for n in critic.review(b) if n["kind"] == "erc" and n["severity"] == "error"]
+    assert any("AIN1" in t for t in erc())
+    b.nc("U1", "AIN1", "AIN2", "BIN1", "BIN2", "nSLEEP")
+    b.nc("U2", "AIN1", "AIN2", "BIN1", "BIN2", "nSLEEP")
+    assert not any("left open" in t for t in erc())
+    b.net("OUT", [("U1", "AOUT1"), ("U2", "AOUT1")])
+    assert any("drive each other" in t for t in erc())
+    b.erc_allow("OUT", "test")
+    assert not any("drive each other" in t for t in erc())
+    try:
+        found = parts.suggest_symbol({"value": "DRV8833", "mpn": "TI DRV8833PWPR", "pads": b.comps["U1"]["pads"]})
+    except FileNotFoundError:
+        pytest.skip("no KiCad symbol library here")
+    assert found == "Driver_Motor:DRV8833PWP"

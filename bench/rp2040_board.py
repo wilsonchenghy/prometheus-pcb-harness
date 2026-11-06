@@ -37,8 +37,8 @@ def build():
     b.place("J3", HDR, (10.0, H - 2.0), 90, "GPIO 15-28", "")  # along the top edge
     # the rest: no position, place_and_route places them
     b.place("U1", "Package_DFN_QFN:QFN-56-1EP_7x7mm_P0.4mm_EP3.2x3.2mm_ThermalVias", None, 0, "RP2040", "Raspberry Pi RP2040",
-            lcsc="C2040")
-    b.place("U2", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", None, 0, "W25Q128JV", "Winbond W25Q128JVSIQ")
+            lcsc="C2040", symbol="MCU_RaspberryPi:RP2040")
+    b.place("U2", "Package_SO:SOIC-8_5.3x5.3mm_P1.27mm", None, 0, "W25Q128JV", "Winbond W25Q128JVSIQ", symbol="Memory_Flash:W25Q128JVS")
     b.place("U3", "Package_TO_SOT_SMD:SOT-23-5", None, 0, "AP2112K-3.3", "Diodes Inc AP2112K-3.3TRG1")
     b.place("Y1", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", None, 0, "12 MHz", "Abracon ABM8-272-T3")
     for k in range(1, 11):                                   # decoupling: 6 x IOVDD, 2 x DVDD, USB_VDD, ADC_AVDD
@@ -61,7 +61,7 @@ def build():
     b.place("SW1", "Button_Switch_SMD:SW_SPST_TL3342", None, 0, "BOOTSEL", "E-Switch TL3342F160QG")
     b.place("SW2", "Button_Switch_SMD:SW_SPST_TL3342", None, 0, "RUN", "E-Switch TL3342F160QG")
 
-    gnd = [("J1", p) for p in ("A1", "A12", "B1", "B12")] + [("U1", "57"), ("U2", "4"), ("U3", "2"), ("Y1", "2"),
+    gnd = [("J1", p) for p in ("A1", "A12", "B1", "B12")] + [("U1", "57"), ("U1", "19"), ("U2", "4"), ("U3", "2"), ("Y1", "2"),
            ("Y1", "4"), ("C13", "2"), ("C14", "2"), ("C15", "2"), ("C16", "2"), ("C11", "2"), ("C12", "2"),
            ("R4", "2"), ("R5", "2"), ("D1", "1"), ("SW1", "2"), ("SW2", "2"), ("J2", "15"), ("J3", "15")] + \
         [(f"C{k}", "2") for k in range(1, 11)]
@@ -101,6 +101,7 @@ def build():
             d["width"] = 0.15
     b.pour("GND", "B", OUT)
     b.pour("GND", "F", OUT)
+    b.nc("U1", "SWCLK", "SWDIO")                         # (the debug port, unused here: TESTEN is tied to GND above)
     return b
 
 

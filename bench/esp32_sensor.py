@@ -15,7 +15,7 @@ MOD = (35.0, 30.0)                                   # the module's origin; its 
 
 def build():
     b = Board("esp32_sensor", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2")
-    b.place("U1", "RF_Module:ESP32-WROOM-32E", MOD, 0, "ESP32-WROOM-32E", "Espressif ESP32-WROOM-32E-N4")
+    b.place("U1", "RF_Module:ESP32-WROOM-32E", MOD, 0, "ESP32-WROOM-32E", "Espressif ESP32-WROOM-32E-N4", symbol="RF_Module:ESP32-WROOM-32")
     b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (4.0, 9.0), 270,
             "USB-C", "GCT USB4105-GF-A", overhang=True)
     b.place("R1", R06, (12.0, 13.5), 0, "5.1k")
@@ -29,7 +29,7 @@ def build():
     b.place("R5", R06, (33.0, 12.5), 0, "10k")
     b.place("C5", C06, (33.0, 4.0), 0, "1u")
     b.place("U3", "Package_LGA:Bosch_LGA-8_2.5x2.5mm_P0.65mm_ClockwisePinNumbering", (64.0, 30.0), 0, "BME280",
-            "Bosch BME280")
+            "Bosch BME280", symbol="Sensor:BME280")
     b.place("C4", C06, (64.0, 25.0), 0, "100n")
     b.place("R3", R06, (64.0, 36.0), 0, "4.7k")
     b.place("R4", R06, (64.0, 39.0), 0, "4.7k")
@@ -58,6 +58,7 @@ def build():
     ant = [(MOD[0] - 10.0, MOD[1] + 12.0), (MOD[0] + 10.0, MOD[1] + 12.0), (MOD[0] + 10.0, 60.0), (MOD[0] - 10.0, 60.0)]
     b.keepout(ant, "FB", "antenna")
     b.pour("GND", "B", OUT)
+    b.nc("U1", "SENSOR_VP", "SENSOR_VN", "IO34", "IO35")   # (the module's input-only pins, unused)
     return b
 
 

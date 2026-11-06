@@ -68,6 +68,10 @@ unless you give one), then `b.net("AIN2", [("U1", "AIN2"), ...])`; a name used b
 instant placement check then matches every symbol pin to a pad and every pad to a pin, and the critic runs an ERC
 on the pins' electrical types (an input left open, a power pin unconnected or unsupplied, two outputs tied, a
 no-connect pin wired). Prefer this for every IC: a wrong pin number is the one mistake the other checks cannot see.
+A chip placed without its symbol is a critic warning that names KiCad's symbol when one fits its pads exactly
+(`parts.suggest_symbol`): add it. When KiCad has none, draw the symbol from the datasheet's pin table and check it with
+the engineer. A pin left open on purpose is `b.nc("U1", "SWCLK")` (KiCad's no-connect flag); a conflict the design has
+on purpose, such as two tri-state outputs on one SPI line, is `b.erc_allow("MISO", "why")`, with the reason kept.
 
 ## Requirements and one stage at a time
 
