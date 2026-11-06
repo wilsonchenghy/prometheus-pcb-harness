@@ -426,7 +426,7 @@ class Board:
     def place(self, ref: str, fp: str, at: Optional[Tuple[float, float]] = None, rot: float = 0.0, value: str = "", mpn: str = "",
               model: Optional[str] = None, model_offset=(0.0, 0.0, 0.0), body=None, note: str = "",
               overhang: bool = False, side: str = "F", lcsc: str = "", min_drill: Optional[float] = None,
-              symbol: Optional[str] = None, label=None):
+              symbol: Optional[str] = None, label=None, cite=None):
         """a part: footprint "Lib:Name", its origin at ``at`` turned ``rot`` deg ccw (seen from above); ``model`` a
         KiCad 3D model path (vendor_parts.kicad; default: the one the footprint names) or ``body`` a build123d shape in
         the footprint frame for one KiCad lacks. ``side="B"`` puts it on the bottom: the footprint is flipped about its y axis (KiCad's flip), its SMD
@@ -437,7 +437,8 @@ class Board:
         ``symbol``: its KiCad symbol "Lib:Name" (``parts.symbol``): nets may then name its pins by name, the check
         matches every pin to a pad and the critic runs an ERC on its pin types; with ``fp=None`` the symbol's own
         footprint is used. ``label``: its reference designator's place on the silkscreen, (x, y, angle, size) board mm,
-        or False to leave it off (default: placed clear of everything, ``place_refs``)"""
+        or False to leave it off (default: placed clear of everything, ``place_refs``). ``cite``: the datasheet's word
+        for the choice, {"page", "quote", "what"?, "value"?, "url"?} or a list of them (``cite``)"""
         sym = None
         if symbol:
             import parts
@@ -494,6 +495,8 @@ class Board:
             self.comps[ref]["label"] = tuple(label) if label else None
         if sym:
             self.comps[ref]["symbol"] = sym
+        for c_ in ([cite] if isinstance(cite, dict) else cite or []):
+            self.cite(**{"ref": ref, "what": "part", "value": value or mpn or fp, **c_})
 
     def courtyard(self, ref: str):
         """a part's courtyard outline in board coordinates (flipped for a bottom-side part), or None"""
@@ -508,10 +511,12 @@ class Board:
         return affinity.translate(affinity.rotate(box(*crt), c["rot"], origin=(0, 0)), *c["at"])
 
     def net(self, name: str, pins: Sequence[Tuple[str, str]], amps: float = 0.1, volts: float = 5.0,
-            width: Optional[float] = None):
+            width: Optional[float] = None, cite=None):
         """a net: its pins (ref, pad number), the current it carries (sets how wide its copper must be) and its
         voltage (what its drop is measured against); ``width``: its track width when routed (default: as wide as
-        its current needs, at least 0.2 mm)"""
+        its current needs, at least 0.2 mm). ``cite``: as ``place``'s, its ref the first pin's part unless given"""
+        for c_ in ([cite] if isinstance(cite, dict) else cite or []):
+            self.cite(**{"ref": pins[0][0], "what": f"net {name}", "value": name, **c_})
         out = []
         for r, p in pins:                                # (a pin by name, through its part's symbol: "AIN2" -> 15)
             p, c = str(p), self.comps.get(r)
@@ -524,6 +529,15 @@ class Board:
         self.nets[name] = {"pins": list(dict.fromkeys(out)), "amps": amps, "volts": volts}
         if width is not None:
             self.nets[name]["width"] = width
+
+    def cite(self, ref: str, what: str, value, page: int, quote: str, url: Optional[str] = None):
+        """the datasheet's word for a choice made on the board (a pin, a capacitor's value, a pull-up): ``page``
+        (1-based) and ``quote`` (its own words there) of ``url`` (default: ``ref``'s symbol's datasheet). Collected in
+        result.json ("evidence"), checked against the datasheet's text, and opened at that page by the viewer"""
+        if not (isinstance(page, int) and page >= 1 and str(quote).strip()):
+            raise ValueError(f"cite {ref} {what}: a page (1-based) and the datasheet's own words are needed")
+        self.__dict__.setdefault("evidence", []).append(
+            {"ref": ref, "what": what, "value": str(value), "url": url, "page": page, "quote": " ".join(str(quote).split())})
 
     def skip(self, what: str, why: str, how: str = ""):
         """an output or a step left out of this run (no network, an extra not installed): said in the run's summary,
