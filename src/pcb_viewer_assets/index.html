@@ -960,9 +960,11 @@ function mergeModel(m, refs) {
 }
 // each part's node (named by its reference); its rest height; an animation of its height
 function partsOf(m) { const refs = new Set(B.comps.map(c => c.ref)), out = []; m.traverse(o => { if (o !== m && refs.has(o.name)) out.push(o); }); return out; }
+let frame3d = 0;                                         // (one render a frame, however many parts move: a part each
+function redraw3d() { if (!frame3d) frame3d = requestAnimationFrame(() => { frame3d = 0; place3d(); }); }   // was 145 a frame)
 function tweenZ(o, from, to, dur, delay, ease) { const t0 = performance.now() + delay;   // (the part's up: glTF's y)
-  const step = (t) => { if (t < t0) { o.position.y = from; place3d(); return requestAnimationFrame(step); }
-    const k = Math.min(1, (t - t0) / dur); o.position.y = from + (to - from) * ease(k); place3d(); if (k < 1) requestAnimationFrame(step); };
+  const step = (t) => { if (t < t0) { o.position.y = from; redraw3d(); return requestAnimationFrame(step); }
+    const k = Math.min(1, (t - t0) / dur); o.position.y = from + (to - from) * ease(k); redraw3d(); if (k < 1) requestAnimationFrame(step); };
   requestAnimationFrame(step); }
 const outBack = (k) => { const c = 1.4; return 1 + (c + 1) * Math.pow(k - 1, 3) + c * Math.pow(k - 1, 2); };
 const outCubic = (k) => 1 - Math.pow(1 - k, 3);
