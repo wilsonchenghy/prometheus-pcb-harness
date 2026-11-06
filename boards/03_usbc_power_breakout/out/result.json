@@ -4,21 +4,15 @@
  "stage": "all",
  "clean": true,
  "kicad_drc": {
-  "run": false,
-  "skipped": "KiCad (kicad-cli) is not installed",
-  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
  },
- "router": "harness",
- "skipped": [
-  {
-   "what": "FreeRouting",
-   "why": "KiCad or Java is not installed: routed with the built-in router",
-   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
-  }
- ],
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
  "environment": {
-  "kicad": false,
-  "kicad_python": false,
+  "kicad": true,
+  "kicad_python": true,
   "java": true,
   "freerouting": true,
   "build123d": true,
@@ -27,12 +21,12 @@
  "parts": 10,
  "nets": 6,
  "layers": 2,
- "seconds": 2.2,
+ "seconds": 44.4,
  "timings": {
-  "place+route": 1.18,
-  "critic": 0.003,
-  "check": 0.05,
-  "export": 0.56
+  "place+route": 42.07,
+  "critic": 0.005,
+  "check": 0.04,
+  "export": 1.59
  },
  "placement": {
   "J1": [
@@ -72,42 +66,32 @@
    "F"
   ],
   "R1": [
-   6.9,
-   18.85,
+   7.1,
+   19.55,
    90,
    "F"
   ],
   "R2": [
-   7.75,
-   3.85,
+   7.4,
+   3.2,
    0,
    "F"
   ],
   "R3": [
-   16.15,
-   15.4,
-   180,
+   14.85,
+   17.65,
+   90,
    "F"
   ],
   "D2": [
-   12.1,
-   15.6,
-   0,
+   18.1,
+   19.2,
+   270,
    "F"
   ]
  },
  "findings": [],
  "critic": [
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via GND at (12.04, 16.32) is 0.17 mm from D2.1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "D2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
   {
    "severity": "info",
    "kind": "assembly",

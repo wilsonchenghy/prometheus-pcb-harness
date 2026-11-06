@@ -4,21 +4,15 @@
  "stage": "all",
  "clean": true,
  "kicad_drc": {
-  "run": false,
-  "skipped": "KiCad (kicad-cli) is not installed",
-  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
  },
- "router": "harness",
- "skipped": [
-  {
-   "what": "FreeRouting",
-   "why": "KiCad or Java is not installed: routed with the built-in router",
-   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
-  }
- ],
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
  "environment": {
-  "kicad": false,
-  "kicad_python": false,
+  "kicad": true,
+  "kicad_python": true,
   "java": true,
   "freerouting": true,
   "build123d": true,
@@ -27,12 +21,12 @@
  "parts": 8,
  "nets": 11,
  "layers": 2,
- "seconds": 3.0,
+ "seconds": 7.7,
  "timings": {
-  "place+route": 1.33,
-  "critic": 0.007,
-  "check": 0.1,
-  "export": 0.89
+  "place+route": 4.9,
+  "critic": 0.006,
+  "check": 0.07,
+  "export": 1.93
  },
  "placement": {
   "U1": [
@@ -86,46 +80,6 @@
  },
  "findings": [],
  "critic": [
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via 5V at (9.50, 4.50) is 0.00 mm from U2.1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via DIO0 at (24.00, 19.75) is 0.00 mm from U1.14 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via DIO1 at (24.00, 21.75) is 0.00 mm from U1.15 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via 3V3 at (11.75, 4.50) is 0.00 mm from U2.5 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
   {
    "severity": "info",
    "kind": "holes",

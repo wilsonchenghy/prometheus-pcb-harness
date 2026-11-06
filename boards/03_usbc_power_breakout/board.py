@@ -29,7 +29,7 @@ def build():
     for ref, fp, val, note in (("R1", R06, "5.1k", "CC1 Rd"), ("R2", R06, "5.1k", "CC2 Rd"), ("R3", R06, "1k", "LED")):
         b.place(ref, fp, None, 0, val, note=note)
     b.place("D2", "LED_SMD:LED_0603_1608Metric", None, 0, "green")
-    b.hole((W - 3.5, H - 7.5), d=3.2)
+    b.hole((13.0, 3.6), d=3.2)                           # (clear of the terminal block's body)
     b.net("VBUS", [("J1", p) for p in ("A4", "A9", "B4", "B9")] + [("F1", "1")], amps=2.0, volts=5.0)
     b.net("5V", [("F1", "2"), ("D1", "1"), ("C1", "1"), ("J2", "1"), ("J3", "1"), ("J3", "2"), ("R3", "1")],
           amps=2.0, volts=5.0)

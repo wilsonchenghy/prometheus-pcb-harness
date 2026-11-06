@@ -4,21 +4,15 @@
  "stage": "all",
  "clean": true,
  "kicad_drc": {
-  "run": false,
-  "skipped": "KiCad (kicad-cli) is not installed",
-  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
  },
- "router": "harness",
- "skipped": [
-  {
-   "what": "FreeRouting",
-   "why": "KiCad or Java is not installed: routed with the built-in router",
-   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
-  }
- ],
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
  "environment": {
-  "kicad": false,
-  "kicad_python": false,
+  "kicad": true,
+  "kicad_python": true,
   "java": true,
   "freerouting": true,
   "build123d": true,
@@ -27,12 +21,12 @@
  "parts": 22,
  "nets": 22,
  "layers": 2,
- "seconds": 6.8,
+ "seconds": 3.2,
  "timings": {
-  "place+route": 4.45,
-  "critic": 0.003,
-  "check": 0.1,
-  "export": 1.71
+  "routes/": 0.0,
+  "critic": 0.017,
+  "check": 0.08,
+  "export": 2.53
  },
  "placement": {
   "J1": [
@@ -66,44 +60,44 @@
    "F"
   ],
   "Q1": [
-   16.2,
-   38.65,
+   16.45,
+   26.75,
    0,
    "F"
   ],
   "D1": [
-   16.0,
-   27.25,
-   0,
+   21.25,
+   22.4,
+   180,
    "F"
   ],
   "D3": [
-   3.45,
-   21.0,
-   0,
+   4.2,
+   20.85,
+   90,
    "F"
   ],
   "R11": [
-   6.75,
-   27.5,
-   90,
+   2.9,
+   35.75,
+   0,
    "F"
   ],
   "R12": [
-   12.35,
-   38.3,
-   90,
+   14.2,
+   37.55,
+   180,
    "F"
   ],
   "R13": [
-   9.7,
-   40.0,
+   13.5,
+   40.9,
    90,
    "F"
   ],
   "R14": [
-   4.1,
-   17.75,
+   6.7,
+   20.9,
    90,
    "F"
   ],
@@ -126,70 +120,50 @@
    "F"
   ],
   "Q2": [
-   15.4,
-   5.45,
+   14.85,
+   3.6,
    0,
    "F"
   ],
   "D2": [
-   18.2,
-   1.4,
-   180,
+   20.85,
+   1.9,
+   0,
    "F"
   ],
   "D4": [
-   11.65,
-   16.65,
+   7.8,
+   17.5,
    0,
    "F"
   ],
   "R21": [
-   7.25,
-   17.3,
-   270,
+   3.75,
+   16.8,
+   0,
    "F"
   ],
   "R22": [
-   11.7,
-   6.65,
-   270,
-   "F"
-  ],
-  "R23": [
-   8.4,
-   6.0,
+   14.5,
+   7.25,
    180,
    "F"
   ],
+  "R23": [
+   11.15,
+   6.55,
+   270,
+   "F"
+  ],
   "R24": [
-   11.65,
-   19.2,
-   0,
+   11.05,
+   18.3,
+   270,
    "F"
   ]
  },
  "findings": [],
  "critic": [
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via JDGND at (8.30, 6.72) is 0.19 mm from R23.2 (keep 0.2 mm of track between them)",
-   "refs": [
-    "R23"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VCC at (7.25, 18.00) is 0.00 mm from R21.1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "R21"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
   {
    "severity": "info",
    "kind": "assembly",

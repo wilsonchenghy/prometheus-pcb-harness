@@ -38,7 +38,7 @@ def build():
             b.place(f"R{ch}{k + 1}", R06, None, 0, val, note=note)
     b.hole((44.0, H - 3.0), d=3.2)
     b.hole((3.5, H - 3.5), d=3.2)
-    b.hole((W / 2 - 4, 3.5), d=3.2)
+    b.hole((42.5, 22.8), d=3.2)                          # (between the relays: clear of K2's coil pad)
 
     b.net("VCC", [("J1", "1"), ("J2", "2"), ("R11", "1"), ("R21", "1"), ("R14", "1"), ("R24", "1")], amps=0.1)
     b.net("GND", [("J1", "4")], amps=0.1)                    # logic ground: only the header (opto LEDs return to INx)

@@ -1,0 +1,276 @@
+{
+ "board": "esp32c3_devboard",
+ "script": "/home/user/prometheus-pcb-harness/boards/18_esp32c3_devboard/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 20,
+ "nets": 22,
+ "layers": 2,
+ "seconds": 4.6,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.044,
+  "check": 0.45,
+  "export": 3.54
+ },
+ "placement": {
+  "U1": [
+   15.0,
+   44.6,
+   0,
+   "F"
+  ],
+  "J1": [
+   26.8,
+   32.5,
+   90,
+   "F"
+  ],
+  "J2": [
+   2.0,
+   36.5,
+   0,
+   "F"
+  ],
+  "J3": [
+   28.0,
+   24.0,
+   0,
+   "F"
+  ],
+  "SW1": [
+   8.0,
+   4.0,
+   0,
+   "F"
+  ],
+  "SW2": [
+   17.0,
+   4.0,
+   0,
+   "F"
+  ],
+  "U2": [
+   11.0,
+   25.0,
+   0,
+   "F"
+  ],
+  "C1": [
+   6.6,
+   47.0,
+   180,
+   "F"
+  ],
+  "C2": [
+   6.3,
+   44.4,
+   180,
+   "F"
+  ],
+  "C3": [
+   14.4,
+   25.0,
+   90,
+   "F"
+  ],
+  "C4": [
+   7.6,
+   25.0,
+   90,
+   "F"
+  ],
+  "C5": [
+   6.0,
+   39.4,
+   0,
+   "F"
+  ],
+  "R1": [
+   19.85,
+   30.55,
+   270,
+   "F"
+  ],
+  "R2": [
+   20.0,
+   35.0,
+   90,
+   "F"
+  ],
+  "R3": [
+   6.0,
+   41.5,
+   0,
+   "F"
+  ],
+  "R4": [
+   23.5,
+   9.0,
+   0,
+   "F"
+  ],
+  "R5": [
+   23.5,
+   13.0,
+   0,
+   "F"
+  ],
+  "R6": [
+   3.2,
+   46.0,
+   90,
+   "F"
+  ],
+  "R7": [
+   13.0,
+   35.5,
+   270,
+   "F"
+  ],
+  "D1": [
+   13.0,
+   32.400000000000006,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via IO3 at (9.00, 44.60) is 0.00 mm from U1.6 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 3V3 at (11.20, 26.40) is 0.07 mm from U2.5 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U2"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 3V3 at (8.00, 46.40) is 0.01 mm from C1.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "C1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 3V3 at (8.00, 23.80) is 0.00 mm from C4.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "C4"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (23.20, 35.80) is 0.00 mm from J1.A12 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (23.20, 35.80) is 0.00 mm from J1.B1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (22.20, 35.00) is 0.05 mm from J1.A9 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (22.20, 35.00) is 0.05 mm from J1.B4 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C492408",
+  "J3": "C492408",
+  "SW1": "C116501",
+  "SW2": "C116501",
+  "C1": "C14663",
+  "C2": "C15850",
+  "C3": "C15850",
+  "C4": "C15850",
+  "C5": "C15849",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C25804",
+  "R4": "C25804",
+  "R5": "C25804",
+  "R6": "C25804",
+  "R7": "C21190"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/18_esp32c3_devboard/out/kicad8.zip"
+ }
+}

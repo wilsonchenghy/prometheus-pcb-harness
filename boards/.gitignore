@@ -7,3 +7,5 @@
 !*/out/result.json
 */err.txt
 */err_kicad.txt
+__pycache__/
+*/symbols/preview/

@@ -4,21 +4,15 @@
  "stage": "all",
  "clean": true,
  "kicad_drc": {
-  "run": false,
-  "skipped": "KiCad (kicad-cli) is not installed",
-  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
  },
- "router": "harness",
- "skipped": [
-  {
-   "what": "FreeRouting",
-   "why": "KiCad or Java is not installed: routed with the built-in router",
-   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
-  }
- ],
+ "router": "harness (routes/)",
+ "skipped": [],
  "environment": {
-  "kicad": false,
-  "kicad_python": false,
+  "kicad": true,
+  "kicad_python": true,
   "java": true,
   "freerouting": true,
   "build123d": true,
@@ -27,12 +21,12 @@
  "parts": 18,
  "nets": 12,
  "layers": 2,
- "seconds": 5.9,
+ "seconds": 2.4,
  "timings": {
-  "place+route": 2.21,
-  "critic": 0.005,
-  "check": 0.05,
-  "export": 1.12
+  "routes/": 0.0,
+  "critic": 0.011,
+  "check": 0.06,
+  "export": 1.73
  },
  "placement": {
   "J1": [
