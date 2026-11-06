@@ -387,11 +387,15 @@ const activeView = () => $$(".view").find(v => v.classList.contains("on")).id;
 function panZoom(svg, onChange) {
   // a gesture moves the drawn picture on the GPU (a CSS transform from the drawn view to the live one) and redraws it
   // sharp once the gesture rests: a viewBox change re-renders every path (a 3 MB sheet, 10 000 copper shapes) per event
-  const st = { vb: [0, 0, 100, 100] }; let base = null, box = null, idle = 0, raf = 0;
+  // (a picture that redraws inside a couple of frames - most boards - is redrawn sharp on every frame instead: the GPU
+  // copy shows blank margins zooming out and a blur zooming in until the gesture rests)
+  const st = { vb: [0, 0, 100, 100] }; let base = null, box = null, idle = 0, raf = 0, cheap = true;
   const rect = () => base ? box : (box = svg.getBoundingClientRect());
-  const draw = () => { base = null; svg.style.transform = ""; svg.style.willChange = ""; svg.setAttribute("viewBox", st.vb.join(" ")); if (onChange) onChange(st.vb); };
-  const apply = () => { svg.setAttribute("viewBox", st.vb.join(" ")); base = null; svg.style.transform = ""; if (onChange) onChange(st.vb); };
-  const live = () => { if (!base) { rect(); base = st.vb.slice(); svg.style.transformOrigin = "0 0"; svg.style.willChange = "transform"; }
+  const timed = () => { const t0 = performance.now(); requestAnimationFrame(() => requestAnimationFrame(() => { cheap = performance.now() - t0 < 50; })); };
+  const draw = () => { base = null; svg.style.transform = ""; svg.style.willChange = ""; svg.setAttribute("viewBox", st.vb.join(" ")); timed(); if (onChange) onChange(st.vb); };
+  const apply = () => { svg.setAttribute("viewBox", st.vb.join(" ")); base = null; svg.style.transform = ""; timed(); if (onChange) onChange(st.vb); };
+  const live = () => { if (!base && cheap) { if (!raf) raf = requestAnimationFrame(() => { raf = 0; apply(); }); return; }
+    if (!base) { rect(); base = st.vb.slice(); svg.style.transformOrigin = "0 0"; svg.style.willChange = "transform"; }
     if (!raf) raf = requestAnimationFrame(() => { raf = 0; const r = box, sn = r.width / st.vb[2], sb = r.width / base[2];
       svg.style.transform = `translate(${(base[0] - st.vb[0]) * sn}px,${(base[1] - st.vb[1]) * sn}px) scale(${sn / sb})`;
       if (onChange) onChange(st.vb); });
