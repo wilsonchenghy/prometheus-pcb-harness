@@ -9,7 +9,7 @@ Work with the engineer, not around them (AGENTS.md, "Working with an engineer"):
 write them into `req.json`; stop at decisions (placement, part swaps, values, assumed pins, looked-up LCSC numbers)
 and let them choose; explain each fix with its finding's `why`. Build end to end only when they ask for that.
 
-1. Once per machine: `prometheus doctor`. If KiCad, Java or FreeRouting is missing, run `prometheus setup`
+1. At the start of a session: `prometheus update` (the newest harness and this skill), then `prometheus doctor`. If KiCad, Java or FreeRouting is missing, run `prometheus setup`
    (FreeRouting, no root) and show the user the setup guide (`docs/setup.md`, https://github.com/wilsonchenghy/prometheus-pcb-harness/blob/main/docs/setup.md) for the rest; install system software only with their
    approval. Routing needs them: without them a run stops and names what is missing (`--router harness` routes a
    simple board with the built-in router, chosen explicitly).

@@ -3,6 +3,7 @@ everything to order it.
 
     python -m pcb_cli doctor                           # what this machine has: KiCad, Java, FreeRouting...
     python -m pcb_cli setup                            # download FreeRouting (checksum-checked)
+    python -m pcb_cli update                           # the newest harness from GitHub (and the Claude Code skill)
     python -m pcb_cli my_board.py out/                 # route (if needed), check, report, order files
     python -m pcb_cli my_board.py out/ --boards 10 --rules jlcpcb-4 --step
     python -m pcb_cli my_schematic.net out/ --size 50x40 --at J1=4,20,90 --amps VBUS=2   # a KiCad netlist
@@ -97,6 +98,78 @@ FREEROUTING_URL = "https://github.com/freerouting/freerouting/releases/download/
 FREEROUTING_SHA256 = "d7fd0f63f52e6d74b0fad6715f87ca9f0ffd7109d66b2a584638000270592ecf"
 
 
+REPO = "wilsonchenghy/prometheus-pcb-harness"
+
+
+def installed() -> tuple:
+    """how this copy of the harness is installed and the commit it is at: ("clone", its folder, sha) for a git clone,
+    ("pip", None, sha) for an install from GitHub (sha None when pip did not record one)"""
+    import subprocess
+    root = Path(__file__).resolve().parent.parent
+    if (root / ".git").exists():
+        sha = subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True).stdout
+        return "clone", root, sha.strip() or None
+    import importlib.metadata
+    import json
+    du = json.loads(importlib.metadata.distribution("prometheus-pcb").read_text("direct_url.json") or "{}")
+    return "pip", None, (du.get("vcs_info") or {}).get("commit_id")
+
+
+def latest() -> str:
+    """the newest commit on GitHub's main"""
+    import json
+    import urllib.request
+    with urllib.request.urlopen(f"https://api.github.com/repos/{REPO}/commits/main", timeout=5) as r:
+        return json.loads(r.read())["sha"]
+
+
+def update_notice() -> None:
+    """once a day, a line on stderr when GitHub has a newer harness than this one (``prometheus update`` takes it)"""
+    import json
+    from vendor_parts import CACHE
+    f = CACHE / "update_check.json"
+    try:
+        seen = json.loads(f.read_text()) if f.exists() else {}
+        if time.time() - seen.get("at", 0) > 86400:
+            seen = {"at": time.time(), "latest": latest()}
+            f.parent.mkdir(parents=True, exist_ok=True)
+            f.write_text(json.dumps(seen))
+        have = installed()[2]
+    except (OSError, ValueError, KeyError):             # (offline, or GitHub's rate limit: no notice, the run goes on)
+        return
+    if have and seen.get("latest") and have != seen["latest"]:
+        print(f"Prometheus: a newer version is on GitHub ({have[:7]} -> {seen['latest'][:7]}): prometheus update",
+              file=sys.stderr)
+
+
+def update() -> int:
+    """the newest harness from GitHub: git pull for a clone, pip's reinstall otherwise; the Claude Code skill too"""
+    import shutil
+    import subprocess
+    kind, root, before = installed()
+    if kind == "clone":
+        subprocess.run(["git", "-C", str(root), "pull", "--ff-only"], check=True)
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-e", str(root)], check=True)
+        skill = root / ".claude" / "skills" / "prometheus" / "SKILL.md"
+    else:
+        subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "--force-reinstall", "--no-deps",
+                        f"prometheus-pcb @ git+https://github.com/{REPO}"], check=True)
+        skill = None
+    dest = Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude")) / "skills" / "prometheus" / "SKILL.md"
+    if dest.exists():                                    # (the skill, where install.sh --skill put it)
+        if skill is not None:
+            shutil.copyfile(skill, dest)
+        else:
+            import urllib.request
+            with urllib.request.urlopen(f"https://raw.githubusercontent.com/{REPO}/main/.claude/skills/prometheus/SKILL.md",
+                                        timeout=30) as r:
+                dest.write_bytes(r.read())
+    after = installed()[2] if kind == "clone" else latest()
+    print(f"Prometheus updated: {(before or 'unknown')[:7]} -> {after[:7]}" if before != after
+          else f"Prometheus is up to date ({after[:7]})")
+    return 0
+
+
 def doctor() -> dict:
     """what this machine gives the harness: Python packages, KiCad (its DRC), Java and FreeRouting (the router),
     and what the harness falls back to without each"""
@@ -112,16 +185,16 @@ def doctor() -> dict:
     rows = {
         "kicad": {"ok": major >= 9, "have": ver or "not installed",
                   "gives": "KiCad's own DRC on every run; FreeRouting through KiCad's Specctra export",
-                  "without": "the harness's own design check and house check only (still run every time)"},
+                  "without": "no routing (or --router harness) and no KiCad DRC"},
         "kicad_python": {"ok": freerouting.kicad_available(), "have": "pcbnew importable" if freerouting.kicad_available()
-                         else "no", "gives": "KiCad writes FreeRouting's input (exact pads, net classes)",
-                         "without": "the harness writes the Specctra file itself"},
+                         else "no", "gives": "KiCad writes FreeRouting's input and reads its result back",
+                         "without": "no routing (or --router harness)"},
         "java": {"ok": bool(java), "have": f"Java {java[1]}: {java[0]}" if java else
                  (f"only Java {freerouting.java_version(old)} ({old}): FreeRouting needs 17+" if old else "not installed"),
                  "gives": "runs FreeRouting (any Java 17+ found, the default one may stay older; or set PROMETHEUS_JAVA)",
-                 "without": "no FreeRouting: the built-in grid router"},
+                 "without": "no routing (or --router harness, the built-in grid router)"},
         "freerouting": {"ok": bool(jar), "have": jar or "not found", "gives": "the router KiCad users use",
-                        "without": "the built-in grid router (fine for simple boards; dense 0.4 mm pitch chips fail)"},
+                        "without": "no routing (or --router harness: fine for simple boards, not 0.4 mm pitch chips)"},
         "build123d": {"ok": importlib.util.find_spec("build123d") is not None, "have": "",
                       "gives": "STEP of the assembled board (--step)", "without": "no STEP"},
         "schemdraw": {"ok": importlib.util.find_spec("schemdraw") is not None, "have": "",
@@ -221,6 +294,10 @@ def main(argv=None) -> int:
         return report()
     if argv[:1] == ["setup"]:
         return setup()
+    if argv[:1] == ["update"]:
+        return update()
+    if not os.environ.get("CI"):                         # (a newer harness on GitHub: said once a day)
+        update_notice()
     if argv[:1] == ["part"]:                             # (a part's symbol: pins, datasheet, footprint, the check)
         import parts
         if len(argv) < 2:
