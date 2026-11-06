@@ -1644,6 +1644,18 @@ def test_kicad_layout_imports_as_a_board_script_and_a_revision_keeps_the_rest(tm
     assert not probs and d.check() == []
     key = lambda x, n: sorted((t["layer"], tuple(map(tuple, t["pts"]))) for t in x.tracks if t["net"] == n)
     assert key(d, "B") == key(c, "B") and key(d, "A") != key(c, "A")
+    # the design written back (KiCad's pcbnew): Q2 moved on its own footprint, B's copper the designer's own items
+    import freerouting
+    if not freerouting.kicad_available():
+        return
+    rv = kicad_import.revise(d, str(tmp_path / "revised"))
+    assert rv["moved"] == ["Q2"] and "B" not in rv["rerouted"] and not rv["added"] + rv["removed"]
+    e, _, _ = kicad_import.read(rv["file"], str(tmp_path / "fp2"))
+    assert e.comps["Q2"]["at"] == (23.0, 12.0) and e.comps["Q2"]["side"] == "B" and e.comps["Q2"]["rot"] == 30.0
+    uuids = lambda f: {str(pcb._find(g, "uuid")[0][1]) for g in pcb._sx_parse(open(f).read())
+                       if isinstance(g, list) and g and g[0] in ("segment", "footprint") and pcb._find(g, "uuid")}
+    assert len(uuids(path) & uuids(rv["file"])) >= 3 + len(key(c, "B"))    # (every footprint, B's tracks: the same items)
+    assert pcb.kicad_drc(rv["file"])["errors"] == []
 
 
 def test_import_carries_cutouts_slots_artwork_labels_and_rules(tmp_path):
