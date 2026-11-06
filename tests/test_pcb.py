@@ -1747,3 +1747,6 @@ def test_a_via_against_its_own_pad_is_warned_a_via_in_pad_or_a_neck_is_not():
     b.via("GND", (x2 + 0.3 + 0.3 + fab.VIA_PAD_NECK + 0.05, 5), 0.3, 0.6)     # a neck away
     b.via("GND", (x2, 5), 0.2, 0.4)                                            # via-in-pad
     assert neck() == []
+    b.vias.clear()
+    b.via("GND", (x2 + 0.2, 5), 0.3, 0.6)                     # centre on the pad, ring half off it: the worst case
+    assert len(neck()) == 1

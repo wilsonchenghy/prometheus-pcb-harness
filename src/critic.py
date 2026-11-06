@@ -250,7 +250,7 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
         for v in board.vias:
             ring = Point(v["at"]).buffer(v["dia"] / 2, 16)
             for r, n, g in smd:
-                if pn.get((r, n)) != v["net"] or g.contains(Point(v["at"])):    # (another net, or a via-in-pad)
+                if pn.get((r, n)) != v["net"] or g.contains(ring):     # (another net, or a via-in-pad: all on the pad)
                     continue
                 gap = ring.distance(g)
                 if gap < VIA_PAD_NECK - 1e-6:
