@@ -527,7 +527,7 @@ function buildUp(host, root) {
   root.setAttribute("clip-path", "url(#wipe)");
   const beam = el("rect", { x: L, y: T, width: 3, height: H, fill: "url(#sweepg)", style: "pointer-events:none" }, host);
   const t0 = performance.now(), dur = 1300;
-  const step = (t) => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3), w = W * e;
+  const step = (t) => { const k = Math.max(0, Math.min(1, (t - t0) / dur)), e = 1 - Math.pow(1 - k, 3), w = W * e;   // (the first frame's time can be before t0)
     r.setAttribute("width", w); beam.setAttribute("x", L + w - 3); beam.setAttribute("opacity", 1 - Math.pow(k, 6));
     if (k < 1) requestAnimationFrame(step); else { root.removeAttribute("clip-path"); beam.remove(); } };
   requestAnimationFrame(step);
