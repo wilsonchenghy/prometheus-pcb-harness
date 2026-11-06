@@ -656,9 +656,8 @@ class Board:
         others = {L: unary_union([g for (n, l), g in fixed.items() if l == L and n != net] or [Point(0, 0).buffer(0)])
                   for L in self.layers}
         drills = unary_union([Point(x, y).buffer(d / 2 + self.hole_gap + via[0] / 2, 12) for x, y, d in self.all_holes()] +
-                             [g.centroid.buffer(d / 2 + self.hole_gap + via[0] / 2, 12)
-                              for _, _, _, g, d in self.pad_shapes() if d] +
-                             [Point(v["at"]).buffer(v["drill"] / 2 + self.hole_gap + via[0] / 2, 12) for v in self.vias]
+                             [h["geom"].buffer(self.hole_gap + via[0] / 2, 12)   # (each drill as its shape: a USB-C
+                              for h in self.drill_list()]                        #  shell's slot is longer than wide)
                              or [Point(0, 0).buffer(0)])
         inside = self.outline.buffer(-(via[1] / 2 + 0.3))
         edge_in = self.outline.buffer(-(self.edge + 0.02))   # (the stub as well as its via keeps the edge gap)
@@ -3135,10 +3134,9 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         # a via keeps the hole gap from every drill, this net's own plated holes too, except that inside one of those
         # the layer change needs no via at all (the plated hole joins the layers)
         # (vias already on the board included: this net's own may be reused as they stand)
-        drl = [(g.centroid, d) for r_, n_, L_, g, d in board.pad_shapes() if d and L_ == "F"] + \
-              [(Point(v_["at"]), v_["drill"]) for v_ in board.vias]
-        if drl:
-            vblk = vblk | _cxy(unary_union([c.buffer(d / 2 + board.hole_gap + via[0] / 2 + 0.02, 12) for c, d in drl]), XX, YY)
+        drl = [h["geom"] for h in board.drill_list()]  # (each drill as its shape: a USB-C shell's slot is longer
+        if drl:                                          #  than it is wide)
+            vblk = vblk | _cxy(unary_union([g_.buffer(board.hole_gap + via[0] / 2 + 0.02, 12) for g_ in drl]), XX, YY)
         own_tht = unary_union([g for r_, n_, L_, g, d in board.pad_shapes()
                                if d and L_ == "F" and pn.get((r_, n_)) == net] +
                               [Point(v_["at"]).buffer(v_["dia"] / 2) for v_ in board.vias if v_["net"] == net]
