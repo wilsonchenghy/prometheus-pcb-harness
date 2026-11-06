@@ -94,6 +94,11 @@ is not given, a board far larger than its parts: an error, shrink the outline to
 milliseconds; an `error` makes the run not clean. The placer honours `near` too: each part held near another is
 placed right after it and moved within its distance if it ends up further.
 
+**Keep the routing in git:** make a `routes/` folder beside the board script. A clean run then writes its placement
+and copper there (`<board>_<design>.json.gz`, the board's older one replaced), and a later run of the same design,
+on any machine, loads it instead of placing and routing (seconds, the same copper). Commit it with the script;
+`PCB_REROUTE=1` ignores it and routes from scratch.
+
 `--stage` runs one step: `critic` (the review alone, instant: run it after every edit to the script), `place`,
 `route` (place and route, then the checks), `check`, `export` (order files and KiCad's DRC). Each run saves the
 placed and routed board as `out/board_state.pkl`; `check`, `export` and `critic` start from it when the design is
