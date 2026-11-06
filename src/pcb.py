@@ -2853,6 +2853,16 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
     return best[1]
 
 
+def _drill_gap(at, drill: float, w: dict) -> float:
+    """drill wall to drill wall, a via's hole at ``at`` to ``w`` (a via, or a part's hole: an oval slot by its
+    shape, not its centre)"""
+    import math
+    if w.get("geom") is not None:
+        from shapely.geometry import Point
+        return Point(at).buffer(drill / 2, 16).distance(w["geom"])
+    return math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - drill / 2 - w["drill"] / 2
+
+
 def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -> List[str]:
     """vias closer than ``gap`` (default: the board's ``hole_gap``; a house's rule, e.g. 0.5 mm for JLCPCB, tightens
     it) to another via of another net or to a part's own drill (a pin's hole, an exposed pad's thermal via, a bare
@@ -2871,12 +2881,12 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
                 if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < 0.02]
 
     def short(a, b):
-        d = math.hypot(a["at"][0] - b["at"][0], a["at"][1] - b["at"][1]) - a["drill"] / 2 - b["drill"] / 2
+        d = _drill_gap(a["at"], a["drill"], b)
         return d < (gap if a["net"] != b["net"] else same) - 1e-6, d
     pn = board.pad_net()                                 # (the parts' own drills: they do not move)
     pinned = [{"net": pn.get(tuple(h["name"].split(" pad "))) if " pad " in h["name"] else None, "at": h["at"],
-               "drill": h["d"], "fixed": True} for h in board.drill_list() if not h["name"].startswith("via ")
-              and not h["slot"]]
+               "drill": h["d"], "geom": h["geom"], "fixed": True} for h in board.drill_list()
+              if not h["name"].startswith("via ")]          # (a slot too: by its shape)
     for _ in range(2):
         bad = [(a, b) for i, a in enumerate(board.vias) for b in board.vias[i + 1:] + pinned if short(a, b)[0]]
         if not bad:
@@ -2899,7 +2909,7 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
                         seg = LineString(pts[-2:] if i == -1 else pts[:2]).buffer(t["w"] / 2)
                         if seg.distance(others[t["layer"]]) < board.clear - 1e-6:
                             return False
-                    return all(math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - v["drill"] / 2 - w["drill"] / 2
+                    return all(_drill_gap(at, v["drill"], w)
                                >= (gap if w["net"] != v["net"] else same) - 1e-6
                                for w in board.vias + pinned if w is not v)
                 dx, dy = v["at"][0] - o["at"][0], v["at"][1] - o["at"][1]
@@ -2935,7 +2945,7 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
     pn = board.pad_net()
     smd = [(r, n, L, g) for r, n, L, g, d in board.pad_shapes() if not d and L in ("F", "B")]
     holes = [{"at": h["at"], "drill": h["d"], "net": pn.get(tuple(h["name"].split(" pad "))) if " pad " in h["name"]
-              else None} for h in board.drill_list() if not h["name"].startswith("via ") and not h["slot"]]
+              else None, "geom": h["geom"]} for h in board.drill_list() if not h["name"].startswith("via ")]
     left: List[str] = []
 
     def against(v, at):                                  # the own-net SMD pads too near a via at ``at``
@@ -2966,7 +2976,7 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
             if any(not others[L].is_empty and sg.buffer(w / 2).distance(others[L]) < board.clear - 1e-6
                    for L, sg, w in segs):
                 return False
-            return all(math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - v["drill"] / 2 - w["drill"] / 2
+            return all(_drill_gap(at, v["drill"], w)
                        >= (board.hole_gap if w["net"] != v["net"] else 0.254) - 1e-6
                        for w in board.vias + holes if w is not v)
         a0 = math.atan2(v["at"][1] - pad_at[1], v["at"][0] - pad_at[0])   # straight off the pad first, then turning
