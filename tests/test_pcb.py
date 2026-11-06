@@ -1336,6 +1336,8 @@ def test_live_edit_moves_a_part_reroutes_its_nets_and_undoes(tmp_path):
     assert got["ok"] and got["rerouted"] == ["B"] and got["check"] == [] and cache.rev == 1
     assert cache.live.comps["R3"]["at"] == (14, 6)
     assert sorted(tuple(map(tuple, t["pts"])) for t in cache.live.tracks if t["net"] == "A") == a_kept
+    c2, _ = pcb_cli.load(str(script))                  # (the live edit is keyed as the next CLI run keys the script)
+    assert cache.live_key == pcb_cli.design_key(c2)
     script.write_text(script.read_text().replace("(30, 0), (30, 20)", "(32, 0), (32, 20)"))
     assert not cache.refresh()["ok"] and cache.rev == 1
     cache.undo.append((None, None, None, [], []))                     # (a "route properly" undone: its copper only)
