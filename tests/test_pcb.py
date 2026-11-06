@@ -1367,6 +1367,27 @@ def test_neck_vias_moves_a_via_off_its_own_pad_and_joins_it_by_a_track():
     assert b.tracks[-1]["net"] == "GND" and b.tracks[-1]["pts"][-1] == v["at"] and len(b.islands("GND")) == before
 
 
+def test_nudge_vias_parts_a_via_from_an_oval_slot_by_its_shape():
+    """a via 0.14 mm from a USB-C shield's oval slot (its centre much further off) under a 0.5 mm rule moves away
+    until the slot's own wall is 0.5 mm off"""
+    import pcb
+    try:
+        pcb.footprint("Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal")
+    except Exception as e:
+        pytest.skip(f"KiCad footprints unavailable: {e}")
+    b = pcb.Board("slot", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (15, 6), 0, "USB")
+    b.net("GND", [("J1", "A1")])
+    slot = next(h for h in b.drill_list() if h["slot"])
+    from shapely.geometry import Point
+    g = slot["geom"]
+    x = g.bounds[0] - 0.14 - 0.15                                    # (a 0.3 mm drill, its wall 0.14 mm off the slot's)
+    b.via("GND", (round(x, 3), round(g.centroid.y, 3)), 0.3, 0.6)
+    assert Point(b.vias[0]["at"]).buffer(0.15).distance(g) < 0.2
+    pcb.nudge_vias(b, gap=0.5, reach=0.6)
+    assert Point(b.vias[0]["at"]).buffer(0.15, 16).distance(g) >= 0.5 - 1e-3
+
+
 def test_tidy_takes_away_a_via_that_joins_nothing():
     """a via with a track on one layer only joins nothing and goes; a via joining two layers' tracks stays; tracks
     meeting in a dead via still meet"""
