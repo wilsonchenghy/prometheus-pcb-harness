@@ -1650,3 +1650,11 @@ def test_a_run_without_kicad_still_gives_a_board_and_says_what_it_skipped(tmp_pa
     r = json.loads((tmp_path / "result.json").read_text())
     assert rc == 0 and r["clean"] and r["router"] == "harness"
     assert [s["what"] for s in r["skipped"]] == ["FreeRouting"] and "docs/setup.md" in r["skipped"][0]["how"]
+
+
+def test_schematic_symbol_pin_numbers_match_todays_library():
+    # KiCad 9's USB-C symbol numbers its shield S1, today's SH (the footprint's pads): the sheet must use today's
+    import kicad_sch
+    text = str(kicad_sch._lib_symbol("Connector:USB_C_Receptacle_USB2.0_16P"))
+    assert "'SH'" in text or '"SH"' in text, text[:300]
+    assert '"S1"' not in text and "'S1'" not in text

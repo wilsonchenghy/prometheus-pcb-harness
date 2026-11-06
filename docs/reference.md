@@ -194,6 +194,7 @@ Run the script to rebuild `out/`, or give it another folder. The KiCad DRC and r
 | `examples/quadruped/` | `qdd_power_board.py` | a quadruped's power / CAN board, twelve motors |
 | `examples/fpv_quad/` | `fpv_boards.py` | a 5-inch quadcopter's 4-in-1 ESC and STM32F405 flight controller (`out/fpv_esc`, `out/fpv_fc`) |
 | `examples/game_controller/` | `controller_pcb.py` | a game controller's board in its shell's outline (`controller_board.json`) |
+| `examples/imu_bno085/` | `imu_bno085.py` (+ `req.json`, run with `prometheus`) | an 18 x 22 mm BNO085 IMU breakout: USB-C, 3.3 V LDO, I2C header |
 | `examples/netlist/` | `blinker_sch.net` | a KiCad netlist to start a board from |
 
 `examples/pcb_bodies.py` (3D bodies for parts KiCad has no model of) and `examples/export.py` are shared by the
