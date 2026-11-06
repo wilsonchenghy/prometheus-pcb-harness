@@ -9,9 +9,8 @@ RF feed: grounded coplanar waveguide (CPWG), 1.2 mm track, 0.2 mm gap to the top
 solid GND on the bottom layer underneath, 1.5 mm FR4 (er ~4.5) under it: ~50 ohm by the conformal-mapping CPWG
 formula (computed for this board, not from a datasheet). It is ~1.6 mm long (lambda/4 at 868 MHz in FR4 is ~45 mm),
 so its exact impedance hardly matters; the module's ANT pad sits on the same y as the SMA's centre pin so the
-line is straight: drawn by hand with b.track (the built-in router put a 0.5 mm jog in it). So this board is
-never cached in routes/ (the harness caches only boards it routed from nothing), and C4 is left to the placer
-(near U1.13): a run with every part fixed and a hand-drawn track skips routing altogether. GND stitching vias flank the line. There is no copper keep-out: the antenna is off-board (on the
+line is straight: drawn by hand with b.track (the built-in router put a 0.5 mm jog in it); the router finishes the
+rest from it, and C4 is left to the placer (near U1.13). GND stitching vias flank the line. There is no copper keep-out: the antenna is off-board (on the
 SMA), and the module wants a solid ground under it (pin 1 / 8 / 10 GND pads drop to the bottom pour).
 
 Choices and assumptions:

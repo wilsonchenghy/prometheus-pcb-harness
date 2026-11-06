@@ -29,8 +29,7 @@ Rules learned so far:
   run with `PCB_REROUTE=1`.
 - USB-C receptacle at more than ~2 A: copper wider than ~0.52 mm does not fit beside its 0.5 mm-pitch pins; draw
   VBUS by hand (see 03_usbc_power_breakout) or rate the board lower.
-- A board with any `b.track()` in `build()` is never written to `routes/` (pcb_cli only caches boards it routed
-  from nothing: `store = ... if not b.tracks`); say so in the docstring and leave `routes/` empty.
+- (fixed) A board with `b.track()` in `build()` is cached in `routes/` like any other now.
 - 0.65 mm-pitch power ICs (DRV8833 HTSSOP): the built-in router cannot bring a multi-amp feed or the pump/VINT caps
   in between the pins. Draw the power side by hand: the feed straight along the pin's own y, wide, necking to 0.4 mm
   for its last <1.5 mm (`NECK_LEN`, the pin-entry exemption), caps with one pad sitting on the bus, short tracks
@@ -48,7 +47,7 @@ Rules learned so far:
 - `req.json` `holes` is `{"count": N, "d": 3.2}`, not a number (a bare number crashes the critic).
 - `width=` on a net does not change the design key: a cached route in `routes/` keeps the old widths. Delete the
   `routes/*.json.gz` file and run again (`PCB_REROUTE=1` routes afresh but writes nothing to `routes/`).
-- There is no via current check: the built-in router drops power nets to the bottom through single 0.3 mm vias.
+- (now a critic warning, "via current") The router drops power nets to the bottom through single 0.3 mm vias.
   Look at `out/board_state.pkl` tracks/vias per power net; draw the power path yourself (`b.track`, `b.via(net,
   at, 0.4, 0.8)` in threes) when it does.
 - Hand-drawn tracks of a net the router later fails near are torn up with the net in its rip-up passes; set

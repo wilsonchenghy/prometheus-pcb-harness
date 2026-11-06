@@ -2514,3 +2514,26 @@ def test_edge_marks_wait_for_a_placed_part():
     b = pcb.Board("em", [(0, 0), (40, 0), (40, 30), (0, 30)])
     b.place("J1", "Connector_Audio:Jack_3.5mm_CUI_SJ1-3523N_Horizontal", None, 0, "")
     assert not any(n["kind"] == "edge" and "marks where" in n["text"] for n in critic.review(b))
+
+
+def test_an_escape_stub_the_script_draws_is_cut_back_not_dropped():
+    """a stub the script draws out of a pin (for the router to take on from) that the routing joins part-way along
+    has its loose tip cut back to the join, as any spur; it stays the script's track, and a saved routing holding it
+    so is still the script's (its copper check accepts it)"""
+    import pcb
+    import pcb_cli
+    b = pcb.Board("es", [(0, 0), (20, 0), (20, 12), (0, 12)])
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (4.0, 6.0), 0, "")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (16.0, 9.0), 0, "")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    x1, y1 = b.pad("R1", "2")
+    b.track("A", "F", [(x1, y1), (x1 + 6.0, y1)], 0.3)          # (the stub, 6 mm out)
+    pcb_cli._own(b)
+    script = pcb.Board("es", [(0, 0), (20, 0), (20, 12), (0, 12)])
+    script.tracks = [dict(t) for t in b.tracks]
+    b.track("A", "F", [(x1 + 3.0, y1), (x1 + 3.0, 9.0), b.pad("R2", "1")], 0.3)   # (the route, from 3 mm along)
+    b.prune_spurs()
+    stub = [t for t in b.tracks if t.get("user")]
+    assert len(stub) == 1 and abs(stub[0]["pts"][-1][0] - (x1 + 3.0)) < 0.2
+    assert not any("dangling" in p for p in b.check())
+    assert pcb_cli._keeps_script_copper(script, b.tracks, b.vias)

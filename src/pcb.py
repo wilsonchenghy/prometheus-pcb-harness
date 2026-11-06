@@ -1391,8 +1391,9 @@ class Board:
         from shapely.geometry import LineString, Point
         from shapely.ops import substring, unary_union
         changed = 0
-        idx = set((k for k, t in enumerate(self.tracks) if not t.get("user")) if tracks is None else tracks)
-        orig, before = None, {}                          # (the script's own copper is left as it drew it)
+        idx = set(range(len(self.tracks)) if tracks is None else tracks)
+        orig, before = None, {}                          # (the script's own copper: a loose tip cut back to where
+        #                                                  the routing joined it - an escape stub - never dropped)
         for _ in range(rounds):
             loose = [(k, e) for k, e in self.loose_ends(only=sorted(i for i in idx if i < len(self.tracks)))]
             if not loose:
@@ -1426,6 +1427,8 @@ class Board:
                     for c in getattr(g, "coords", []):
                         far = max(far, line.project(Point(c)))
                 if far <= 1e-3:
+                    if t.get("user"):                    # (the script's own track: kept, whole)
+                        continue
                     drop.add(k)                          # it lies inside nothing of its net: the whole spur goes
                     changed += 1
                     continue
@@ -1436,7 +1439,7 @@ class Board:
                 if len(new) >= 2 and cut.length > 1e-3:
                     t["pts"] = new if tuple(pts[0]) == tuple(t["pts"][0]) else new[::-1]
                     changed += 1
-                else:
+                elif not t.get("user"):
                     drop.add(k)
                     changed += 1
             if drop:
@@ -3601,8 +3604,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         if pin in fan_geo:
             tree[fan_geo[pin][0]].append(fan_geo[pin][1])
     if getattr(board, "prune", True):                    # the dead ends (a way-out stub or fan-out the route joined
-        mine = [k for k, t in enumerate(board.tracks) if t["net"] == net and not t.get("user")]   # (part-way
-        #                                                  along): the whole net's once (not the script's own copper)
+        mine = [k for k, t in enumerate(board.tracks) if t["net"] == net]    # part-way along): the whole net's once
         if not probs and len(board.islands(net)) == 1:   # it is whole, else only this call's (a stub of a pin not
             board.prune_spurs(mine)                      # reached yet is its way out, kept for the next call)
         else:

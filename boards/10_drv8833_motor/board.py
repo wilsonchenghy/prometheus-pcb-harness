@@ -18,8 +18,7 @@ Engineering choices / assumptions (not cited from a page read in this run: the d
 - J3 is wired BOUT2 -> pin 1, BOUT1 -> pin 2 (J2: AOUT1 -> 1, AOUT2 -> 2) so the output tracks do not cross.
 - The power side of U1 (VM bus, VCP, VINT, the AIN/BIN escapes, GND pins into the exposed pad) is drawn by hand with
   b.track(): the built-in router could not fit a 3 A VM feed and the cap connections between 0.65 mm pins. The
-  harness saves to routes/ only boards with no hand-drawn tracks, so routes/ stays empty and each run re-routes the
-  rest (about a minute).
+  router finishes the rest from that copper, and a clean run keeps the result in routes/.
 
     prometheus boards/10_drv8833_motor/board.py out/ --spec boards/10_drv8833_motor/req.json
 """

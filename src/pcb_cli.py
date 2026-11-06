@@ -287,10 +287,20 @@ def save_state(b, out, key):
 def _keeps_script_copper(b, tracks, vias) -> bool:
     """a saved routing holds every track and via the script draws itself (a harness that once trimmed or dropped
     them saved a routing without them: same design key, wrong copper)"""
+    from shapely.geometry import LineString
     k_t = lambda t: (t["net"], t["layer"], tuple(tuple(round(c, 4) for c in p) for p in t["pts"]), round(t["w"], 4))
     k_v = lambda v: (v["net"], tuple(round(c, 4) for c in v["at"]))
     have_t, have_v = {k_t(t) for t in tracks}, {k_v(v) for v in vias}
-    return all(k_t(t) in have_t for t in b.tracks) and all(k_v(v) in have_v for v in b.vias)
+
+    def kept(t):                                         # (as drawn, or its loose tip cut back to where the routing
+        if k_t(t) in have_t:                             #  joined it: one end where it was, the rest along it)
+            return True
+        line = LineString(t["pts"]).buffer(1e-3)
+        return any(s["net"] == t["net"] and s["layer"] == t["layer"] and abs(s["w"] - t["w"]) < 1e-4
+                   and (tuple(s["pts"][0]) in (tuple(t["pts"][0]), tuple(t["pts"][-1]))
+                        or tuple(s["pts"][-1]) in (tuple(t["pts"][0]), tuple(t["pts"][-1])))
+                   and line.contains(LineString(s["pts"])) for s in tracks if len(s["pts"]) >= 2)
+    return all(kept(t) for t in b.tracks) and all(k_v(v) in have_v for v in b.vias)
 
 
 def load_state(b, out, key) -> bool:
