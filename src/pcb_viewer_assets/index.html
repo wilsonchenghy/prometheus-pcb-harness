@@ -856,7 +856,8 @@ function styleModel(m) {
           seen.set(mat, new THREE.MeshStandardMaterial({ color: lin(0xf4f4ef), roughness: .7, metalness: 0,
             polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide }));   //  of it, crisp)
         else { n.side = THREE.DoubleSide; n.roughness = .38;
-          if (n.transparent && n.opacity > .95) { n.transparent = false; n.opacity = 1; }   // (the core: solid, no vias seen through its edge)
+          if (n.transparent && n.opacity > .95) { n.transparent = false; n.opacity = 1; n.depthWrite = true; }   // (the core: solid,
+                                       // and in the depth buffer: the back copper no longer shows through it as dark dashes)
           else if (n.transparent && c.g > c.r && c.g > c.b) { n.color = lin(0x1d5e3c); n.opacity = .88; }   // (the mask: a fab's
                                        // green; KiCad's own is so dark that over bare laminate it renders black)
           else if (n.transparent) n.opacity = Math.max(n.opacity, .92);
