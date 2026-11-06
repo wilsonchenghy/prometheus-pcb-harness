@@ -623,6 +623,70 @@ def _rail(grp):
     for q, nxt in zip(grp, grp[1:]):                     # (its room reaches the next part's: the wires are inside)
         q.box = (q.box[0], q.box[1], max(q.box[2], pitch + nxt.box[0] - 0.01), q.box[3])
 
+ATTACH = 4                                               # (parts hung on one pin's wire, at most: the rest in rows)
+REACH = 80.0                                             # (how far out from its pin a hung part may stand, mm)
+
+
+def _attach(head, rest):
+    """the parts an engineer draws on an IC's pin rather than off by a label: a decoupling capacitor hanging under
+    its supply pin's wire, a pull-up standing on its signal's, out past the IC's labels on that side (the pin's label
+    stays by the pin, its wire running on under it). Each kept only where it clears the IC, the other pins' wires
+    and the parts hung before it.
+    [the parts hung], each with its offset from the IC's origin (``hang``)"""
+    sides = {}                                            # (net: the first side pin's label on it, top first)
+    for it in sorted((it for it in head.items if it[0] == "label" and it[2] in (0, 180)), key=lambda it: it[1][1]):
+        sides.setdefault(it[3], it)
+    units: Dict[Tuple, list] = {}
+    for q in rest:
+        ends = [it for it in q.items if it[0] in ("label", "gnd")]
+        if len(q.pins) != 2 or q.off is not None or len(ends) != 2 or abs(ends[0][1][0] - ends[1][1][0]) > 1e-6:
+            continue
+        top, low = sorted(ends, key=lambda it: it[1][1])
+        hit = [it for it in (low, top) if it[0] == "label" and it[3] != "GND" and it[3] in sides]
+        if hit:                                           # (both on the IC: on the one at its foot, a pull-up's)
+            units.setdefault((id(sides[hit[0][3]]), hit[0] is top), [sides[hit[0][3]], hit[0] is top]).append((q, hit[0]))
+    if not units:
+        return []
+    base = _union(head.hard + head.soft)
+    placed, out = [], []                                  # (head frame: what the hung parts must clear)
+    cursor = {0: base[2] + G, 180: base[0] - G}
+    # up-hangers top first, then down-hangers from the bottom: no part's wire crosses another's
+    for lab, down, *qs in sorted(units.values(), key=lambda u: (u[1], u[0][1][1] * (-1 if u[1] else 1))):
+        _, e, ang, net = lab
+        dx = 1 if ang == 0 else -1
+        cur, cols, rooms = cursor[ang], [], []
+        others = list(placed)
+        for q, a in qs[:ATTACH]:
+            ax, ay = a[1]
+            edge = q.box[0] if dx > 0 else q.box[2]
+            k = math.ceil(((cur - edge + ax) - e[0]) * dx / G - 1e-9)
+            c = round(e[0] + dx * k * G, 4)
+            if k * G > REACH:                             # (too far out: the block would outgrow its sheet)
+                break
+            off = (round(c - ax, 4), round(e[1] - ay, 4))
+            room = (q.box[0] + off[0], q.box[1] + off[1], q.box[2] + off[0], q.box[3] + off[1])
+            wire = (min(e[0], c), e[1] - 0.2, max(e[0], c), e[1] + 0.2)
+            if any(_hit(room, o) or _hit(wire, o) for o in others) or any(_hit(room, o) for o in head.hard + head.soft):
+                break
+            cols.append((q, a, c, off))
+            rooms.append(room)
+            cur = room[2] if dx > 0 else room[0]
+        if not cols:
+            continue
+        far = (cols[-1][2], e[1])                         # (the pin's label stays by the pin, the wire on under it)
+        head.items += [("wire", e, far)] + [("junction", (c, e[1])) for _, _, c, _ in cols[:-1]]
+        for q, a, c, off in cols:
+            q.items = [it for it in q.items if it is not a]
+            pt = a[1]
+            q.soft = [s_ for s_ in q.soft if not _hit(s_, (pt[0] - .01, pt[1] - .01, pt[0] + .01, pt[1] + .01))]
+            q.hang = off
+            q._rebox()
+            out.append(q)
+        rooms = [(q.box[0] + q.hang[0], q.box[1] + q.hang[1], q.box[2] + q.hang[0], q.box[3] + q.hang[1]) for q, *_ in cols]
+        placed += rooms + [(min(e[0], far[0]), e[1] - 0.2, max(e[0], far[0]), e[1] + 0.2)]
+        cursor[ang] = max(r[2] for r in rooms) if dx > 0 else min(r[0] for r in rooms)
+    return out
+
 
 def _blocks(board, pad: float = 0.0):
     """[[title, extent, [_Part]]]: each functional block laid out round its own origin (``pad``: the extra width of a
@@ -648,10 +712,16 @@ def _blocks(board, pad: float = 0.0):
         # the IC on the left, its parts in rows to its right, about as tall as it
         head = ps[0] if ps and len(ps[0].pins) > 3 else None
         rest = ps[1:] if head else ps
+        hung = _attach(head, rest) if head and not any(q.lib == "Device:L" for q in rest) else []
+        rest = [q for q in rest if q not in hung]
+        if head:
+            head.place(0.0, 0.0)
+        for q in hung:
+            q.at = (round(head.at[0] + q.hang[0], 4), round(head.at[1] + q.hang[1], 4))
         area = sum(p.w * p.h for p in rest)
         width = max([p.w for p in rest] + [min(((area / max(head.h, 40.0)) if head else (area * 1.6) ** 0.5) * 1.15,
                                                ROW_MAX)])        # (a small IC with many parts: rows, not one long line)
-        x0 = head.w + 4.0 if head else 0.0
+        x0 = max([head.w] + [q.room()[2] for q in hung]) + 4.0 if head else 0.0
         x, y, bottom = x0, 0.0, 0.0
         for grp in _banks(rest):                         # (rows by each part's room as snapped to the grid)
             p = grp[0]
@@ -676,9 +746,7 @@ def _blocks(board, pad: float = 0.0):
             for k, q in enumerate(grp[1:], 1):           # (a bank: on its pitch, the rail wires meeting)
                 q.at = (p.at[0] + k * p.pitch, p.at[1])
             x, bottom = grp[-1].room()[2] + 1.0, max([bottom] + [q.room()[3] for q in grp])
-        if head:
-            head.place(0.0, 0.0)
-        ps = ([head] if head else []) + rest              # (a chain's inductor is its lying-down twin now)
+        ps = ([head] if head else []) + hung + rest       # (a chain's inductor is its lying-down twin now)
         out.append([title, _union([p.room() for p in ps]), ps])
     return out
 

@@ -1575,17 +1575,23 @@ def test_schematic_draws_decoupling_as_a_bank_on_one_rail():
     assert kicad_sch.overlaps(lay) == []
 
 
-def test_schematic_draws_pull_ups_as_a_bank_on_their_rail():
-    """resistors from one rail to nets of their own (I2C and strap pull-ups on 3V3) stand on one wire across their
-    tops with one rail label, each foot keeping its own net's label"""
+def test_schematic_hangs_pull_ups_and_decoupling_on_their_pins():
+    """a pull-up stands on its signal's wire out of the IC's pin and a regulator's capacitors hang under its input
+    and output pins, the pin's label moved out past them - as an engineer draws them, not off by a label - and the
+    sheet reads back as the board's netlist"""
     import kicad_sch
     import pcb_cli
     b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "examples" / "imu_bno085" / "imu_bno085.py"))
     lay = kicad_sch.layout(b)
-    ups = [p for _, _, ps in lay[0] for p in ps if getattr(p, "pitch", 0) and p.foot == "label"]
-    assert len(ups) >= 3 and {p.rail for p in ups} == {"3V3"}
-    labels = [it[3] for p in ups for it in p.items if it[0] == "label"]
-    assert labels.count("3V3") == 1 and {"SCL", "SDA"} <= set(labels)
+    hung = {p.ref: p for _, _, ps in lay[0] for p in ps if getattr(p, "hang", None)}
+    heads = {p.ref: p for _, _, ps in lay[0] for p in ps}
+    for ref, ic in (("R5", "U1"), ("R6", "U1"), ("C1", "U2"), ("C2", "U2")):
+        q, u = hung[ref], heads[ic]
+        joins = {(round(u.at[0] + e[0], 3), round(u.at[1] + e[1], 3)) for it in u.items if it[0] == "wire" for e in it[1:]}
+        joins |= {(round(u.at[0] + it[1][0], 3), round(u.at[1] + it[1][1], 3)) for it in u.items if it[0] == "junction"}
+        ends = [(round(q.at[0] + e[0], 3), round(q.at[1] + e[1], 3)) for it in q.items if it[0] == "wire" for e in it[1:]]
+        assert joins & set(ends), ref                    # (its stub meets the pin's wire)
+    assert not any(it[0] == "label" and it[3] in ("SDA", "SCL") for it in hung["R5"].items + hung["R6"].items)
     assert kicad_sch.overlaps(lay) == []
 
 
