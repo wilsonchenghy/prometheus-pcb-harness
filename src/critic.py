@@ -84,6 +84,8 @@ WHY = {
            "faults no copper check can see.",
     "datasheet": "A symbol's pin numbers must match the manufacturer's: a wrong pin is the one mistake the board checks "
                  "cannot catch.",
+    "evidence": "A choice cited to a datasheet must say what that page says: a quote not there is a value remembered, "
+                "not read.",
 }
 
 

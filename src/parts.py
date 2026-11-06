@@ -338,7 +338,41 @@ def datasheet_notes(board) -> List[dict]:
         if not bad:
             notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],
                           "text": f"{ref}: {d['agree']} of {d['total']} pins agree with the datasheet's pin table"})
+    for e in evidence(board):                           # (a citation must say what its page says)
+        if e["found"] is False:
+            notes.append({"severity": "warning", "kind": "evidence", "refs": [e["ref"]],
+                          "text": f"{e['ref']} {e['what']} = {e['value']}: \"{e['quote']}\" is not on page {e['page']} "
+                                  f"of its datasheet"})
+        elif e["url"] is None:
+            notes.append({"severity": "warning", "kind": "evidence", "refs": [e["ref"]],
+                          "text": f"{e['ref']} {e['what']} = {e['value']}: cited with no datasheet link (give url=)"})
     return notes
+
+
+def evidence(board, read=None) -> List[dict]:
+    """the board's citations (``Board.cite``), each with its datasheet link (default: its part's symbol's) and
+    "found": its quote on its page of that datasheet's text (True / False; None when the datasheet could not be
+    read). ``read``: url -> pages (default: datasheet_text)"""
+    read = read or datasheet_text
+    squash = lambda t: re.sub(r"\s+", "", t).lower()      # (pypdf runs words together and splits lines anywhere)
+    out, texts = [], {}
+    for e in getattr(board, "evidence", []):
+        e = dict(e)
+        c = board.comps.get(e["ref"]) or {}
+        e["url"] = e["url"] or (c.get("symbol") or {}).get("datasheet") or None
+        if e["url"] and e["url"].lower().startswith("http"):
+            if e["url"] not in texts:
+                try:
+                    texts[e["url"]] = read(e["url"])
+                except Exception:
+                    texts[e["url"]] = None
+            pages = texts[e["url"]]
+            e["found"] = None if pages is None else (e["page"] <= len(pages)
+                                                     and squash(e["quote"]) in squash(pages[e["page"] - 1]))
+        else:
+            e["found"] = None
+        out.append(e)
+    return out
 
 
 # ---- the datasheet: its pin table, read and held against the symbol ----
@@ -390,10 +424,24 @@ def _numbers(variants, text, flags) -> List[str]:
                                                         # line's "3- VOUT" is not VIN's number)
 
 
+def _quote(variants, text, flags, num: Optional[str]) -> str:
+    """the datasheet's own words that gave a pin its number(s): the table row's "NAME 3" or the list's "3- NAME"
+    (the one with ``num`` in it, if any), for the viewer to find on the page"""
+    found = []
+    for v in variants:
+        e = re.escape(v) + r"(?![A-Za-z0-9_])"
+        found += [m.group(0) for m in re.finditer(r"(?:^[ \t]*|(?<=[a-z]\.))(\d{1,3})(?:[ \t]*[-–:.][ \t]*|[ \t]+)" + e,
+                                                  text, flags | re.M)]
+        found += [m.group(0) for m in re.finditer(e + r"\s*((?:\d{1,3}(?:\s*[,/–-]\s*|\s+)){0,5}\d{1,3}|—)", text, flags)]
+    found = [" ".join(q.split()) for q in found]
+    return next((q for q in found if num in re.findall(r"\d{1,3}", q)), found[0] if found else "")
+
+
 def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
     """each of the symbol's pins looked up in its datasheet's pin table: the pin's name followed by its number(s)
     (one per package the table lists). Returns {"datasheet", "page", "pins": [{"num", "name", "status": "agrees" |
-    "differs" | "not found", "datasheet": [numbers]}], "agree", "total"}"""
+    "differs" | "not found", "datasheet": [numbers], "page" (1-based, where it was read), "quote" (the words read
+    there)}], "agree", "total"}"""
     s = symbol(name)
     if not s["datasheet"].lower().startswith("http"):
         return {"datasheet": s["datasheet"], "error": "the symbol has no datasheet link", "pins": []}
@@ -410,7 +458,7 @@ def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
     tables.sort(key=lambda i: -hits[i])
     if not tables:                                      # (no table: a guess from the first pages would mislead)
         return {"datasheet": s["datasheet"], "page": None, "agree": 0, "total": len(s["pins"]),
-                "pins": [{"num": p["num"], "name": p["key"], "status": "not checked", "datasheet": []}
+                "pins": [{"num": p["num"], "name": p["key"], "status": "not checked", "datasheet": [], "page": None, "quote": ""}
                          for p in s["pins"]]}
     text = "\n".join(pages[i] for i in tables)
     exposed = bool(re.search(r"power\s*pad|ppad|thermal\s*pad|exposed\s*pad|\bEP\b|\bPAD\b", text, re.I))
@@ -427,7 +475,15 @@ def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
         else:
             st = "differs" if nums else "not found"
         agree += st == "agrees"
-        out.append({"num": p["num"], "name": p["key"], "status": st, "datasheet": nums})
+        at, quote = None, ""                             # (the page and words it was read from: its number there
+        for i in tables:                                 #  first, else the first page naming it with any number)
+            on = _numbers(variants, pages[i], 0) or _numbers(variants, pages[i], re.I)
+            if p["num"] in on or (on and at is None):
+                at = i + 1
+                quote = _quote(variants, pages[i], 0, p["num"]) or _quote(variants, pages[i], re.I, p["num"])
+                if p["num"] in on:
+                    break
+        out.append({"num": p["num"], "name": p["key"], "status": st, "datasheet": nums, "page": at, "quote": quote})
     page = (tables[0] + 1) if tables else None
     return {"datasheet": s["datasheet"], "page": page, "pins": out, "agree": agree, "total": len(out)}
 
