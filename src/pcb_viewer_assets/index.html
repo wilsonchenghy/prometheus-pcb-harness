@@ -161,6 +161,14 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .tools { left: 18px; bottom: 18px; display: flex; }
 .tools button { border: 0; border-right: 1px solid var(--line2); background: none; width: 34px; height: 32px; cursor: pointer; color: var(--text2); font-size: 15px; display: flex; align-items: center; justify-content: center; }
 .tools button:last-child { border-right: 0; }
+#lsvg.moving { cursor: grab; } #lsvg.moving.dragging { cursor: grabbing; }
+.editcard { left: 50%; bottom: 18px; transform: translateX(-50%); display: none; min-width: 340px; max-width: 560px; padding: 10px 12px; font-size: 12.5px; }
+.editcard.on { display: block; }
+.editcard .hd { display: flex; align-items: center; gap: 10px; } .editcard .hd b { font: 500 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.editcard .hd .sp { flex: 1; } .editcard .mute { color: var(--text2); }
+.editcard ul { margin: 6px 0 0; padding-left: 16px; color: var(--amber); font-size: 12px; } .editcard ul.bad { color: var(--red); }
+.editcard code { display: block; margin-top: 8px; padding: 6px 8px; background: var(--hover); border: 1px solid var(--line2); font: 11.5px var(--mono); color: var(--text); white-space: pre-wrap; word-break: break-all; }
+.editcard .row2 { display: flex; gap: 8px; margin-top: 8px; } .editcard .btn { padding: 5px 11px; font-size: 12px; }
 .tools button:hover { background: var(--tint); color: var(--blue); }
 .tools .sep { width: 0; border-left: 1px solid var(--line); }
 .tools button.on { color: #fff; background: var(--ink); }
@@ -265,9 +273,10 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     </div>
     <div class="float tools" id="tools">
       <button id="zin" title="Zoom in">+</button><button id="zout" title="Zoom out">−</button><button id="fit" title="Fit">⤢</button>
-      <div class="sep"></div><button id="flip" title="View from below">⇅</button><button id="loupeb" title="Loupe (L)">◎</button><button id="explode" title="Exploded view (E)" style="display:none">⇡</button><button id="krender" title="KiCad photoreal render" style="display:none">◐</button>
+      <div class="sep"></div><button id="flip" title="View from below">⇅</button><button id="loupeb" title="Loupe (L)">◎</button><button id="moveb" title="Move parts (M): drag a part, R turns it, drop to re-route its nets">✥</button><button id="explode" title="Exploded view (E)" style="display:none">⇡</button><button id="krender" title="KiCad photoreal render" style="display:none">◐</button>
     </div>
     <div class="float looks" id="looks"><button class="on" data-m="board">As made</button><button data-m="glow">Light</button><button data-m="xray">Layers</button></div>
+    <div class="float editcard" id="editcard"></div>
     <div id="msg"></div>
     <div class="dsheet" id="dsheet"><div class="dsh-top"><span class="k" id="dstitle">Datasheet</span><span class="dsstep"><button id="pfprev" title="Previous pin (←)">‹</button><b id="pfpin"></b><span class="st" id="pfst"></span><button id="pfnext" title="Next pin (→)">›</button></span><span class="sp"></span>
       <button id="dsprev" title="Previous page">‹</button><span class="k" id="dspage"></span><button id="dsnext" title="Next page">›</button>
@@ -351,7 +360,8 @@ $$("#seg button").forEach(b => b.onclick = () => {
   $("#looks").style.display = b.dataset.v === "layout" ? "" : "none";
   $("#krender").style.display = b.dataset.v === "v3d" ? "" : "none";
   $("#flip").style.display = b.dataset.v === "layout" ? "" : "none";
-  $("#loupeb").style.display = b.dataset.v === "layout" ? "" : "none"; $("#explode").style.display = b.dataset.v === "v3d" ? "" : "none";
+  $("#loupeb").style.display = b.dataset.v === "layout" ? "" : "none"; $("#moveb").style.display = b.dataset.v === "layout" ? "" : "none";
+  if (b.dataset.v !== "layout") { setMove(false); $("#editcard").classList.remove("on"); } $("#explode").style.display = b.dataset.v === "v3d" ? "" : "none";
   if (b.dataset.v !== "layout") setLoupe(false);
   $("#tools").style.display = b.dataset.v === "parts" ? "none" : "";
   $(".app").classList.toggle("focus", b.dataset.v === "parts" || b.dataset.v === "schem");   // (a figure or a sheet: the whole width)
@@ -498,6 +508,7 @@ function drawLayout() {
       el("circle", { cx: x, cy: y, r: 0.22, fill: c }, pg);
       hover(pg, esc(f.text)); pg.addEventListener("click", () => openIssue(i)); window._pins[i] = pg; }); }
   if (selNet) focusNet(selNet, true);
+  drawRats(svg);
   if (!window._built) { window._built = true; buildUp(host, svg); }
 }
 function buildUp(host, root) {
@@ -1197,6 +1208,85 @@ function drawSchemMarks() {
       if (k >= 0) proofGo(k); else openPin(p.ref, p.num); });
     if (proof && proof.list[proof.i] && proof.list[proof.i].ref === p.ref && proof.list[proof.i].num === p.num)
       el("circle", { cx: p.x, cy: p.y, r: 2.4, fill: "none", stroke: "#b9852c", "stroke-width": .5, "pointer-events": "none" }, g); }
+}
+
+// ---------- live edits: drag a part (✥ or M), R turns it, drop: the server moves it and routes only its nets ----------
+let moveOn = false, drag = null, EDIT = null, editBusy = false;
+function setMove(on) { moveOn = on; $("#moveb").classList.toggle("on", on); $("#lsvg").classList.toggle("moving", on); }
+$("#moveb").onclick = () => setMove(!moveOn);
+async function postJ(u, body) {
+  try { const r = await fetch(u, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body || {}) }); return await r.json(); }
+  catch (e) { return { ok: false, error: String(e) }; } }
+function toBoard(e) { const r = $("#lsvg").getBoundingClientRect(), vb = LZ.vb, mx = vb[0] + (e.clientX - r.left) / r.width * vb[2], my = vb[1] + (e.clientY - r.top) / r.height * vb[3];
+  return [flipped ? -mx : mx, -my]; }
+function partBox(c) { const xs = [], ys = [];
+  for (const poly of c.courtyard.length ? c.courtyard : c.pads.flatMap(p => p.poly)) for (const ring of poly) for (const q of ring) { xs.push(q[0]); ys.push(q[1]); }
+  return xs.length ? [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] : null; }
+function partAt(p) {                                    // (the smallest part under the pointer, the side in view first)
+  let best = null;
+  for (const c of B.comps) { const b = partBox(c); if (!b || p[0] < b[0] || p[0] > b[2] || p[1] < b[1] || p[1] > b[3]) continue;
+    const k = ((c.side || "F") === topL() ? 0 : 1e6) + (b[2] - b[0]) * (b[3] - b[1]); if (!best || k < best[0]) best = [k, c]; }
+  return best && best[1]; }
+function ghost() {                                      // (the part's pads and outline, where the drop would put it)
+  const g0 = $("#ghost"); if (g0) g0.remove(); if (!drag) return;
+  const c = drag.c, cx = X(c.at[0]), cy = Y(c.at[1]), dx = flipped ? -drag.d[0] : drag.d[0], dy = -drag.d[1];
+  const g = el("g", { id: "ghost", transform: `translate(${dx} ${dy}) rotate(${flipped ? drag.rot : -drag.rot} ${cx} ${cy})`, "pointer-events": "none" }, $("#lroot"));
+  for (const p of c.pads) el("path", { d: p.poly.map(poly => poly.map(r => "M" + r.map(q => X(q[0]) + "," + Y(q[1])).join("L") + "Z").join("")).join(""), fill: "rgba(226,180,92,.55)", stroke: "#b9852c", "stroke-width": .06 }, g);
+  if (c.courtyard.length) el("path", { d: polyPath(c.courtyard), fill: "none", stroke: "#b9852c", "stroke-width": .08, "stroke-dasharray": ".35 .25" }, g);
+  el("text", { x: cx, y: cy - .2, fill: "#8a5f19", "font-size": .9, "text-anchor": "middle", style: `font-family:'${FONT}';font-weight:600` }, g).textContent = c.ref + (drag.rot ? ` ${drag.rot}°` : "");
+}
+$("#layout").addEventListener("pointerdown", e => {     // (capture: ahead of the pan)
+  if (!moveOn || editBusy || !B || e.button !== 0) return; const p = toBoard(e), c = partAt(p); if (!c) return;
+  e.stopImmediatePropagation(); e.preventDefault(); drag = { c, p0: p, d: [0, 0], rot: 0, id: e.pointerId };
+  $("#lsvg").classList.add("dragging"); ghost(); }, true);
+window.addEventListener("pointermove", e => { if (!drag) return; const p = toBoard(e);
+  drag.d = [Math.round((p[0] - drag.p0[0]) * 20) / 20, Math.round((p[1] - drag.p0[1]) * 20) / 20]; ghost(); });   // (a 0.05 mm step)
+window.addEventListener("pointerup", async () => { if (!drag) return; const d = drag; drag = null; $("#lsvg").classList.remove("dragging"); ghost();
+  if (Math.hypot(...d.d) < .05 && !d.rot) return;
+  editBusy = true; editCard({ busy: `Moving ${d.c.ref}…` });
+  showEdit(await postJ("/api/move", { ref: d.c.ref, at: [+(d.c.at[0] + d.d[0]).toFixed(3), +(d.c.at[1] + d.d[1]).toFixed(3)], rot: ((d.c.rot || 0) + d.rot) % 360 }), d.c.ref); });
+window.addEventListener("keydown", e => { if (e.target.tagName === "INPUT" || activeView() !== "layout") return;
+  if (drag && (e.key === "r" || e.key === "R")) { drag.rot = (drag.rot + 90) % 360; ghost(); e.preventDefault(); }
+  else if (drag && e.key === "Escape") { drag = null; $("#lsvg").classList.remove("dragging"); ghost(); }
+  else if (!drag && (e.key === "m" || e.key === "M") && !e.metaKey && !e.ctrlKey) setMove(!moveOn);
+  else if ((e.metaKey || e.ctrlKey) && e.key === "z" && EDIT && !editBusy) { e.preventDefault(); undoEdit(); } });
+async function undoEdit() { editBusy = true; editCard({ busy: "Undoing…" }); showEdit(await postJ("/api/undo", {}), "undo"); }
+async function routeEdit() { editBusy = true; editCard({ busy: "Routing properly with FreeRouting… (about 30 s)" }); showEdit(await postJ("/api/route", {}), "route"); }
+function showEdit(r, what) {
+  editBusy = false;
+  if (!r || !r.ok) { editCard({ error: (r && r.error) || "the server did not answer", what }); return; }
+  EDIT = r; B = r.board; drawLayout(); if (activeView() === "parts") drawParts();
+  editCard({ r, what });
+  const n = (r.unrouted || []).length + (r.check || []).filter(t => !(r.unrouted || []).includes(t)).length;   // (the verdict was the
+  $("#vk").textContent = "Verdict · edited"; const vv = $("#vv");                                              //  last run's: say so)
+  vv.className = "v " + (n ? "bad" : "ok"); vv.textContent = n ? `${n} to fix after the edit.` : "Routed after the edit.";
+  $("#vs").textContent = n ? "Route properly, move it back, or undo." : "Run the board again for the house rules and KiCad's DRC before ordering.";
+}
+function editCard(o) {
+  const box = $("#editcard"); box.classList.add("on");
+  if (o.busy) { box.innerHTML = `<div class="hd"><b>${esc(o.busy)}</b></div>`; return; }
+  if (o.error) { box.innerHTML = `<div class="hd"><b style="color:var(--red)">${o.what === "undo" ? "Nothing undone" : o.what === "route" ? "Not routed again" : "Not moved"}</b><span class="sp"></span><button class="btn" id="ecx">✕</button></div><div class="mute">${esc(o.error)}</div>`;
+    $("#ecx").onclick = () => box.classList.remove("on"); return; }
+  const r = o.r, un = r.unrouted || [], ck = (r.check || []).filter(t => !un.includes(t));
+  const head = o.what === "route" ? "Routed again" : o.what === "undo" ? "Undone" : `${esc(o.what)} moved`;
+  box.innerHTML = `<div class="hd"><b>${head}</b><span class="mute">${r.seconds != null ? r.seconds.toFixed(2) + " s" : ""}${r.rerouted && r.rerouted.length ? " · re-routed " + esc(r.rerouted.join(", ")) : ""}</span><span class="sp"></span><button class="btn" id="ecx">✕</button></div>` +
+    (un.length ? `<ul>${un.slice(0, 4).map(t => `<li>${esc(t)}</li>`).join("")}${un.length > 4 ? `<li>${un.length - 4} more</li>` : ""}</ul>` : `<div class="mute" style="margin-top:4px">Every net it touched is routed.</div>`) +
+    (ck.length ? `<ul class="bad">${ck.slice(0, 3).map(t => `<li>${esc(t)}</li>`).join("")}</ul>` : "") +
+    (r.line && o.what !== "undo" && o.what !== "route" ? `<code>${esc(r.line)}</code>` : "") +
+    `<div class="row2"><button class="btn" id="ecundo">Undo</button>${un.length ? `<button class="btn primary" id="ecroute">Route properly</button>` : ""}${r.line && o.what !== "undo" && o.what !== "route" ? `<button class="btn" id="eccopy">Copy for board.py</button>` : ""}</div>`;
+  $("#ecx").onclick = () => box.classList.remove("on"); $("#ecundo").onclick = undoEdit;
+  if ($("#ecroute")) $("#ecroute").onclick = routeEdit;
+  if ($("#eccopy")) $("#eccopy").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(r.line); $("#eccopy").textContent = "Copied"; };
+}
+function drawRats(svg) {                                // (a net the quick re-route left: a dashed line from the pin it could not reach)
+  const un = (EDIT && EDIT.unrouted) || []; if (!un.length || !B) return;
+  const g = el("g", { "pointer-events": "none" }, svg);
+  for (const t of un) { const m = /route (\S+): could not reach ([A-Za-z0-9_]+)\.(\S+?)(?=[\s(]|$)/.exec(t); if (!m) continue;
+    const c = B.comps.find(x => x.ref === m[2]), pad = c && c.pads.find(p => p.num === m[3]); if (!pad) continue;
+    let best = null; for (const o of B.comps) for (const p of o.pads) if (p.net === m[1] && p !== pad) { const d = Math.hypot(p.at[0] - pad.at[0], p.at[1] - pad.at[1]); if (!best || d < best[0]) best = [d, p]; }
+    if (!best) continue;
+    el("line", { x1: X(pad.at[0]), y1: Y(pad.at[1]), x2: X(best[1].at[0]), y2: Y(best[1].at[1]), stroke: "#e2b45c", "stroke-width": .14, "stroke-dasharray": ".5 .3" }, g);
+    el("circle", { cx: X(pad.at[0]), cy: Y(pad.at[1]), r: .45, fill: "none", stroke: "#e2b45c", "stroke-width": .14 }, g); }
 }
 
 // ---------- data ----------
