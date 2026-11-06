@@ -1034,6 +1034,116 @@ class Board:
             return 0
         return changed
 
+    def trim_overshoots(self) -> int:
+        """a track end that runs on past the point where the next track of its net leaves it (a route taken off a
+        fine-pitch pin's stub part-way) and meets nothing there: cut back to that point, so no rounded end pokes out
+        past the corner. Returns how many ends it cut"""
+        import math
+        from shapely.geometry import LineString, Point, Polygon
+        pn = self.pad_net()
+        pad_at = {}
+        for r, n, L, g, d in self.pad_shapes():
+            pad_at.setdefault((pn.get((r, n)), L if not d else "*"), []).append(g)
+        cut, groups = 0, {}                              # (each net's pieces by KiCad's end rule, before any cut)
+        for k, t in enumerate(self.tracks):
+            for end in (0, -1):
+                if len(t["pts"]) < 2:                    # (cut to nothing by its other end)
+                    break
+                e = Point(t["pts"][end])
+                if any(math.dist(v["at"], t["pts"][end]) < 1e-3 for v in self.vias if v["net"] == t["net"]) or \
+                        any(g.buffer(1e-3).contains(e) for key in ((t["net"], t["layer"]), (t["net"], "*"))
+                            for g in pad_at.get(key, [])):
+                    continue                             # (it ends on a pad or a via: a real end)
+                others = [u for j, u in enumerate(self.tracks) if j != k and u["net"] == t["net"]
+                          and u["layer"] == t["layer"] and len(u["pts"]) >= 2]
+                if any(math.dist(q, t["pts"][end]) < 1e-3 for u in others for q in (u["pts"][0], u["pts"][-1])) or \
+                        any(LineString(u["pts"]).distance(e) < 1e-3 for u in others) or \
+                        any(Polygon(pz["poly"], pz.get("holes") or None).contains(e) for pz in self.pours
+                            if pz["net"] == t["net"] and pz["layer"] == t["layer"]):
+                    continue                             # (a joint: another track's end or middle, or its pour)
+                line = LineString(t["pts"] if end == -1 else t["pts"][::-1])   # (the loose end last)
+                at = [line.project(Point(q)) for u in others for q in (u["pts"][0], u["pts"][-1])
+                      if line.distance(Point(q)) < 1e-3 and 1e-3 < line.length - line.project(Point(q)) < 2.0
+                      and line.project(Point(q)) > 1e-3]           # (all overshoot: prune_spurs' to drop)
+                if not at:
+                    continue
+                from shapely.ops import substring
+                if t["net"] not in groups:
+                    groups[t["net"]] = len(self.anchor_groups(t["net"]))
+                old = list(t["pts"])
+                new = [tuple(c) for c in substring(line, 0.0, max(at)).coords]
+                t["pts"] = new if end == -1 else new[::-1]
+                self.__dict__.pop("_cu_memo", None)
+                if len(self.anchor_groups(t["net"])) > groups[t["net"]]:
+                    t["pts"] = old                       # (it was a joint after all: the net would come apart)
+                    self.__dict__.pop("_cu_memo", None)
+                    continue
+                cut += 1
+        self.tracks = [t for t in self.tracks if len(t["pts"]) >= 2 and LineString(t["pts"]).length > 1e-3]
+        self.__dict__.pop("_cu_memo", None)
+        return cut
+
+    def chamfer(self) -> int:
+        """each 90-degree corner of a track turned into two 45-degree bends (a chamfer about twice the track's width),
+        where the chamfer keeps the clearance to every other net: two tracks of one net and width that meet end to
+        end, with nothing else there, count as one. Returns how many corners it chamfered"""
+        import math
+        from shapely.geometry import LineString, Point
+        ends = {}
+        for k, t in enumerate(self.tracks):
+            for i in (0, -1):
+                ends.setdefault((t["net"], t["layer"], tuple(round(c, 4) for c in t["pts"][i])), []).append((k, i))
+        joined, gone = [], set()                         # (two segments end to end: one polyline)
+        pad_pts = [g for *_, g, _ in self.pad_shapes()]
+        for (net, L, p), lst in ends.items():
+            if len(lst) != 2 or any(k in gone for k, _ in lst) or lst[0][0] == lst[1][0]:
+                continue
+            (a, ia), (b, ib) = lst
+            ta, tb = self.tracks[a], self.tracks[b]
+            if abs(ta["w"] - tb["w"]) > 1e-6 or any(math.dist(v["at"], p) < 1e-3 for v in self.vias) or \
+                    any(g.contains(Point(p)) for g in pad_pts):
+                continue
+            pa = ta["pts"] if ia == -1 else ta["pts"][::-1]
+            pb = tb["pts"] if ib == 0 else tb["pts"][::-1]
+            joined.append({**ta, "pts": list(pa) + list(pb[1:])})
+            gone |= {a, b}
+        tracks = [t for k, t in enumerate(self.tracks) if k not in gone] + joined
+        fixed = self.copper(pours=False)
+        lands = {}                                       # (where each net's other copper ends: a corner one lands in
+        for u in tracks:                                 #  keeps its copper)
+            lands.setdefault((u["net"], u["layer"]), []).append(u["pts"][0])
+            lands[(u["net"], u["layer"])].append(u["pts"][-1])
+        n = 0
+        for t in tracks:
+            others = [g for (nt, l), g in fixed.items() if l == t["layer"] and nt != t["net"]]
+            near = lands.get((t["net"], t["layer"]), []) + [v["at"] for v in self.vias if v["net"] == t["net"]] + \
+                [(g.centroid.x, g.centroid.y) for g in pad_pts]
+            pts, out = list(t["pts"]), [t["pts"][0]]
+            for a, b, c in zip(pts, pts[1:], pts[2:]):
+                u1 = (b[0] - a[0], b[1] - a[1])
+                u2 = (c[0] - b[0], c[1] - b[1])
+                l1, l2 = math.hypot(*u1), math.hypot(*u2)
+                if l1 < 1e-6 or l2 < 1e-6 or abs(u1[0] * u2[0] + u1[1] * u2[1]) > 1e-3 * l1 * l2:
+                    out.append(b)                        # (not a right angle)
+                    continue
+                d = min(l1 / 2, l2 / 2, 2 * t["w"])
+                if any(math.dist(q, b) < d + t["w"] for q in near):
+                    out.append(b)                        # (something of its net lands at the corner)
+                    continue
+                p1 = (round(b[0] - u1[0] / l1 * d, 4), round(b[1] - u1[1] / l1 * d, 4))
+                p2 = (round(b[0] + u2[0] / l2 * d, 4), round(b[1] + u2[1] / l2 * d, 4))
+                cut = LineString([p1, p2]).buffer(t["w"] / 2, 8)
+                if all(cut.distance(g) >= self.clear - 1e-6 for g in others):
+                    out += [p1, p2]
+                    n += 1
+                else:
+                    out.append(b)
+            out.append(pts[-1])
+            t["pts"] = out
+        self.tracks = tracks
+        self.__dict__.pop("_cu_memo", None)
+        return n
+
     def prune_spurs(self, tracks: Optional[Sequence[int]] = None, rounds: int = 4) -> int:
         """trim the dangling ends of ``tracks`` (default: all) back to where they last lie inside other copper of
         their net, and drop tracks that reach nothing past their other end: a fine-pitch pad's way-out stub that the
@@ -1858,6 +1968,14 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
 def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     """route the whole board (``_route_board``), then length-match the differential pairs (``tune_pairs``)"""
     probs = _route_board(board, router, **kw)
+    unpaired = lambda: {p_ for p_ in board.check() if not p_.startswith("pair ")}   # (pairs: tuned just below)
+    before = unpaired()                                  # (clean corners: no stub past a bend, no right angles;
+    t0 = [dict(t, pts=list(t["pts"])) for t in board.tracks]   # kept only when the check finds nothing new)
+    board.trim_overshoots()
+    board.chamfer()
+    if unpaired() - before:
+        board.tracks = t0
+        board.__dict__.pop("_cu_memo", None)
     if getattr(board, "pairs", None):
         tune_pairs(board)
         probs = [p_ for p_ in probs if not p_.startswith("pair ")] + \
@@ -1911,17 +2029,19 @@ def tune_pairs(board: Board, tries_per_seg: int = 6) -> List[str]:
             a, b = t["pts"][k], t["pts"][k + 1]
             ux, uy = (b[0] - a[0]) / S, (b[1] - a[1]) / S
             per = 2 * (t["w"] + board.clear + 0.05)       # one bump: up, across, down, across
-            nmax = int((S - 1.0) // per)
+            m = per / 5                                   # (its corners mitred at 45 degrees, as a professional
+            nmax = int((S - 1.0) // per)                  #  tuner draws them: each mitre is 0.586 m shorter)
             for nb in sorted({max(1, nmax), max(1, nmax // 2), max(1, nmax // 4)}, reverse=True)[:3]:
-                A = want / (2 * nb)
-                if A < t["w"] or A > 3.0:
+                A = want / (2 * nb) + 2 * (2 - math.sqrt(2)) * m   # (a bump adds 2A less 2.343 m)
+                if A < max(t["w"], 2.5 * m) or A > 3.0:
                     continue
                 for sign in (1, -1):
                     nx, ny = -uy * sign, ux * sign
                     s0 = (S - nb * per) / 2
                     pts = [a]
                     for j in range(nb):
-                        for d_, h in ((0, 0), (0, A), (per / 2, A), (per / 2, 0)):
+                        for d_, h in ((-m, 0), (0, m), (0, A - m), (m, A), (per / 2 - m, A), (per / 2, A - m),
+                                      (per / 2, m), (per / 2 + m, 0)):
                             o = s0 + j * per + d_
                             pts.append((round(a[0] + ux * o + nx * h, 4), round(a[1] + uy * o + ny * h, 4)))
                     pts.append(b)

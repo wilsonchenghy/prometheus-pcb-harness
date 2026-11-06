@@ -1658,3 +1658,26 @@ def test_schematic_symbol_pin_numbers_match_todays_library():
     text = str(kicad_sch._lib_symbol("Connector:USB_C_Receptacle_USB2.0_16P"))
     assert "'SH'" in text or '"SH"' in text, text[:300]
     assert '"S1"' not in text and "'S1'" not in text
+
+
+def test_clean_corners_no_overshoot_no_right_angles():
+    """a stub that runs past the point where its route turns off is cut back to that point, and a right-angle
+    corner becomes two 45-degree bends, with the board checking as clean as before"""
+    import math
+    import pcb
+    b = pcb.Board("cc", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5, 5), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (20, 15), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    x0, y0 = b.pad("R1", "2")
+    x1, y1 = b.pad("R2", "1")
+    b.track("A", "F", [(x0, y0), (11.6, y0)], 0.25)              # a stub 0.1 mm past the turn at 11.5: inside the
+                                                                 # route's copper, so no check flags it (SCL's kink)
+    b.track("A", "F", [(11.5, y0), (11.5, y1), (x1, y1)], 0.25)  # the route off it: a right angle at (11.5, y1)
+    assert b.check() == []
+    assert b.trim_overshoots() == 1 and max(p[0] for p in b.tracks[0]["pts"]) == 11.5
+    assert b.chamfer() >= 1 and b.check() == []
+    for t in b.tracks:
+        for a, c, d in zip(t["pts"], t["pts"][1:], t["pts"][2:]):
+            u, v = (c[0] - a[0], c[1] - a[1]), (d[0] - c[0], d[1] - c[1])
+            assert abs(u[0] * v[0] + u[1] * v[1]) > 1e-3 * math.hypot(*u) * math.hypot(*v)   # no right angle left
