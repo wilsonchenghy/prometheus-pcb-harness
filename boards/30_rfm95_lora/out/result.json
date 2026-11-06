@@ -1,0 +1,205 @@
+{
+ "board": "rfm95_lora",
+ "script": "/home/user/prometheus-pcb-harness/boards/30_rfm95_lora/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": false,
+  "skipped": "KiCad (kicad-cli) is not installed",
+  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+ },
+ "router": "harness",
+ "skipped": [
+  {
+   "what": "FreeRouting",
+   "why": "KiCad or Java is not installed: routed with the built-in router",
+   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
+  }
+ ],
+ "environment": {
+  "kicad": false,
+  "kicad_python": false,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 8,
+ "nets": 11,
+ "layers": 2,
+ "seconds": 3.0,
+ "timings": {
+  "place+route": 1.33,
+  "critic": 0.007,
+  "check": 0.1,
+  "export": 0.89
+ },
+ "placement": {
+  "U1": [
+   17.5,
+   17.5,
+   0,
+   "F"
+  ],
+  "J2": [
+   29.4,
+   10.5,
+   0,
+   "F"
+  ],
+  "J1": [
+   2.5,
+   26.43,
+   0,
+   "F"
+  ],
+  "U2": [
+   10.6,
+   3.6,
+   0,
+   "F"
+  ],
+  "C1": [
+   7.6,
+   3.4,
+   90,
+   "F"
+  ],
+  "C2": [
+   13.6,
+   3.4,
+   90,
+   "F"
+  ],
+  "C3": [
+   28.1,
+   18.5,
+   90,
+   "F"
+  ],
+  "C4": [
+   29.5,
+   22.0,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 5V at (9.50, 4.50) is 0.00 mm from U2.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U2"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via DIO0 at (24.00, 19.75) is 0.00 mm from U1.14 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via DIO1 at (24.00, 21.75) is 0.00 mm from U1.15 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 3V3 at (11.75, 4.50) is 0.00 mm from U2.5 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U2"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 8 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J2": "C5199907",
+  "C1": "C15849",
+  "C2": "C15849",
+  "C3": "C14663",
+  "C4": "C15850"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "U1",
+   "what": "pin 9 ANT",
+   "value": "RFM95W-868S2",
+   "url": "https://cdn.sparkfun.com/assets/learn_tutorials/8/0/4/RFM95_96_97_98W.pdf",
+   "page": 11,
+   "quote": "RF signal output/input",
+   "found": null
+  },
+  {
+   "ref": "C1",
+   "what": "LDO input / output capacitor",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "page": 2,
+   "quote": "1.0\u00b5F ceramic capacitor is selected as input/output",
+   "found": null
+  },
+  {
+   "ref": "C2",
+   "what": "LDO input / output capacitor",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "page": 2,
+   "quote": "1.0\u00b5F ceramic capacitor is selected as input/output",
+   "found": null
+  },
+  {
+   "ref": "U2",
+   "what": "module TX current at +20 dBm",
+   "value": "120 mA",
+   "url": "https://cdn.sparkfun.com/assets/learn_tutorials/8/0/4/RFM95_96_97_98W.pdf",
+   "page": 13,
+   "quote": "RFOP = +20 dBm, on PA_BOOST",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/30_rfm95_lora/out/kicad8.zip"
+ }
+}

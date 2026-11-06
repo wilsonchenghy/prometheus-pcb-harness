@@ -1,0 +1,275 @@
+{
+ "board": "mosfet_4ch_driver",
+ "script": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": false,
+  "skipped": "KiCad (kicad-cli) is not installed",
+  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+ },
+ "router": "harness",
+ "skipped": [
+  {
+   "what": "FreeRouting",
+   "why": "KiCad or Java is not installed: routed with the built-in router",
+   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
+  }
+ ],
+ "environment": {
+  "kicad": false,
+  "kicad_python": false,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 31,
+ "nets": 18,
+ "layers": 2,
+ "seconds": 11.7,
+ "timings": {
+  "place+route": 9.27,
+  "critic": 0.009,
+  "check": 0.13,
+  "export": 1.78
+ },
+ "placement": {
+  "J1": [
+   4.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J2": [
+   16.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J3": [
+   28.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J4": [
+   40.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J5": [
+   52.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J6": [
+   39.85,
+   37.4,
+   90,
+   "F"
+  ],
+  "C1": [
+   9.5,
+   17.5,
+   90,
+   "F"
+  ],
+  "Q1": [
+   19.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D1": [
+   23.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R1": [
+   27.8,
+   33.3,
+   180,
+   "F"
+  ],
+  "R5": [
+   18.0,
+   23.333,
+   90,
+   "F"
+  ],
+  "R9": [
+   29.8,
+   36.55,
+   0,
+   "F"
+  ],
+  "D5": [
+   33.8,
+   37.4,
+   270,
+   "F"
+  ],
+  "Q2": [
+   31.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D2": [
+   35.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R2": [
+   43.6,
+   24.7,
+   270,
+   "F"
+  ],
+  "R6": [
+   30.0,
+   23.333,
+   90,
+   "F"
+  ],
+  "R10": [
+   46.6,
+   24.6,
+   270,
+   "F"
+  ],
+  "D6": [
+   49.6,
+   24.6,
+   270,
+   "F"
+  ],
+  "Q3": [
+   43.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D3": [
+   47.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R3": [
+   39.35,
+   27.7,
+   270,
+   "F"
+  ],
+  "R7": [
+   38.667,
+   20.0,
+   90,
+   "F"
+  ],
+  "R11": [
+   38.35,
+   31.75,
+   180,
+   "F"
+  ],
+  "D7": [
+   34.5,
+   32.5,
+   270,
+   "F"
+  ],
+  "Q4": [
+   55.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D4": [
+   59.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R4": [
+   53.95,
+   29.35,
+   270,
+   "F"
+  ],
+  "R8": [
+   54.0,
+   23.25,
+   90,
+   "F"
+  ],
+  "R12": [
+   50.8,
+   31.2,
+   90,
+   "F"
+  ],
+  "D8": [
+   46.8,
+   32.0,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via IN1 at (28.50, 33.25) is 0.00 mm from R1.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "J2": "C7509570",
+  "J3": "C7509570",
+  "J4": "C7509570",
+  "J5": "C7509570",
+  "C1": "C128462",
+  "D1": "C8678",
+  "R1": "C22775",
+  "R5": "C25803",
+  "R9": "C21190",
+  "D2": "C8678",
+  "R2": "C22775",
+  "R6": "C25803",
+  "R10": "C21190",
+  "D3": "C8678",
+  "R3": "C22775",
+  "R7": "C25803",
+  "R11": "C21190",
+  "D4": "C8678",
+  "R4": "C22775",
+  "R8": "C25803",
+  "R12": "C21190"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/out/kicad8.zip"
+ }
+}

@@ -1,0 +1,237 @@
+{
+ "board": "env_sensor_bme280_sht40",
+ "script": "/home/user/prometheus-pcb-harness/boards/31_env_sensor_bme280_sht40/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": false,
+  "skipped": "KiCad (kicad-cli) is not installed",
+  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+ },
+ "router": "harness",
+ "skipped": [
+  {
+   "what": "FreeRouting",
+   "why": "KiCad or Java is not installed: routed with the built-in router",
+   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
+  }
+ ],
+ "environment": {
+  "kicad": false,
+  "kicad_python": false,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 13,
+ "nets": 5,
+ "layers": 2,
+ "seconds": 4.6,
+ "timings": {
+  "place+route": 2.91,
+  "critic": 0.005,
+  "check": 0.09,
+  "export": 0.77
+ },
+ "placement": {
+  "J1": [
+   10.0,
+   3.2,
+   0,
+   "F"
+  ],
+  "J2": [
+   10.0,
+   18.8,
+   180,
+   "F"
+  ],
+  "J3": [
+   2.5,
+   16.08,
+   0,
+   "F"
+  ],
+  "U3": [
+   9.6,
+   11.0,
+   90,
+   "F"
+  ],
+  "U1": [
+   21.0,
+   11.0,
+   0,
+   "F"
+  ],
+  "U2": [
+   26.5,
+   11.0,
+   0,
+   "F"
+  ],
+  "C1": [
+   6.65,
+   10.65,
+   90,
+   "F"
+  ],
+  "C2": [
+   13.85,
+   12.2,
+   0,
+   "F"
+  ],
+  "C3": [
+   19.4,
+   7.6,
+   90,
+   "F"
+  ],
+  "C4": [
+   22.6,
+   7.6,
+   90,
+   "F"
+  ],
+  "C5": [
+   27.5,
+   8.3,
+   0,
+   "F"
+  ],
+  "R1": [
+   21.25,
+   15.05,
+   270,
+   "F"
+  ],
+  "R2": [
+   18.4,
+   4.3,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VIN at (8.75, 9.75) is 0.00 mm from U3.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 3V3 at (19.75, 9.50) is 0.00 mm from U1.8 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 3V3 at (21.25, 15.75) is 0.00 mm from R1.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (9.50, 10.25) is 0.00 mm from U3.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  }
+ ],
+ "lcsc_auto": {
+  "U2": "C2909890",
+  "C1": "C15849",
+  "C2": "C15849",
+  "C3": "C14663",
+  "C4": "C14663",
+  "C5": "C14663",
+  "R1": "C25804",
+  "R2": "C25804"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "C3",
+   "what": "BME280 VDD / VDDIO decoupling",
+   "value": "100n",
+   "url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+   "page": 39,
+   "quote": "The recommended value for C1, C2 is 100 nF",
+   "found": null
+  },
+  {
+   "ref": "C4",
+   "what": "BME280 VDD / VDDIO decoupling",
+   "value": "100n",
+   "url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+   "page": 39,
+   "quote": "The recommended value for C1, C2 is 100 nF",
+   "found": null
+  },
+  {
+   "ref": "C1",
+   "what": "LDO input / output capacitor",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "page": 2,
+   "quote": "1.0\u00b5F ceramic capacitor is selected as input/output",
+   "found": null
+  },
+  {
+   "ref": "C2",
+   "what": "LDO input / output capacitor",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "page": 2,
+   "quote": "1.0\u00b5F ceramic capacitor is selected as input/output",
+   "found": null
+  },
+  {
+   "ref": "U1",
+   "what": "SDO to GND: address 0x76",
+   "value": "GND",
+   "url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+   "page": 32,
+   "quote": "Connecting SDO to GND results in slave address",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/31_env_sensor_bme280_sht40/out/kicad8.zip"
+ }
+}
