@@ -21,3 +21,10 @@ Rules learned so far:
 - KiCad is not installed here: the built-in router runs (`router: harness`) and there is no KiCad DRC. "via neck"
   warnings from the built-in router are tolerated; errors are not. A board is done only when `clean` is true.
 - Pours: GND on B (and F) over the outline.
+- To find a KiCad symbol's exact name, list its library on GitLab:
+  `curl -s "https://gitlab.com/api/v4/projects/kicad%2Flibraries%2Fkicad-symbols/repository/tree?path=Relay.kicad_symdir&per_page=100&page=1"`
+  (footprints: project `kicad%2Flibraries%2Fkicad-footprints`, path `Relay_THT.pretty`).
+- A run reuses `out/board_state.pkl` for nets it thinks unchanged: after hand-drawn copper changes, delete it and
+  run with `PCB_REROUTE=1`.
+- USB-C receptacle at more than ~2 A: copper wider than ~0.52 mm does not fit beside its 0.5 mm-pitch pins; draw
+  VBUS by hand (see 03_usbc_power_breakout) or rate the board lower.
