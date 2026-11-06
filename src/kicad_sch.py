@@ -458,6 +458,29 @@ def blocks(board) -> List[Tuple[str, List[str]]]:
             groups.setdefault("_other", []).append(r)
         else:
             groups[g].append(r)
+    # a capacitor from a supply to ground goes with the chip that has a power pin on that supply, the nearest of them
+    # on the board: a regulator's input and output capacitors with the regulator, a chip's decoupling with that chip
+    power: Dict[str, List[str]] = {}
+    for r in ics:
+        types = {q["num"]: q["type"] for q in (board.comps[r].get("symbol") or {}).get("pins", [])}
+        for (rr, p), n in pn.items():
+            if rr == r and n != "GND" and types.get(p) in ("power_in", "power_out") and r not in power.get(n, []):
+                power.setdefault(n, []).append(r)
+    at = lambda r: board.comps[r].get("at")
+    for g in list(groups):
+        for r in list(groups[g]):
+            on = set(pins_of.get(r, []))
+            if not re.match(r"C\d", r) or len(board.comps[r]["pads"]) != 2 or "GND" not in on or len(on) != 2:
+                continue
+            rail = next(n for n in on if n != "GND")
+            ics_on = power.get(rail, [])
+            if not ics_on or not at(r) or any(not at(o) for o in ics_on) or \
+                    any(re.match(r"L\d", o) and rail in pins_of.get(o, []) for o in groups[g]):
+                continue                                 # (an inductor's output capacitor stays in its power stage)
+            best = min(ics_on, key=lambda o: math.dist(at(r)[:2], at(o)[:2]))
+            if best != g and best in groups:
+                groups[g].remove(r)
+                groups[best].append(r)
     out = []
     for k, rs in groups.items():
         if k in board.comps and is_ic(k):
