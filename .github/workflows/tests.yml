@@ -35,8 +35,10 @@ jobs:
       - run: |
           sudo curl -fsS --retry 3 --max-time 60 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x245D5502FAD7A805" -o /etc/apt/keyrings/kicad.asc
           echo "deb [signed-by=/etc/apt/keyrings/kicad.asc] https://ppa.launchpadcontent.net/kicad/kicad-9.0-releases/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) main" | sudo tee /etc/apt/sources.list.d/kicad.list
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends kicad
+          apt="-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3"   # (Launchpad stalls now and then:
+          for i in 1 2; do                                                                        #  every fetch time-limited, twice)
+            timeout -k 10 420 sudo apt-get $apt update && timeout -k 10 420 sudo apt-get $apt install -y --no-install-recommends kicad && break
+          done
           kicad-cli version
       - run: pip install -e .
       - run: python -m pcb_cli bench/blinker.py out/blinker --kicad-drc require --router harness
@@ -53,8 +55,10 @@ jobs:
       - run: |
           sudo curl -fsS --retry 3 --max-time 60 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x245D5502FAD7A805" -o /etc/apt/keyrings/kicad.asc
           echo "deb [signed-by=/etc/apt/keyrings/kicad.asc] https://ppa.launchpadcontent.net/kicad/kicad-8.0-releases/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) main" | sudo tee /etc/apt/sources.list.d/kicad.list
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends kicad
+          apt="-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3"   # (Launchpad stalls now and then:
+          for i in 1 2; do                                                                        #  every fetch time-limited, twice)
+            timeout -k 10 420 sudo apt-get $apt update && timeout -k 10 420 sudo apt-get $apt install -y --no-install-recommends kicad && break
+          done
           kicad-cli version
       - run: pip install -e ".[schematic]" pytest
       - run: python -m pytest -q tests/test_pcb.py -k kicad8 -rs
@@ -73,8 +77,10 @@ jobs:
       - run: |
           sudo curl -fsS --retry 3 --max-time 60 "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x245D5502FAD7A805" -o /etc/apt/keyrings/kicad.asc
           echo "deb [signed-by=/etc/apt/keyrings/kicad.asc] https://ppa.launchpadcontent.net/kicad/kicad-9.0-releases/ubuntu $(. /etc/os-release; echo $VERSION_CODENAME) main" | sudo tee /etc/apt/sources.list.d/kicad.list
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends kicad
+          apt="-o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=3"   # (Launchpad stalls now and then:
+          for i in 1 2; do                                                                        #  every fetch time-limited, twice)
+            timeout -k 10 420 sudo apt-get $apt update && timeout -k 10 420 sudo apt-get $apt install -y --no-install-recommends kicad && break
+          done
           mkdir -p ~/.cache/prometheus/freerouting
           curl -sSL -o ~/.cache/prometheus/freerouting/freerouting-2.0.1.jar \
             https://github.com/freerouting/freerouting/releases/download/v2.0.1/freerouting-2.0.1.jar
