@@ -1,0 +1,219 @@
+{
+ "board": "mic_preamp_mcp6002",
+ "script": "/home/user/prometheus-pcb-harness/boards/09_mic_preamp_mcp6002/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": false,
+  "skipped": "KiCad (kicad-cli) is not installed",
+  "install": "sudo add-apt-repository ppa:kicad/kicad-9.0-releases && sudo apt install kicad (or your distribution's kicad package, version 9 or newer)"
+ },
+ "router": "harness",
+ "skipped": [
+  {
+   "what": "FreeRouting",
+   "why": "KiCad or Java is not installed: routed with the built-in router",
+   "how": "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it"
+  }
+ ],
+ "environment": {
+  "kicad": false,
+  "kicad_python": false,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 18,
+ "nets": 12,
+ "layers": 2,
+ "seconds": 5.9,
+ "timings": {
+  "place+route": 2.21,
+  "critic": 0.005,
+  "check": 0.05,
+  "export": 1.12
+ },
+ "placement": {
+  "J1": [
+   4.6,
+   8.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   27.4,
+   12.81,
+   0,
+   "F"
+  ],
+  "U1": [
+   15.0,
+   9.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   20.85,
+   7.6,
+   270,
+   "F"
+  ],
+  "R2": [
+   23.4,
+   8.9,
+   90,
+   "F"
+  ],
+  "C1": [
+   23.25,
+   13.15,
+   90,
+   "F"
+  ],
+  "C2": [
+   9.55,
+   7.5,
+   90,
+   "F"
+  ],
+  "R3": [
+   9.35,
+   4.15,
+   180,
+   "F"
+  ],
+  "R4": [
+   12.6,
+   2.75,
+   270,
+   "F"
+  ],
+  "C3": [
+   9.35,
+   1.55,
+   180,
+   "F"
+  ],
+  "R5": [
+   13.5,
+   13.45,
+   180,
+   "F"
+  ],
+  "C4": [
+   15.05,
+   16.05,
+   0,
+   "F"
+  ],
+  "R6": [
+   23.4,
+   4.9,
+   270,
+   "F"
+  ],
+  "R7": [
+   17.65,
+   3.8,
+   270,
+   "F"
+  ],
+  "C5": [
+   23.45,
+   1.6,
+   0,
+   "F"
+  ],
+  "C6": [
+   19.9,
+   11.6,
+   90,
+   "F"
+  ],
+  "C7": [
+   27.0,
+   16.65,
+   0,
+   "F"
+  ],
+  "R8": [
+   22.5,
+   16.7,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VCC at (17.50, 11.00) is 0.00 mm from U1.8 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via FB at (11.75, 9.25) is 0.00 mm from U1.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 18 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J2": "C2691448",
+  "R1": "C4190",
+  "R2": "C22775",
+  "C1": "C15850",
+  "C2": "C15849",
+  "R3": "C25803",
+  "R4": "C21190",
+  "C3": "C70225",
+  "R5": "C25803",
+  "C4": "C1671",
+  "R6": "C25803",
+  "R7": "C25803",
+  "C5": "C15849",
+  "C6": "C14663",
+  "C7": "C15850",
+  "R8": "C22775"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/09_mic_preamp_mcp6002/out/kicad8.zip"
+ }
+}
