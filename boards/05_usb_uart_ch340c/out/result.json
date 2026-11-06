@@ -1,0 +1,252 @@
+{
+ "board": "usb_uart_ch340c",
+ "script": "/home/user/prometheus-pcb-harness/boards/05_usb_uart_ch340c/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 15,
+ "nets": 14,
+ "layers": 2,
+ "seconds": 2.9,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.445,
+  "check": 0.12,
+  "export": 1.88
+ },
+ "placement": {
+  "J1": [
+   3.2,
+   9.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   33.4,
+   15.35,
+   0,
+   "F"
+  ],
+  "U1": [
+   26.6,
+   8.0,
+   0,
+   "F"
+  ],
+  "C1": [
+   25.1,
+   15.2,
+   180,
+   "F"
+  ],
+  "C2": [
+   29.3,
+   14.2,
+   0,
+   "F"
+  ],
+  "C3": [
+   20.4,
+   8.7,
+   180,
+   "F"
+  ],
+  "C4": [
+   29.1,
+   1.05,
+   0,
+   "F"
+  ],
+  "R1": [
+   9.75,
+   11.15,
+   90,
+   "F"
+  ],
+  "R2": [
+   9.75,
+   6.25,
+   270,
+   "F"
+  ],
+  "R3": [
+   15.55,
+   6.35,
+   0,
+   "F"
+  ],
+  "R4": [
+   18.7,
+   13.85,
+   0,
+   "F"
+  ],
+  "R5": [
+   14.95,
+   15.1,
+   270,
+   "F"
+  ],
+  "D1": [
+   19.6,
+   6.15,
+   180,
+   "F"
+  ],
+  "D2": [
+   20.2,
+   11.35,
+   180,
+   "F"
+  ],
+  "D3": [
+   14.25,
+   11.7,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via CTS at (28.50, 3.75) is 0.00 mm from U1.9 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via RXD at (23.25, 9.50) is 0.00 mm from U1.3 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via TXD at (23.25, 10.75) is 0.00 mm from U1.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (7.75, 6.50) is 0.00 mm from J1.A9 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (7.75, 6.50) is 0.00 mm from J1.B4 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VBUS at (28.00, 12.50) is 0.00 mm from U1.16 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for J2, U1: left on the assembly layer",
+   "refs": [
+    "J2",
+    "U1"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 15 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "D1",
+    "D2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "C1": "C15850",
+  "C2": "C14663",
+  "C3": "C14663",
+  "C4": "C14663",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C21190",
+  "R4": "C21190",
+  "R5": "C21190",
+  "D3": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "C2",
+   "what": "VCC decoupling",
+   "value": "100n",
+   "url": "https://datasheet.lcsc.com/szlcsc/Jiangsu-Qin-Heng-CH340C_C84681.pdf",
+   "page": 4,
+   "quote": "0.1uF",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/05_usb_uart_ch340c/out/kicad8.zip"
+ }
+}

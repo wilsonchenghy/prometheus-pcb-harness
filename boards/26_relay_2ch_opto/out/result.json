@@ -1,0 +1,212 @@
+{
+ "board": "relay_2ch_opto",
+ "script": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 22,
+ "nets": 22,
+ "layers": 2,
+ "seconds": 10.7,
+ "timings": {
+  "place+route": 7.24,
+  "critic": 0.015,
+  "check": 0.07,
+  "export": 2.61
+ },
+ "placement": {
+  "J1": [
+   2.6,
+   13.0,
+   0,
+   "F"
+  ],
+  "J2": [
+   2.6,
+   32.0,
+   0,
+   "F"
+  ],
+  "K1": [
+   21.0,
+   33.0,
+   0,
+   "F"
+  ],
+  "J3": [
+   52.0,
+   30.0,
+   90,
+   "F"
+  ],
+  "U1": [
+   11.0,
+   33.0,
+   0,
+   "F"
+  ],
+  "Q1": [
+   13.2,
+   25.9,
+   0,
+   "F"
+  ],
+  "D1": [
+   14.6,
+   20.75,
+   90,
+   "F"
+  ],
+  "D3": [
+   7.3,
+   21.45,
+   270,
+   "F"
+  ],
+  "R11": [
+   5.7,
+   38.2,
+   0,
+   "F"
+  ],
+  "R12": [
+   17.0,
+   27.65,
+   270,
+   "F"
+  ],
+  "R13": [
+   8.65,
+   27.05,
+   180,
+   "F"
+  ],
+  "R14": [
+   3.8,
+   20.75,
+   0,
+   "F"
+  ],
+  "K2": [
+   21.0,
+   12.0,
+   0,
+   "F"
+  ],
+  "J4": [
+   52.0,
+   9.0,
+   90,
+   "F"
+  ],
+  "U2": [
+   11.0,
+   12.0,
+   0,
+   "F"
+  ],
+  "Q2": [
+   11.3,
+   3.2,
+   0,
+   "F"
+  ],
+  "D2": [
+   17.45,
+   1.9,
+   0,
+   "F"
+  ],
+  "D4": [
+   11.85,
+   38.6,
+   90,
+   "F"
+  ],
+  "R21": [
+   6.2,
+   16.55,
+   0,
+   "F"
+  ],
+  "R22": [
+   15.0,
+   6.6,
+   270,
+   "F"
+  ],
+  "R23": [
+   9.55,
+   6.7,
+   180,
+   "F"
+  ],
+  "R24": [
+   9.0,
+   38.8,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 22 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "U1",
+    "U2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C2691448",
+  "J2": "C2937625",
+  "K1": "C35449",
+  "J3": "C91154",
+  "D1": "C83528",
+  "D3": "C2286",
+  "R11": "C21190",
+  "R12": "C21190",
+  "R13": "C25804",
+  "R14": "C21190",
+  "K2": "C35449",
+  "J4": "C91154",
+  "D2": "C83528",
+  "D4": "C2286",
+  "R21": "C21190",
+  "R22": "C21190",
+  "R23": "C25804",
+  "R24": "C21190"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/out/kicad8.zip"
+ }
+}

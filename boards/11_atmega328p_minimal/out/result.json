@@ -1,0 +1,257 @@
+{
+ "board": "atmega328p_minimal",
+ "script": "/home/user/prometheus-pcb-harness/boards/11_atmega328p_minimal/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {
+   "track_dangling": 1
+  }
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 20,
+ "nets": 31,
+ "layers": 2,
+ "seconds": 4.4,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.141,
+  "check": 0.48,
+  "export": 3.2
+ },
+ "placement": {
+  "U1": [
+   22.0,
+   14.0,
+   0,
+   "F"
+  ],
+  "J3": [
+   6.0,
+   2.2,
+   90,
+   "F"
+  ],
+  "J4": [
+   6.0,
+   25.8,
+   90,
+   "F"
+  ],
+  "J2": [
+   43.8,
+   20.35,
+   0,
+   "F"
+  ],
+  "J5": [
+   2.2,
+   16.54,
+   0,
+   "F"
+  ],
+  "SW1": [
+   37.5,
+   7.5,
+   0,
+   "F"
+  ],
+  "Y1": [
+   14.5,
+   7.5,
+   0,
+   "F"
+  ],
+  "C1": [
+   15.3,
+   14.8,
+   90,
+   "F"
+  ],
+  "C2": [
+   15.3,
+   11.6,
+   270,
+   "F"
+  ],
+  "C3": [
+   28.7,
+   11.4,
+   90,
+   "F"
+  ],
+  "C4": [
+   28.7,
+   15.2,
+   90,
+   "F"
+  ],
+  "C5": [
+   11.75,
+   15.3,
+   90,
+   "F"
+  ],
+  "C6": [
+   9.8,
+   7.467,
+   90,
+   "F"
+  ],
+  "C7": [
+   18.65,
+   7.35,
+   0,
+   "F"
+  ],
+  "C8": [
+   40.35,
+   3.15,
+   0,
+   "F"
+  ],
+  "R1": [
+   30.2,
+   20.05,
+   270,
+   "F"
+  ],
+  "R2": [
+   39.05,
+   16.7,
+   90,
+   "F"
+  ],
+  "R3": [
+   6.6,
+   20.9,
+   0,
+   "F"
+  ],
+  "D1": [
+   39.0,
+   21.55,
+   270,
+   "F"
+  ],
+  "D2": [
+   11.4,
+   20.9,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via D6 at (20.00, 8.80) is 0.00 mm from U1.10 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via A7 at (25.40, 15.20) is 0.00 mm from U1.22 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via D10 at (23.20, 8.80) is 0.00 mm from U1.14 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via A2 at (24.60, 17.00) is 0.13 mm from U1.25 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via A1 at (27.00, 16.80) is 0.00 mm from U1.24 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via D12 at (24.80, 10.60) is 0.00 mm from U1.16 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  }
+ ],
+ "lcsc_auto": {
+  "J3": "C2840012",
+  "J4": "C2840012",
+  "J5": "C492420",
+  "SW1": "C116501",
+  "C1": "C14663",
+  "C2": "C14663",
+  "C3": "C14663",
+  "C4": "C14663",
+  "C5": "C15850",
+  "C6": "C1653",
+  "C7": "C1653",
+  "C8": "C14663",
+  "R1": "C25804",
+  "R2": "C21190",
+  "R3": "C21190",
+  "D1": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/11_atmega328p_minimal/out/kicad8.zip"
+ }
+}

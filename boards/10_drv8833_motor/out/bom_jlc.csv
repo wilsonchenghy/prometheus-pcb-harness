@@ -1,0 +1,13 @@
+Comment,Designator,Footprint,LCSC Part #
+10u 25V,C1,C_1206_3216Metric,C9807
+100n 25V,C2,C_0603_1608Metric,C1590
+10n 25V,C3,C_0603_1608Metric,C327204
+2.2u 10V,C4,C_0603_1608Metric,C100082
+red,D1,LED_0603_1608Metric,C2286
+VM in,J1,"TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",C7509570
+motor A,J2,"TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",C7509570
+motor B,J3,"TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",C7509570
+logic,J4,PinHeader_1x08_P2.54mm_Vertical,C2829863
+10k,"R1,R2",R_0603_1608Metric,C25804
+1k,R3,R_0603_1608Metric,C21190
+DRV8833,U1,HTSSOP-16-1EP_4.4x5mm_P0.65mm_EP3.4x5mm_Mask2.46x2.31mm_ThermalVias,C50506

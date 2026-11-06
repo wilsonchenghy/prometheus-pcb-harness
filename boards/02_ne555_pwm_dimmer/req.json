@@ -1,0 +1,2 @@
+{"size_mm": [40, 30], "layers": 2, "house": "jlcpcb-2", "nets": {"12V": {"amps": 2.0}, "LED-": {"amps": 2.0}},
+ "near": [["C3", "U1", 3.0], ["C2", "U1", 4.0]], "edge": ["J1", "J2"], "holes": {"count": 2, "d": 3.2}}

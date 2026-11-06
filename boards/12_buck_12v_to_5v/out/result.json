@@ -1,0 +1,232 @@
+{
+ "board": "buck_12v_to_5v",
+ "script": "/home/user/prometheus-pcb-harness/boards/12_buck_12v_to_5v/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 19,
+ "nets": 9,
+ "layers": 2,
+ "seconds": 2.8,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.588,
+  "check": 0.06,
+  "export": 1.65
+ },
+ "placement": {
+  "J1": [
+   5.3,
+   14.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   44.7,
+   18.0,
+   90,
+   "F"
+  ],
+  "U1": [
+   22.0,
+   14.0,
+   0,
+   "F"
+  ],
+  "C2": [
+   17.2,
+   15.25,
+   90,
+   "F"
+  ],
+  "C1": [
+   14.4,
+   15.25,
+   90,
+   "F"
+  ],
+  "C3": [
+   26.6,
+   15.25,
+   90,
+   "F"
+  ],
+  "C4": [
+   26.6,
+   12.2,
+   270,
+   "F"
+  ],
+  "L1": [
+   31.5,
+   18.0,
+   0,
+   "F"
+  ],
+  "C5": [
+   14.8,
+   6.4,
+   270,
+   "F"
+  ],
+  "C6": [
+   31.5,
+   12.0,
+   180,
+   "F"
+  ],
+  "C7": [
+   31.5,
+   8.6,
+   180,
+   "F"
+  ],
+  "C8": [
+   31.5,
+   5.199999999999999,
+   180,
+   "F"
+  ],
+  "C9": [
+   36.8,
+   12.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   25.5,
+   8.5,
+   180,
+   "F"
+  ],
+  "R2": [
+   22.0,
+   8.5,
+   270,
+   "F"
+  ],
+  "R3": [
+   25.2,
+   19.1,
+   180,
+   "F"
+  ],
+  "R4": [
+   43.9,
+   12.95,
+   180,
+   "F"
+  ],
+  "D1": [
+   42.3,
+   9.9,
+   0,
+   "F"
+  ],
+  "TP1": [
+   20.8,
+   19.35,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for C3, C6, U1: left on the assembly layer",
+   "refs": [
+    "C3",
+    "C6",
+    "U1"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 19 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "L1",
+    "TP1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "J2": "C7509570",
+  "U1": "C841384",
+  "C2": "C64705",
+  "C1": "C77102",
+  "C3": "C1591",
+  "C4": "C59782",
+  "C5": "C178565",
+  "C6": "C19659",
+  "C7": "C19659",
+  "C8": "C19659",
+  "C9": "C19659",
+  "R1": "C25803",
+  "R2": "C25962",
+  "R3": "C25803",
+  "R4": "C21190"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "R2",
+   "what": "RFBB for 5 V",
+   "value": "24.9k",
+   "url": "https://www.ti.com/lit/ds/symlink/lmr33630.pdf",
+   "page": 21,
+   "quote": "For this 5-V example, RFBT = 100 k\u03a9 and RFBB = 24.9 k\u03a9 are chosen.",
+   "found": null
+  },
+  {
+   "ref": "C3",
+   "what": "CBOOT",
+   "value": "100n",
+   "url": "https://www.ti.com/lit/ds/symlink/lmr33630.pdf",
+   "page": 23,
+   "quote": "A high-quality ceramic capacitor of 100 nF and at least 10 V is required.",
+   "found": null
+  },
+  {
+   "ref": "U1",
+   "what": "EN tied to VIN",
+   "value": "VIN",
+   "url": "https://www.ti.com/lit/ds/symlink/lmr33630.pdf",
+   "page": 5,
+   "quote": "Can be connected directly to VIN",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/12_buck_12v_to_5v/out/kicad8.zip"
+ }
+}

@@ -1,0 +1,180 @@
+{
+ "board": "ina219_power_monitor",
+ "script": "/home/user/prometheus-pcb-harness/boards/13_ina219_power_monitor/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 12,
+ "nets": 10,
+ "layers": 2,
+ "seconds": 2.1,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.055,
+  "check": 0.05,
+  "export": 1.51
+ },
+ "placement": {
+  "J1": [
+   30.8,
+   7.5,
+   90,
+   "F"
+  ],
+  "J2": [
+   2.5,
+   13.8,
+   0,
+   "F"
+  ],
+  "U1": [
+   12.5,
+   10.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   22.5,
+   10.0,
+   270,
+   "F"
+  ],
+  "C1": [
+   15.0,
+   5.7,
+   270,
+   "F"
+  ],
+  "C2": [
+   15.85,
+   14.55,
+   0,
+   "F"
+  ],
+  "R2": [
+   6.6,
+   8.75,
+   90,
+   "F"
+  ],
+  "R3": [
+   8.5,
+   5.5,
+   0,
+   "F"
+  ],
+  "R4": [
+   6.8,
+   12.8,
+   90,
+   "F"
+  ],
+  "R5": [
+   9.9,
+   15.25,
+   90,
+   "F"
+  ],
+  "R6": [
+   18.3,
+   12.0,
+   180,
+   "F"
+  ],
+  "R7": [
+   18.3,
+   8.6,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via SDA at (10.00, 9.25) is 0.00 mm from U1.3 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via SCL at (10.00, 8.00) is 0.00 mm from U1.4 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VCC at (15.00, 8.00) is 0.00 mm from U1.5 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 12 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "R4",
+    "R5"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "R1": "C840616",
+  "C1": "C14663",
+  "C2": "C14663",
+  "R2": "C25804",
+  "R3": "C25804",
+  "R6": "C22859",
+  "R7": "C22859"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/13_ina219_power_monitor/out/kicad8.zip"
+ }
+}

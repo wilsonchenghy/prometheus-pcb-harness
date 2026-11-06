@@ -1,0 +1,214 @@
+{
+ "board": "tp4056_lipo_charger",
+ "script": "/home/user/prometheus-pcb-harness/boards/06_tp4056_lipo_charger/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {
+   "track_dangling": 1
+  }
+ },
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 18,
+ "nets": 16,
+ "layers": 2,
+ "seconds": 46.5,
+ "timings": {
+  "place+route": 43.99,
+  "critic": 0.07,
+  "check": 0.06,
+  "export": 1.68
+ },
+ "placement": {
+  "J1": [
+   3.2,
+   11.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   30.5,
+   6.0,
+   270,
+   "F"
+  ],
+  "J3": [
+   15.0,
+   2.2,
+   90,
+   "F"
+  ],
+  "U1": [
+   13.0,
+   11.0,
+   0,
+   "F"
+  ],
+  "U2": [
+   24.5,
+   9.0,
+   0,
+   "F"
+  ],
+  "Q1": [
+   23.3,
+   4.0,
+   180,
+   "F"
+  ],
+  "C2": [
+   17.8,
+   6.6,
+   270,
+   "F"
+  ],
+  "C1": [
+   9.6,
+   6.4,
+   270,
+   "F"
+  ],
+  "C3": [
+   25.0,
+   11.45,
+   0,
+   "F"
+  ],
+  "R1": [
+   11.0,
+   15.2,
+   0,
+   "F"
+  ],
+  "R2": [
+   14.5,
+   17.2,
+   180,
+   "F"
+  ],
+  "R3": [
+   19.5,
+   17.2,
+   180,
+   "F"
+  ],
+  "R4": [
+   21.6,
+   11.8,
+   270,
+   "F"
+  ],
+  "R5": [
+   20.9,
+   9.0,
+   180,
+   "F"
+  ],
+  "R6": [
+   5.0,
+   17.6,
+   0,
+   "F"
+  ],
+  "R7": [
+   5.5,
+   2.0,
+   270,
+   "F"
+  ],
+  "D1": [
+   14.5,
+   19.5,
+   0,
+   "F"
+  ],
+  "D2": [
+   19.5,
+   19.5,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via OD at (22.90, 10.75) is 0.10 mm from U2.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U2"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via CHRG at (14.75, 12.00) is 0.00 mm from U1.7 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J3": "C492401",
+  "U2": "C351410",
+  "Q1": "C2830320",
+  "C2": "C15850",
+  "C1": "C15850",
+  "C3": "C14663",
+  "R1": "C22765",
+  "R2": "C21190",
+  "R3": "C21190",
+  "R4": "C22775",
+  "R5": "C21190",
+  "R6": "C23186",
+  "R7": "C23186",
+  "D1": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "R1",
+   "what": "PROG resistor for 1 A",
+   "value": "1.2k",
+   "url": "https://www.lcsc.com/datasheet/lcsc_datasheet_2410121619_TOPPOWER-Nanjing-Extension-Microelectronics-TP4056-42-ESOP8_C16581.pdf",
+   "page": 4,
+   "quote": "1.2k",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/06_tp4056_lipo_charger/out/kicad8.zip"
+ }
+}

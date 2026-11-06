@@ -1,0 +1,319 @@
+{
+ "board": "usb_hub_fe11s",
+ "script": "/home/user/prometheus-pcb-harness/boards/23_usb_hub_fe11s/board.py",
+ "stage": "all",
+ "clean": false,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {
+   "track_dangling": 1
+  }
+ },
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 29,
+ "nets": 25,
+ "layers": 2,
+ "seconds": 80.5,
+ "timings": {
+  "place+route": 75.48,
+  "critic": 0.04,
+  "check": 0.16,
+  "export": 3.98
+ },
+ "placement": {
+  "J1": [
+   39.0,
+   42.8,
+   180,
+   "F"
+  ],
+  "J2": [
+   7.0,
+   12.0,
+   0,
+   "F"
+  ],
+  "J3": [
+   25.5,
+   12.0,
+   0,
+   "F"
+  ],
+  "J4": [
+   44.0,
+   12.0,
+   0,
+   "F"
+  ],
+  "J5": [
+   62.5,
+   12.0,
+   0,
+   "F"
+  ],
+  "U1": [
+   39.0,
+   30.0,
+   90,
+   "F"
+  ],
+  "Y1": [
+   35.2,
+   23.75,
+   180,
+   "F"
+  ],
+  "F1": [
+   56.5,
+   24.15,
+   0,
+   "F"
+  ],
+  "R1": [
+   46.95,
+   39.0,
+   0,
+   "F"
+  ],
+  "R2": [
+   31.2,
+   38.0,
+   270,
+   "F"
+  ],
+  "R3": [
+   46.0,
+   27.6,
+   0,
+   "F"
+  ],
+  "R4": [
+   30.6,
+   28.45,
+   90,
+   "F"
+  ],
+  "R5": [
+   50.2,
+   31.9,
+   180,
+   "F"
+  ],
+  "R6": [
+   46.6,
+   33.1,
+   90,
+   "F"
+  ],
+  "R7": [
+   31.15,
+   31.75,
+   0,
+   "F"
+  ],
+  "R8": [
+   53.6,
+   32.85,
+   90,
+   "F"
+  ],
+  "C1": [
+   37.2,
+   34.7,
+   0,
+   "F"
+  ],
+  "C2": [
+   44.6,
+   24.4,
+   90,
+   "F"
+  ],
+  "C3": [
+   39.9,
+   35.7,
+   90,
+   "F"
+  ],
+  "C4": [
+   51.35,
+   25.4,
+   90,
+   "F"
+  ],
+  "C5": [
+   27.4,
+   28.75,
+   270,
+   "F"
+  ],
+  "C6": [
+   42.6,
+   24.3,
+   90,
+   "F"
+  ],
+  "C7": [
+   33.2,
+   34.6,
+   0,
+   "F"
+  ],
+  "C10": [
+   6.15,
+   18.65,
+   180,
+   "F"
+  ],
+  "C11": [
+   61.8,
+   25.4,
+   90,
+   "F"
+  ],
+  "C12": [
+   6.2,
+   22.3,
+   180,
+   "F"
+  ],
+  "C13": [
+   24.55,
+   18.3,
+   90,
+   "F"
+  ],
+  "D1": [
+   54.2,
+   36.1,
+   180,
+   "F"
+  ],
+  "FB1": [
+   50.05,
+   34.45,
+   180,
+   "F"
+  ]
+ },
+ "findings": [
+  {
+   "stage": "routing",
+   "kind": "clearance",
+   "text": "F.Cu: GND and VDD5 0.19 mm apart (clearance 0.2) at (40.1, 33.8)",
+   "pins": [],
+   "hint": "copper of two nets too close: move or re-route, or check the clearance",
+   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "at": [
+    40.1,
+    33.8
+   ]
+  },
+  {
+   "stage": "design",
+   "kind": "clearance",
+   "text": "F.Cu: GND and VDD5 0.19 mm apart (clearance 0.2) at (40.1, 33.8)",
+   "pins": [],
+   "hint": "copper of two nets too close: move or re-route, or check the clearance",
+   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "at": [
+    40.1,
+    33.8
+   ]
+  },
+  {
+   "stage": "kicad",
+   "kind": "other",
+   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1875 mm) (Track [GND] on F.Cu, length 0.2500 mm; Track [VDD5] on F.Cu, length 1.6500 mm)",
+   "pins": [
+    "W0.52mm"
+   ],
+   "hint": "read the text",
+   "why": ""
+  }
+ ],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "6 of 29 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "J2",
+    "J3",
+    "J4",
+    "J5",
+    "U1",
+    "D1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "Y1": "C9002",
+  "F1": "C210837",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C13167",
+  "R4": "C25804",
+  "R5": "C25804",
+  "R6": "C4184",
+  "R7": "C25804",
+  "R8": "C21190",
+  "C1": "C15850",
+  "C2": "C15850",
+  "C3": "C14663",
+  "C4": "C15850",
+  "C5": "C15849",
+  "C6": "C14663",
+  "C7": "C14663",
+  "C10": "C76659",
+  "C11": "C76659",
+  "C12": "C76659",
+  "C13": "C76659",
+  "FB1": "C85833"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "R3",
+   "what": "REXT",
+   "value": "2.7k 1%",
+   "url": "https://cdn-shop.adafruit.com/product-files/2991/FE1.1s+Data+Sheet+(Rev.+1.0).pdf",
+   "page": 5,
+   "quote": "resister should be connected to VSS",
+   "found": null
+  },
+  {
+   "ref": "C1",
+   "what": "VD33_O cap",
+   "value": "10u",
+   "url": "https://cdn-shop.adafruit.com/product-files/2991/FE1.1s+Data+Sheet+(Rev.+1.0).pdf",
+   "page": 5,
+   "quote": "decoupling capacitor is required",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/23_usb_hub_fe11s/out/kicad8.zip"
+ }
+}

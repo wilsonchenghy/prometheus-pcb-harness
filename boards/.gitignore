@@ -1,0 +1,12 @@
+# keep only the order files and the summary of each run
+*/out/*
+!*/out/gerbers.zip
+!*/out/bom_jlc.csv
+!*/out/cpl.csv
+!*/out/layers.png
+!*/out/render_3d.jpg
+!*/out/result.json
+*/err.txt
+*/err_kicad.txt
+__pycache__/
+*/symbols/preview/
