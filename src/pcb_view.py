@@ -150,6 +150,30 @@ def kind_of(ref: str, fp: str) -> str:
     return "other"
 
 
+def _datasheet_pdf(cache, out, ref: str, url: str):
+    """the datasheet PDF (from the parts cache, fetched once) of a part by its ref, or one the board cites by url;
+    only links the board itself names are fetched (this page is not a proxy)"""
+    import hashlib
+    import parts
+    from vendor_parts import CACHE
+    comps = cache.board().get("comps", [])
+    links = {c["symbol"].get("datasheet") for c in comps if c.get("symbol")}
+    p = out / "result.json"
+    if p.exists():
+        links |= {e.get("url") for e in json.loads(p.read_text()).get("evidence", []) if isinstance(e, dict)}
+    if ref:
+        url = next((c["symbol"].get("datasheet") for c in comps if c["ref"] == ref and c.get("symbol")), "")
+    if not url or url not in links or not url.lower().startswith("http"):
+        return None
+    dst = CACHE / "datasheets" / (hashlib.sha1(url.encode()).hexdigest()[:16] + ".pdf")
+    if not dst.exists() or dst.stat().st_size < 2000:
+        try:
+            parts.datasheet_text(url)                    # (fetches it into the cache, as the pin check does)
+        except Exception:
+            return None
+    return dst if dst.exists() else None
+
+
 def board_data(b) -> dict:
     """everything the page draws, board mm (y up)"""
     pn = b.pad_net()
@@ -460,6 +484,15 @@ def make_handler(out_dir: str):
                 if path == "/api/schematic":
                     with cache.lock:
                         return self._json(_schematic(out))
+                if path in ("/pdf.min.js", "/pdf.worker.min.js"):        # (PDF.js, for the datasheet panel)
+                    return self._send(200, (PAGE.parent / path[1:]).read_bytes(), "text/javascript")
+                if path == "/api/datasheet.pdf":        # (?ref=U1, or ?url= one the board cites: the PDF itself)
+                    import urllib.parse as up
+                    q = up.parse_qs(self.path.split("?", 1)[-1])
+                    pdf = _datasheet_pdf(cache, out, q.get("ref", [""])[0], q.get("url", [""])[0])
+                    if pdf is None:
+                        return self._send(404, b"no datasheet", "text/plain")
+                    return self._send(200, pdf.read_bytes(), "application/pdf")
                 if path == "/GLTFLoader.js":
                     return self._send(200, (PAGE.parent / "GLTFLoader.js").read_bytes(), "text/javascript")
                 if path == "/api/render3d":

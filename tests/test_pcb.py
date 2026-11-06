@@ -1805,3 +1805,22 @@ def test_a_routes_folder_beside_the_script_keeps_the_routing(tmp_path, monkeypat
     assert pcb_cli.main(args) == 0
     again = json.loads((tmp_path / "out" / "result.json").read_text())
     assert again["clean"] and "routes/" in again["router"] and again["placement"] == first["placement"]
+
+
+def test_the_viewer_serves_a_cited_datasheet_and_nothing_else(tmp_path, monkeypatch):
+    """/api/datasheet.pdf gives a part's datasheet from the parts cache, and refuses a link the board does not cite"""
+    import hashlib
+    import pcb_view
+    from vendor_parts import CACHE
+    url = "https://example.com/u1.pdf"
+    dst = CACHE / "datasheets" / (hashlib.sha1(url.encode()).hexdigest()[:16] + ".pdf")
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(b"%PDF-1.4" + b" " * 3000)
+
+    class Cache:
+        def board(self):
+            return {"comps": [{"ref": "U1", "symbol": {"datasheet": url}}]}
+    assert pcb_view._datasheet_pdf(Cache(), tmp_path, "U1", "") == dst
+    assert pcb_view._datasheet_pdf(Cache(), tmp_path, "", url) == dst
+    assert pcb_view._datasheet_pdf(Cache(), tmp_path, "", "https://example.com/other.pdf") is None
+    dst.unlink()

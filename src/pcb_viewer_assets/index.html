@@ -73,6 +73,29 @@ h4 { margin: 4px 0 10px; }
 .verdict .v.ok { background: linear-gradient(90deg, #b9852c, #dcae58); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .verdict .v.bad { color: var(--red); } .verdict .v.run { color: var(--text2); }
 .verdict .s { color: var(--text2); margin-top: 6px; font-size: 13px; }
+/* the datasheet panel: the maker's PDF over the canvas, the cited text marked on its page */
+.dsheet { position: absolute; inset: 14px; z-index: 30; display: none; flex-direction: column; background: #fff; border: 1px solid var(--line); box-shadow: 0 24px 60px -24px rgba(17,24,39,.45); }
+.dsheet.on { display: flex; }
+.dsh-top { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 44px; border-bottom: 1px solid var(--line); flex: none; }
+.dsh-top .k { font: 500 11px var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--text2); }
+.dsh-top .k b { color: var(--text); font-weight: 500; }
+.dsh-top .sp { flex: 1; }
+.dsh-top button { border: 1px solid var(--line); background: #fff; width: 28px; height: 26px; cursor: pointer; color: var(--text2); }
+.dsh-top button:hover { background: var(--tint); color: var(--blue); }
+.dsh-top a { font-size: 12px; color: var(--blue); text-decoration: none; }
+.dsh-note { padding: 8px 14px; font-size: 12.5px; color: var(--text2); border-bottom: 1px solid var(--line2); flex: none; }
+.dsh-note.ok { color: var(--green); } .dsh-note.warn { color: var(--amber); }
+.dsh-note q { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.dsh-body { flex: 1; overflow: auto; background: #e9ecef; padding: 18px; }
+.dsh-pagebox { position: relative; margin: 0 auto; width: max-content; box-shadow: 0 8px 30px -12px rgba(17,24,39,.4); }
+.dsh-pagebox canvas { display: block; background: #fff; }
+.dsmark { position: absolute; background: rgba(226,180,92,.35); outline: 1px solid rgba(185,133,44,.8); pointer-events: none; }
+.dsmark.row { background: rgba(31,95,168,.08); outline: 2px solid #1f5fa8; outline-offset: 2px; border-radius: 3px; }
+.ev { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 10px 12px; margin-bottom: -1px; border: 1px solid var(--line); background: #fff; cursor: pointer; }
+.ev:hover { background: var(--tint); }
+.ev .w { font: 500 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text2); }
+.ev .x { color: var(--text); } .ev .pg { font: 500 11px var(--mono); color: var(--blue); align-self: center; }
+.ev q { grid-column: 1 / -1; font: 12px var(--mono); color: var(--text2); }
 .tabs2 { display: flex; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .tabs2 button { border: 0; background: none; padding: 11px 10px 10px; cursor: pointer; color: var(--text2); font: 500 11px var(--mono); letter-spacing: .16em; text-transform: uppercase; border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .tabs2 button.on { color: var(--text); border-bottom-color: var(--ink); }
@@ -223,14 +246,19 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     </div>
     <div class="float looks" id="looks"><button class="on" data-m="board">As made</button><button data-m="glow">Light</button><button data-m="xray">Layers</button></div>
     <div id="msg"></div>
+    <div class="dsheet" id="dsheet"><div class="dsh-top"><span class="k" id="dstitle">Datasheet</span><span class="sp"></span>
+      <button id="dsprev" title="Previous page">‹</button><span class="k" id="dspage"></span><button id="dsnext" title="Next page">›</button>
+      <a id="dsopen" target="_blank" rel="noopener">open original ↗</a><button id="dsclose" title="Close (Esc)">✕</button></div>
+      <div class="dsh-note" id="dsnote"></div><div class="dsh-body" id="dsbody"><div class="dsh-pagebox" id="dspagebox"><canvas id="dscanvas"></canvas><div id="dsmarks"></div></div></div></div>
   </div>
 
   <div class="right">
     <div class="verdict"><div class="k" id="vk">Verdict</div><div class="v run" id="vv">Loading.</div><div class="s" id="vs"></div></div>
-    <div class="tabs2"><button class="on" data-p="checks">Checks<span class="badge" id="bchecks">0</span></button><button data-p="run">Run</button><button data-p="files">Outputs</button></div>
+    <div class="tabs2"><button class="on" data-p="checks">Checks<span class="badge" id="bchecks">0</span></button><button data-p="run">Run</button><button data-p="files">Outputs</button><button data-p="evidence">Evidence<span class="badge" id="bevidence">0</span></button></div>
     <div class="pane on" id="p-checks"><div id="checks"></div></div>
     <div class="pane" id="p-run"><div id="runp"></div></div>
     <div class="pane" id="p-files"><div id="files"></div></div>
+    <div class="pane" id="p-evidence"><div id="evidence"></div></div>
   </div>
 
   <div class="status"><span>x <b id="cx">—</b></span><span>y <b id="cy">—</b></span><span>zoom <b id="zm">—</b></span>
@@ -239,6 +267,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 <div id="tip"></div>
 <script src="/three.min.js"></script>
 <script src="/GLTFLoader.js"></script>
+<script src="/pdf.min.js"></script>
 <script>
 "use strict";
 const $ = (s) => document.querySelector(s), $$ = (s) => [...document.querySelectorAll(s)];
@@ -754,10 +783,12 @@ async function annotateDatasheet(c, pinXY, L) {
     return; }
   cap.textContent = `DATASHEET · ${d.agree} / ${d.total} PINS AGREE · PAGE ${d.page}`; fitText(cap, L.w - 44 - 90);
   cap.setAttribute("fill", d.agree === d.total ? "#8a6a2c" : "#b2412f");
-  const link = el("a", { href: d.datasheet, target: "_blank" }, svg);
-  el("text", { x: L.x + L.w - 22, y: L.y + L.h - 22, fill: "#9a7a3a", "font-size": 11, "font-family": FONT, "text-anchor": "end", style: "cursor:pointer" }, link).textContent = "open PDF ↗";
+  const link = el("g", { style: "cursor:pointer" }, svg);
+  link.addEventListener("click", () => openDatasheet({ ref, link: d.datasheet, page: d.page, title: ref + " pin table" }));
+  el("text", { x: L.x + L.w - 22, y: L.y + L.h - 22, fill: "#9a7a3a", "font-size": 11, "font-family": FONT, "text-anchor": "end" }, link).textContent = "open the page ›";
   for (const q of d.pins) { const a = pinXY[q.num]; if (!a) continue; const ok = q.status === "agrees";
-    const g = el("g", {}, svg), x = a[0] + (a[2].rot === 0 ? -16 : a[2].rot === 180 ? 16 : 0), y = a[1] + (a[2].rot === 90 ? 16 : a[2].rot === 270 ? -16 : 0);
+    const g = el("g", { style: "cursor:pointer" }, svg), x = a[0] + (a[2].rot === 0 ? -16 : a[2].rot === 180 ? 16 : 0), y = a[1] + (a[2].rot === 90 ? 16 : a[2].rot === 270 ? -16 : 0);
+    g.addEventListener("click", () => openDatasheet({ ref, link: d.datasheet, page: q.page || d.page, find: q.quote || [q.name, q.num], title: `${ref} pin ${q.num} ${q.name}` }));
     el("circle", { cx: x, cy: y, r: 5.5, fill: ok ? "#c9a45f" : "#d6553f" }, g);
     el("path", { d: ok ? `M${x - 2.6},${y} l1.8,1.9 l3.4,-3.6` : `M${x - 2.2},${y - 2.2} l4.4,4.4 M${x + 2.2},${y - 2.2} l-4.4,4.4`, fill: "none", stroke: "#fff", "stroke-width": 1.4, "stroke-linecap": "round" }, g);
     hover(g, ok ? `pin ${q.num} ${q.name}: the datasheet agrees` : `pin ${q.num} ${q.name}: ${q.status}` + (q.datasheet.length ? ` (the datasheet lists ${q.datasheet.join(", ")})` : "")); }
@@ -986,12 +1017,72 @@ function drawHeader() {
   }
 }
 
+// ---------- the datasheet panel: the PDF at its page, the cited text marked ----------
+// a quote found on one text line is boxed as a row; its words found apart are only highlighted; not found, the
+// page is shown and said so (a wrong box would read as proof)
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.js";
+const DSDOC = {}; let dsCur = null;
+function dsTokens(find) { return (Array.isArray(find) ? find : String(find || "").split(/\s+/)).map(t => String(t).trim()).filter(Boolean); }
+async function openDatasheet(o) {                       // o: {ref | url, page, find: "quote" | [words], title}
+  const key = o.ref ? "ref=" + encodeURIComponent(o.ref) : "url=" + encodeURIComponent(o.url);
+  $("#dsheet").classList.add("on"); $("#dstitle").innerHTML = "Datasheet · <b>" + esc(o.title || o.ref || "") + "</b>";
+  $("#dsopen").href = o.url || o.link || "#"; $("#dsnote").className = "dsh-note"; $("#dsnote").textContent = "Loading the PDF…";
+  $("#dsmarks").innerHTML = "";
+  if (!window.pdfjsLib) { $("#dsnote").textContent = "PDF.js did not load: open the original."; return; }
+  try { DSDOC[key] = DSDOC[key] || await pdfjsLib.getDocument("/api/datasheet.pdf?" + key).promise; }
+  catch (e) { $("#dsnote").className = "dsh-note warn"; $("#dsnote").textContent = "This datasheet could not be loaded here: open the original."; return; }
+  dsCur = { doc: DSDOC[key], page: Math.min(Math.max(o.page || 1, 1), DSDOC[key].numPages), find: dsTokens(o.find), quote: o.find };
+  await dsShow();
+}
+async function dsShow() {
+  const { doc, find } = dsCur, page = await doc.getPage(dsCur.page);
+  const w = $("#dsbody").clientWidth - 40, vp0 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: Math.min(2, Math.max(.6, w / vp0.width)) });
+  const cv = $("#dscanvas"), dpr = window.devicePixelRatio || 1;
+  cv.width = vp.width * dpr; cv.height = vp.height * dpr; cv.style.width = vp.width + "px"; cv.style.height = vp.height + "px";
+  await page.render({ canvasContext: cv.getContext("2d"), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
+  $("#dspage").textContent = `${dsCur.page} / ${doc.numPages}`;
+  const marks = $("#dsmarks"); marks.innerHTML = "";
+  if (!find.length) { $("#dsnote").className = "dsh-note"; $("#dsnote").textContent = "Page " + dsCur.page + " of the maker's datasheet."; return; }
+  const tc = await page.getTextContent(), boxes = [];
+  for (const it of tc.items) { if (!it.str || !it.str.trim()) continue;
+    const t = pdfjsLib.Util.transform(vp.transform, it.transform), h = Math.hypot(t[2], t[3]), wd = it.width * vp.scale;
+    for (const tok of find) { const re = new RegExp("(^|[^A-Za-z0-9_])" + tok.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "(?![A-Za-z0-9_])", "i"), m = re.exec(it.str);
+      if (!m) continue; const i0 = m.index + m[1].length, n = it.str.length;
+      boxes.push({ tok, x: t[4] + wd * i0 / n, w: Math.max(4, wd * tok.length / n), y: t[5] - h, h, line: t[5] }); } }
+  const add = (b, cls) => { const d = document.createElement("div"); d.className = "dsmark" + (cls ? " " + cls : ""); Object.assign(d.style, { left: b.x + "px", top: b.y + "px", width: b.w + "px", height: b.h + "px" }); marks.appendChild(d); return d; };
+  // a row: one of each token on one line (the first token's line, each other within half a line of it)
+  let row = null;
+  for (const a of boxes.filter(b => b.tok === find[0])) { const mates = find.slice(1).map(tk => boxes.filter(b => b.tok === tk && Math.abs(b.line - a.line) < a.h * .6).sort((p, q) => Math.abs(p.x - a.x) - Math.abs(q.x - a.x))[0]);
+    if (mates.every(Boolean)) { row = [a, ...mates]; break; } }
+  const note = $("#dsnote"), q = esc(Array.isArray(dsCur.quote) ? dsCur.quote.join(" ") : dsCur.quote || find.join(" "));
+  if (row) { for (const b of row) add(b);
+    const x0 = Math.min(...row.map(b => b.x)), x1 = Math.max(...row.map(b => b.x + b.w)), y0 = Math.min(...row.map(b => b.y)), y1 = Math.max(...row.map(b => b.y + b.h));
+    const r = add({ x: x0 - 4, y: y0 - 3, w: x1 - x0 + 8, h: y1 - y0 + 6 }, "row"); r.scrollIntoView({ block: "center", inline: "center" });
+    note.className = "dsh-note ok"; note.innerHTML = `Found on page ${dsCur.page}: <q>${q}</q>, boxed.`; }
+  else if (boxes.length) { for (const b of boxes) add(b); boxes[0] && marks.lastChild.scrollIntoView({ block: "center" });
+    note.className = "dsh-note warn"; note.innerHTML = `<q>${q}</q> is not on one line of page ${dsCur.page}: its words are highlighted where they are. Read the row by hand.`; }
+  else { note.className = "dsh-note warn"; note.innerHTML = `<q>${q}</q> was not found on page ${dsCur.page} (a scanned page, or other wording). Read it by hand.`; }
+}
+$("#dsprev").onclick = () => { if (dsCur && dsCur.page > 1) { dsCur.page--; dsShow(); } };
+$("#dsnext").onclick = () => { if (dsCur && dsCur.page < dsCur.doc.numPages) { dsCur.page++; dsShow(); } };
+$("#dsclose").onclick = () => $("#dsheet").classList.remove("on");
+// the evidence: each decision the run cites (result.json "evidence"), a click away from its page
+function drawEvidence() {
+  const box = $("#evidence"); box.innerHTML = ""; const ev = (R && R.evidence) || [];
+  $("#bevidence").textContent = ev.length;
+  if (!ev.length) { box.innerHTML = `<div class="empty"><b>No citations yet</b>A value or pin given with its datasheet page (cite=) is listed here, a click from that page. Each part's pins against its datasheet are in Parts.</div>`; return; }
+  for (const e of ev) { const d = document.createElement("div"); d.className = "ev";
+    d.innerHTML = `<div><div class="w">${esc(e.ref || "")} · ${esc(e.what || "")}</div><div class="x">${esc(e.value == null ? "" : String(e.value))}</div></div><div class="pg">${e.page ? "p. " + esc(String(e.page)) : ""}</div>` + (e.quote ? `<q>${esc(e.quote)}</q>` : "");
+    d.onclick = () => openDatasheet({ ref: e.url ? null : e.ref, url: e.url, link: e.url, page: e.page, find: e.quote || [e.value], title: `${e.ref || ""} ${e.what || ""}` });
+    box.appendChild(d); }
+}
+
 // ---------- data ----------
 async function getJ(u) { try { return await (await fetch(u, { cache: "no-store" })).json(); } catch (e) { return null; } }
 async function loadAll() {
   R = await getJ("/api/result"); B = await getJ("/api/board"); SHEETS = null;
   $("#msg").textContent = !B || B.error ? ((B && B.error) || "No board yet") : "";
-  drawHeader(); drawLayers(); drawNets(); drawChecks(); drawRun(); drawFiles(); drawLayout(); fitLayout();
+  drawHeader(); drawLayers(); drawNets(); drawChecks(); drawRun(); drawFiles(); drawEvidence(); drawLayout(); fitLayout();
   if (activeView() === "schem") drawSchem(); if (activeView() === "parts") drawParts(); if (threeReady) build3d();
 }
 let wasRunning = false, snap = null;
@@ -1007,7 +1098,7 @@ let pW = 0; new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.wid
   if (w && w !== pW && activeView() === "parts") { pW = w; drawParts(); } }).observe($("#psvg"));   // settles, not a frame late)
 window.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return;
   if (e.key === "f") fitLayout(true); for (const i of [1, 2, 3, 4]) if (e.key === String(i)) $$("#seg button")[i - 1].click();
-  if (e.key === "Escape") { selectNet(null); setLoupe(false); }
+  if (e.key === "Escape") { selectNet(null); setLoupe(false); $("#dsheet").classList.remove("on"); }
   if (e.key === "l" && activeView() === "layout") setLoupe(!loupeOn);
   if (e.key === "e" && activeView() === "v3d") $("#explode").click(); });
 </script>
