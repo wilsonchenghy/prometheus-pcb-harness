@@ -148,7 +148,11 @@ and slots, the outline with its cut-outs, the silkscreen text on both sides. The
 and DRC severities are in `rev2/artwork.json`. Run `prometheus rev2/board.py rev2/out/ --json` first, unchanged: it shows the
 design as it stands, and its findings are the existing board's, to talk through with the engineer before changing
 anything. Then make the change they ask for in `board.py` (move a part, add one, change a net's width) and run
-again: nets whose parts did not move keep their copper exactly, the nets of moved parts are routed again. The
+again: nets whose parts did not move keep their copper exactly, the nets of moved parts are routed again. Each run
+also writes the design back revised, `out/revised/<name>.kicad_pcb` (KiCad's own pcbnew; the import keeps the
+original in `rev2/source/`): the designer's own file with only the moved, added or removed parts and the re-routed
+nets changed, the rest (arcs, zones, net classes, each footprint's link to the schematic) theirs. Their schematic
+is copied unchanged: a part added or taken away must be added or taken away there too (the run says which). The
 import prints what it left out (drawings on layers the board house does not make; boards over 4 layers are refused);
 keep the `.kicad_pro` beside the board, or its rules are unknown.
 

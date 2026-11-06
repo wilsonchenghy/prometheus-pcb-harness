@@ -6,6 +6,8 @@
 ``footprints/``, as the board file carries them), every net, the zones as pours, the outline, the silkscreen text.
 The routed copper is in ``routes.json``: ``routes()`` puts it back, all of it while the parts stay where they were;
 once parts move, the nets they touch are routed again and the rest keep their copper (``pcb.reuse_routes``).
+The design itself is kept in ``source/``; every run writes it back revised (``revise``: out/revised/), the designer's
+own file with only what the revision changed changed.
 """
 from __future__ import annotations
 
@@ -342,7 +344,7 @@ def read(path: str, fp_dir: str):
              and _find(g, "layer") and _find(g, "layer")[0][1] != "Edge.Cuts" and not art(g)]
     if other:
         notes.append(f"{len(other)} drawings on layers the board house does not make (fab, user, comments) left out")
-    return b, {"placement": pcb.placement(b), "tracks": tracks, "vias": vias}, notes
+    return b, {"placement": pcb.placement(b), "tracks": tracks, "vias": vias, "frame": [X0, Y1]}, notes
 
 
 def artwork(board, path: str) -> None:
@@ -361,6 +363,10 @@ def routes(board, path: str) -> List[str]:
         t["pts"] = [tuple(p) for p in t["pts"]]
     for v in old["vias"]:
         v["at"] = tuple(v["at"])
+    src = Path(path).parent / "source" / f"{Path(path).parent.name}.kicad_pcb"
+    if "frame" in old and src.exists():                  # (the design itself, for revise() to write back)
+        board.kicad_source = {"file": str(src), "frame": old["frame"], "placement": old["placement"],
+                              "tracks": [dict(t) for t in old["tracks"]], "vias": [dict(v) for v in old["vias"]]}
     if pcb.placement(board) == old["placement"]:
         board.tracks += old["tracks"]
         board.vias += old["vias"]
@@ -373,12 +379,123 @@ def routes(board, path: str) -> List[str]:
         pcb._NO_LATEST = keep
 
 
+_REVISE = r"""
+import json, sys, pcbnew
+j = json.load(open(sys.argv[1]))
+b = pcbnew.LoadBoard(j["src"])
+mm, (X0, Y1) = pcbnew.FromMM, j["frame"]
+P = lambda x, y: pcbnew.VECTOR2I(mm(x + X0), mm(Y1 - y))
+LAY = {"F": pcbnew.F_Cu, "B": pcbnew.B_Cu, "1": pcbnew.In1_Cu, "2": pcbnew.In2_Cu}
+fps = {f.GetReference(): f for f in b.GetFootprints()}
+
+def flip(f):
+    try:
+        f.Flip(f.GetPosition(), pcbnew.FLIP_DIRECTION_LEFT_RIGHT)     # (KiCad 9+)
+    except (AttributeError, TypeError):
+        f.Flip(f.GetPosition(), False)
+
+def put(f, x, y, rot, side):
+    if (f.GetLayer() == pcbnew.B_Cu) != (side == "B"):
+        flip(f)
+    f.SetPosition(P(x, y))
+    f.SetOrientationDegrees(rot)
+
+for r in j["removed"]:
+    b.Remove(fps.pop(r))
+for r, (x, y, rot, side) in j["moved"].items():
+    put(fps[r], x, y, rot, side)
+for r, a in j["added"].items():
+    f = pcbnew.FootprintLoad(a["lib"], a["name"])
+    f.SetReference(r)
+    f.SetValue(a["value"])
+    b.Add(f)
+    put(f, *a["at"])
+    fps[r] = f
+for n in j["nets"]:
+    if b.FindNet(n) is None:
+        b.Add(pcbnew.NETINFO_ITEM(b, n))
+for r, f in fps.items():
+    for p in f.Pads():
+        n = j["pads"].get(r + "\t" + p.GetNumber())
+        if n is not None and p.GetNetname() != n:
+            p.SetNet(b.FindNet(n))
+for t in list(b.GetTracks()):
+    if t.GetNetname() in j["redo"]:
+        b.Remove(t)
+for t in j["tracks"]:
+    for p, q in zip(t["pts"], t["pts"][1:]):
+        s = pcbnew.PCB_TRACK(b)
+        s.SetStart(P(*p)); s.SetEnd(P(*q)); s.SetWidth(mm(t["w"])); s.SetLayer(LAY[t["layer"]])
+        s.SetNet(b.FindNet(t["net"]))
+        b.Add(s)
+for v in j["vias"]:
+    w = pcbnew.PCB_VIA(b)
+    w.SetPosition(P(*v["at"])); w.SetDrill(mm(v["drill"])); w.SetWidth(mm(v["dia"])); w.SetNet(b.FindNet(v["net"]))
+    b.Add(w)
+pcbnew.ZONE_FILLER(b).Fill(b.Zones())
+b.Save(j["out"])
+"""
+
+
+def revise(board, out_dir: str) -> dict:
+    """the imported design written back revised (out_dir/<name>.kicad_pcb, by KiCad itself): the parts that moved
+    moved, the ones added or taken away so, each pad on its net, and the copper of every net whose copper changed
+    replaced by the board's; every other net's tracks, arcs and vias, the zones (refilled), the rules, the net
+    classes, the drawings and each footprint's link to the schematic left as the designer had them. The schematic
+    is copied unchanged. Returns what changed"""
+    import shutil
+    import subprocess
+    import tempfile
+    ks = board.kicad_source
+    now, was = pcb.placement(board), ks["placement"]
+    flat = lambda p: [p[1][0], p[1][1], (p[2] + 180.0 if p[3] == "B" else p[2]) % 360.0, p[3]]   # (KiCad's angle)
+    same_fp = lambda r: r in was and now[r][0] == was[r][0]   # (a part on another footprint: taken away, added anew)
+    moved = {r: flat(now[r]) for r in now if same_fp(r) and now[r] != was[r]}
+    added = {}
+    for r in now:
+        if not same_fp(r):
+            lib, name = board.comps[r]["fp"].split(":", 1)
+            d = next((d / f"{lib}.pretty" for d in pcb.FP_DIRS if (d / f"{lib}.pretty" / f"{name}.kicad_mod").exists()), None)
+            if d is None:
+                raise ValueError(f"{r}: footprint {board.comps[r]['fp']} not found to add to the design")
+            added[r] = {"lib": str(d), "name": name, "value": board.comps[r]["value"], "at": flat(now[r])}
+    key_t = lambda t: (t["layer"], tuple((round(x, 4), round(y, 4)) for x, y in t["pts"]), round(t["w"], 4))
+    key_v = lambda v: ((round(v["at"][0], 4), round(v["at"][1], 4)), round(v["dia"], 4))
+    nets = set(board.nets) | {t["net"] for t in ks["tracks"]}
+    redo = sorted(n for n in nets
+                  if sorted(key_t(t) for t in board.tracks if t["net"] == n) != sorted(key_t(t) for t in ks["tracks"] if t["net"] == n)
+                  or sorted(key_v(v) for v in board.vias if v["net"] == n) != sorted(key_v(v) for v in ks["vias"] if v["net"] == n))
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    src = Path(ks["file"])
+    job = {"src": str(src), "out": str(out / src.name), "frame": ks["frame"], "moved": moved, "added": added,
+           "removed": sorted(r for r in was if r not in now or not same_fp(r)), "nets": sorted(board.nets),
+           "pads": {f"{r}\t{n}": net for (r, n), net in board.pad_net().items()}, "redo": redo,
+           "tracks": [t for t in board.tracks if t["net"] in redo], "vias": [v for v in board.vias if v["net"] in redo]}
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+        json.dump(job, f)
+    r = subprocess.run([pcb._pcbnew_python(), "-c", _REVISE, f.name], capture_output=True, text=True, timeout=300)
+    os.unlink(f.name)
+    if r.returncode != 0:
+        raise RuntimeError("KiCad could not write the revision: " + (r.stderr or r.stdout)[-400:])
+    for ext in (".kicad_pro", ".kicad_sch", ".kicad_prl"):
+        if src.with_suffix(ext).exists():
+            shutil.copy(src.with_suffix(ext), out / src.with_suffix(ext).name)
+    return {"file": job["out"], "moved": sorted(moved), "added": sorted(added), "removed": job["removed"],
+            "rerouted": redo, "kept": len(nets) - len(redo)}
+
+
 def write(path: str, out_dir: str) -> dict:
     """``out_dir``/board.py, routes.json and footprints/ from the layout in ``path``; what was written and the notes"""
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     b, rt, notes = read(path, str(out / "footprints"))
     (out / "routes.json").write_text(json.dumps(rt))
+    import shutil                                        # (the design as it was: revise() writes it back changed)
+    (out / "source").mkdir(exist_ok=True)
+    for ext in (".kicad_pcb", ".kicad_pro", ".kicad_sch", ".kicad_prl"):
+        if Path(path).with_suffix(ext).exists():
+            shutil.copy(Path(path).with_suffix(ext), out / "source" / f"{out.name}{ext}")
     (out / "artwork.json").write_text(json.dumps({"graphics": b.graphics, "kicad_rules": b.kicad_rules}))
     r = lambda v: round(v, 6)
     L = [f'"""{b.name}: imported from {Path(path).name} (prometheus import).',

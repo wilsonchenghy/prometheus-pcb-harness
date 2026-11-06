@@ -550,6 +550,20 @@ def main(argv=None) -> int:
             files["kicad8"] = shutil.make_archive(os.path.join(a.out, "kicad8"), "zip", os.path.join(a.out, "kicad8"))
         except Exception as e:
             b.skip("the KiCad 8 copy (for Altium)", f"{type(e).__name__}: {str(e)[:200]}")
+        if getattr(b, "kicad_source", None):            # (an imported design: written back, only the revision changed)
+            import kicad_import
+            try:
+                rv = kicad_import.revise(b, os.path.join(a.out, "revised"))
+                files["revised"] = rv["file"]
+                print(f"revised design: {rv['file']} ({len(rv['moved'])} moved, {len(rv['added'])} added, "
+                      f"{len(rv['removed'])} taken away, {len(rv['rerouted'])} nets routed again"
+                      f"{': ' + ', '.join(rv['rerouted']) if rv['rerouted'] else ''}; {rv['kept']} nets as they were)")
+                if rv["added"] or rv["removed"]:
+                    print("  its schematic is the designer's, unchanged: add or take away "
+                          + ", ".join(rv["added"] + rv["removed"]) + " there too")
+            except Exception as e:
+                b.skip("the revised design (the imported .kicad_pcb, written back)", f"{type(e).__name__}: {str(e)[:200]}",
+                       "KiCad's pcbnew Python (docs/setup.md)")
         if a.kicad_drc != "off":                        # a third, independent judge: KiCad's own DRC
             ver = pcb.kicad_version()
             major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
