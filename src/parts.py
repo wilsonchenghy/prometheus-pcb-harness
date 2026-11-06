@@ -391,7 +391,25 @@ def datasheet_text(url: str) -> List[str]:
         dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_bytes(data)
     import pypdf
-    return [(p.extract_text() or "") for p in pypdf.PdfReader(str(dst)).pages]
+    return [(p.extract_text() or "") + "\n" + _lines(p) for p in pypdf.PdfReader(str(dst)).pages]
+
+
+def _lines(page) -> str:
+    """the page's words as printed, one line per row of the page (pypdf's own text reads a table down its columns
+    when its cells wrap: "GND" then "3 (R5)" from the row below), for a pin table's rows to be read across"""
+    runs = []
+
+    def seen(text, cm, tm, *_):
+        if text.strip():
+            runs.append((tm[4] * cm[1] + tm[5] * cm[3] + cm[5], tm[4] * cm[0] + tm[5] * cm[2] + cm[4], text.strip()))
+    page.extract_text(visitor_text=seen)
+    rows: List[list] = []
+    for y, x, t in sorted(runs, key=lambda r: -r[0]):
+        if rows and abs(rows[-1][0] - y) < 1.5:       # (one baseline, to a point and a half)
+            rows[-1][1].append((x, t))
+        else:
+            rows.append([y, [(x, t)]])
+    return "\n".join(" ".join(t for x, t in sorted(r)) for _, r in rows)
 
 
 # the same pin under the names datasheets and KiCad's symbols give it
@@ -410,6 +428,14 @@ def _names(key: str) -> set:
     return {a for a in out if a}
 
 
+# a row that gives the number(s) first: "3- VIN", "2 2 6, 7 GND" (one column per package), "— 2, 3, 4 NC"
+_LISTED = (r"(?:^[ \t]*(?:—[ \t]+)*|(?<=[a-z]\.))"
+           r"(\d{1,3}[ \t]*[-–:.][ \t]*|(?:\d{1,3}(?:[ \t]*,[ \t]*\d{1,3})*[ \t]+){1,4}(?=\S+[ \t]+[^\d\s]|\S+$))"
+           r"/?")                                       # (an active-low name's overbar as a slash: "7 /HOLD")
+                                                        # (not a pinout drawing's row, "4 4 VCP 13 13": its
+                                                        #  other side's numbers follow the name)
+
+
 def _numbers(variants, text, flags) -> List[str]:
     """the pin numbers the datasheet gives a pin under any of its names: "NAME 3", "NAME 3, 4" (a table row) or
     "3- NAME" (a numbered list)"""
@@ -418,8 +444,8 @@ def _numbers(variants, text, flags) -> List[str]:
         e = re.escape(v) + r"(?![A-Za-z0-9_])"          # (no left edge: pypdf runs words together, "X7RVCP 9")
         for m in re.finditer(e + r"\s*((?:\d{1,3}(?:\s*[,/–-]\s*|\s+)){0,5}\d{1,3}|—)", text, flags):
             nums += re.findall(r"\d{1,3}", m.group(1))
-        for m in re.finditer(r"(?:^[ \t]*|(?<=[a-z]\.))(\d{1,3})(?:[ \t]*[-–:.][ \t]*|[ \t]+)" + e, text, flags | re.M):
-            listed.append(m.group(1))
+        for m in re.finditer(_LISTED + e, text, flags | re.M):
+            listed += re.findall(r"\d{1,3}", m.group(1))
     return listed or nums                               # (a numbered list says it plainly: "VIN" then the next
                                                         # line's "3- VOUT" is not VIN's number)
 
@@ -430,7 +456,7 @@ def _quote(variants, text, flags, num: Optional[str]) -> str:
     found = []
     for v in variants:
         e = re.escape(v) + r"(?![A-Za-z0-9_])"
-        found += [m.group(0) for m in re.finditer(r"(?:^[ \t]*|(?<=[a-z]\.))(\d{1,3})(?:[ \t]*[-–:.][ \t]*|[ \t]+)" + e,
+        found += [m.group(0) for m in re.finditer(_LISTED + e,
                                                   text, flags | re.M)]
         found += [m.group(0) for m in re.finditer(e + r"\s*((?:\d{1,3}(?:\s*[,/–-]\s*|\s+)){0,5}\d{1,3}|—)", text, flags)]
     found = [" ".join(q.split()) for q in found]
