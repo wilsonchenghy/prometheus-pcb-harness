@@ -205,6 +205,45 @@ def _prefetch_callers():
         prefetch(sorted(names))
 
 
+
+def _courtyard_poly(tree):
+    """a footprint's courtyard as KiCad draws it (F.CrtYd lines, rectangles, polygons, arcs and circles closed into
+    one shape, footprint frame, y up), or None when its strokes close nothing (the box of them is used then)"""
+    from shapely.geometry import LineString, Point, Polygon, box
+    from shapely.ops import polygonize, unary_union
+    on = lambda ln: any(isinstance(c, list) and c[0] == "layer" and "CrtYd" in str(c[1]) for c in ln)
+    xy = lambda q: (float(q[1]), -float(q[2]))
+    lines, areas = [], []
+    for ln in _find(tree, "fp_line"):
+        if on(ln) and _find(ln, "start") and _find(ln, "end"):
+            lines.append(LineString([xy(_find(ln, "start")[0]), xy(_find(ln, "end")[0])]))
+    for ln in _find(tree, "fp_arc"):
+        if on(ln) and _find(ln, "start") and _find(ln, "mid") and _find(ln, "end"):
+            lines.append(LineString([xy(_find(ln, k)[0]) for k in ("start", "mid", "end")]))
+    for ln in _find(tree, "fp_rect"):
+        if on(ln) and _find(ln, "start") and _find(ln, "end"):
+            (x0, y0), (x1, y1) = xy(_find(ln, "start")[0]), xy(_find(ln, "end")[0])
+            areas.append(box(min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)))
+    for ln in _find(tree, "fp_poly"):
+        if on(ln) and _find(ln, "pts"):
+            pts = [xy(q) for q in _find(_find(ln, "pts")[0], "xy")]
+            if len(pts) >= 3:
+                areas.append(Polygon(pts).buffer(0))
+    for ln in _find(tree, "fp_circle"):
+        if on(ln) and _find(ln, "center") and _find(ln, "end"):
+            c_, e_ = xy(_find(ln, "center")[0]), xy(_find(ln, "end")[0])
+            areas.append(Point(c_).buffer(math.dist(c_, e_), 32))
+    if lines:
+        areas += list(polygonize(unary_union(lines)))
+    g = unary_union(areas) if areas else None
+    if g is None or g.is_empty or g.area < 1e-6:
+        return None
+    if g.geom_type == "MultiPolygon":                    # (pieces: their outer shape, holes filled)
+        g = unary_union([Polygon(p.exterior) for p in g.geoms])
+    elif g.geom_type == "Polygon":
+        g = Polygon(g.exterior)
+    return g
+
 def footprint(name: str) -> Dict:
     """KiCad footprint "Lib:Name" -> {"pads": {number: [pad, ...]}, "courtyard": (x0, y0, x1, y1)}; a pad is
     {"at": (x, y) board frame (y up), "size": (w, h), "rot": deg, "shape": rect|roundrect|circle|oval|...,
@@ -284,6 +323,8 @@ def footprint(name: str) -> Dict:
             xs += [float(q[1]) for q in pts_]
             ys += [-float(q[2]) for q in pts_]
     crt = (min(xs), min(ys), max(xs), max(ys)) if xs else None
+    crt_poly = _courtyard_poly(tree) if crt else None   # (its real shape, as KiCad's DRC judges overlaps: an SOIC's
+    #                                                     is narrower over the body than across its pins)
     # silkscreen, for renders: the reference designator's place and the outline strokes on F.SilkS
     ref = None
     for t in _find(tree, "fp_text") + _find(tree, "property"):
@@ -312,7 +353,7 @@ def footprint(name: str) -> Dict:
     if mod and isinstance(mod[0][1], str):
         m_ = re.sub(r"^\$\{[^}]*\}/", "", mod[0][1])
         model = re.sub(r"\.wrl$", ".step", m_) if "3dshapes/" in m_ else None
-    _FP[name] = {"pads": pads, "courtyard": crt, "ref": ref, "silk": silk, "model": model}
+    _FP[name] = {"pads": pads, "courtyard": crt, "courtyard_poly": crt_poly, "ref": ref, "silk": silk, "model": model}
     return _FP[name]
 
 
@@ -503,12 +544,16 @@ class Board:
         from shapely import affinity
         from shapely.geometry import box
         c = self.comps[ref]
-        crt = footprint(c["fp"])["courtyard"]
+        fp = footprint(c["fp"])
+        crt = fp["courtyard"]
         if not crt:
             return None
+        g = fp.get("courtyard_poly")
+        if g is None:
+            g = box(*crt)
         if c.get("side", "F") == "B":
-            crt = (-crt[2], crt[1], -crt[0], crt[3])
-        return affinity.translate(affinity.rotate(box(*crt), c["rot"], origin=(0, 0)), *c["at"])
+            g = affinity.scale(g, -1.0, 1.0, origin=(0, 0))
+        return affinity.translate(affinity.rotate(g, c["rot"], origin=(0, 0)), *c["at"])
 
     def net(self, name: str, pins: Sequence[Tuple[str, str]], amps: float = 0.1, volts: float = 5.0,
             width: Optional[float] = None, cite=None):
@@ -1765,8 +1810,8 @@ class Board:
                     continue
                 if self.comps[refs[i]].get("side", "F") != self.comps[refs[j]].get("side", "F"):
                     continue                                 # top and bottom parts may overlap in plan
-                if cy[refs[i]].intersection(cy[refs[j]]).area > 0.05:
-                    probs.append(f"courtyards of {refs[i]} and {refs[j]} overlap")
+                if cy[refs[i]].intersection(cy[refs[j]]).area > 1e-3:     # (KiCad's DRC flags any overlap: a
+                    probs.append(f"courtyards of {refs[i]} and {refs[j]} overlap")   # 0.03 mm strip is one)
         if tree is not None:                                 # a mounting hole is drilled through whatever is there
             from shapely.geometry import Point as _Ph
             for x, y, d in self.holes:

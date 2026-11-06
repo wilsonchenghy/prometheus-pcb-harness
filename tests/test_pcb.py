@@ -2304,3 +2304,19 @@ def test_tidy_merges_two_vias_of_one_net_drilled_into_each_other():
     assert any("drills" in p for p in b.check())
     assert b.tidy() >= 1 and len(b.vias) == 2
     assert not any("drills" in p for p in b.check()) and len(b.islands("A")) == 1
+
+
+def test_courtyards_are_kicads_shapes():
+    """a courtyard is the footprint's own shape (an SOIC's is notched over the body, past its pins), not its box, and
+    any overlap of two is one (KiCad's DRC flags a 0.03 mm strip): a part tucked into the notch is clear, a part
+    0.03 mm over another is not"""
+    import pcb
+    b = pcb.Board("cy", [(0, 0), (20, 0), (20, 14), (0, 14)])
+    b.place("U1", "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", (8.0, 6.0), 0, "")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (8.0 + 4.4, 6.0 + 3.23), 0, "")   # (in the corner notch)
+    assert not any("overlap" in p for p in b.check_placement())
+    assert b.courtyard("U1").area < 7.4 * 5.4 - 0.5
+    c = pcb.Board("cy2", [(0, 0), (20, 0), (20, 14), (0, 14)])
+    c.place("R1", "Resistor_SMD:R_0603_1608Metric", (5.0, 6.0), 0, "")
+    c.place("R2", "Resistor_SMD:R_0603_1608Metric", (5.0, 6.0 + 1.46 - 0.03), 0, "")  # (0.03 mm over R1's)
+    assert any("overlap" in p for p in c.check_placement())
