@@ -191,7 +191,7 @@ Run the script to rebuild `out/`, or give it another folder. The KiCad DRC and r
 | `examples/social_wheelbot/` | `ripple_pcb.py` | a wheeled robot's power / CAN board, six motors |
 | `examples/quadruped/` | `qdd_power_board.py` | a quadruped's power / CAN board, twelve motors |
 | `examples/game_controller/` | `controller_pcb.py` | a game controller's board in its shell's outline (`controller_board.json`) |
-| `examples/imu_bno085/` | `imu_bno085.py` (+ `req.json`, run with `prometheus`) | an 18 x 22 mm BNO085 IMU breakout: USB-C, 3.3 V LDO, I2C header |
+| `examples/imu_bno085/` | `imu_bno085.py` (+ `req.json`, `routes/`; run with `prometheus`) | an 18 x 22 mm BNO085 IMU breakout: USB-C, 3.3 V LDO, I2C header |
 | `examples/netlist/` | `blinker_sch.net` | a KiCad netlist to start a board from |
 
 `examples/pcb_bodies.py` (3D bodies for parts KiCad has no model of) and `examples/export.py` are shared by the
