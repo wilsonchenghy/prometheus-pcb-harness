@@ -273,6 +273,11 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     if r.returncode != 0 or not os.path.exists(routed):
         raise RuntimeError("KiCad's Specctra import failed:\n" + (r.stdout + r.stderr)[-2000:])
     segs, vias = _read_kicad_copper(routed, board)
+    # (KiCad's session import hands the segments back in no fixed order: each is put its lower end first and the
+    #  lot sorted, so the same routing gives the same tracks, joined the same way, and the same Gerbers)
+    segs = sorted(((n_, L_, list(p_) if tuple(p_[0]) <= tuple(p_[-1]) else list(p_)[::-1], w_)
+                   for n_, L_, p_, w_ in segs), key=lambda s_: (s_[0], s_[1], [tuple(q) for q in s_[2]], s_[3]))
+    vias = sorted(vias, key=lambda v_: (v_[0], tuple(v_[1]), v_[2], v_[3]))
     t0, v0 = len(board.tracks), len(board.vias)
     have_t = {(t["net"], t["layer"], tuple(map(tuple, t["pts"]))) for t in board.tracks}
     have_v = {(v["net"], tuple(round(c, 3) for c in v["at"])) for v in board.vias}
@@ -340,7 +345,10 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
             if max(x1_ - x0_, y1_ - y0_) < 1.5 * min(x1_ - x0_, y1_ - y0_):
                 continue                                   # (a square pad: an exposed pad or a BGA ball, not a pin)
             reach = short if k % 2 == 0 else long
-            if abs(dx) > abs(dy):                          # a pin on the left or right side
+            if (x1_ - x0_) > (y1_ - y0_):                  # a pin on the left or right side: by the pad's long axis
+                #                                            (not by where it lies from the centre: the end pins of
+                #                                            a long SSOP row lie further out along the row than
+                #                                            across it, and a stub along the row runs into the next)
                 ex = x1_ if dx > 0 else x0_
                 pts = [(round(cx, 4), round(cy, 4)), (round(ex + (reach if dx > 0 else -reach), 4), round(cy, 4))]
             else:
