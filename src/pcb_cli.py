@@ -455,12 +455,13 @@ def main(argv=None) -> int:
         save_state(b, a.out, key)
         if viewing:                                      # (the placed and routed board, before the checks and export)
             prog.snapshot(b, os.path.abspath(a.script))
-    lcsc_auto = {}
+    lcsc_auto, lcsc_suggested = {}, {}
     if stage in ("export", "all") and not a.no_lcsc and not os.environ.get("CI"):   # (JLCPCB assembly: a C-number each)
         import parts
         parts.JLC_DOWN = ""
         try:
             lcsc_auto = parts.fill_lcsc(b, a.boards)
+            lcsc_suggested = parts.suggest_lcsc(b, a.boards)
         except OSError as e:
             parts.JLC_DOWN = str(e)
         if parts.JLC_DOWN:                               # (JLCPCB's search unreachable: the numbers not looked up)
@@ -468,6 +469,9 @@ def main(argv=None) -> int:
                    "run again online, or give lcsc= on the parts")
         if lcsc_auto:
             print(f"LCSC numbers found for {len(lcsc_auto)} parts: " + ", ".join(f"{r} {n}" for r, n in lcsc_auto.items()))
+        if lcsc_suggested:                               # (not in the BOM: the engineer adopts each with lcsc=)
+            print(f"LCSC numbers suggested for {len(lcsc_suggested)} parts (by value and package; add lcsc= to use "
+                  "one): " + ", ".join(f"{r} {g['lcsc']} ({g['part']})" for r, g in lcsc_suggested.items()))
     t = time.perf_counter()
     prog.stage("critic")
     notes = critic.review(b, spec)
@@ -557,7 +561,7 @@ def main(argv=None) -> int:
               "findings": [finding(st, p) for st, ps in (("routing", probs), ("design", chk), ("house", fchk),
                                                           ("kicad", kchk), ("schematic", schk))
                            for p in ps],
-              "critic": notes, "lcsc_auto": lcsc_auto,
+              "critic": notes, "lcsc_auto": lcsc_auto, "lcsc_suggested": lcsc_suggested,
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)

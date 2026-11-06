@@ -62,7 +62,10 @@ hands. Unless they ask you to just build it, work with them:
 A full run looks up an LCSC number (JLCPCB assembly) for every part without one: the MPN itself, else a resistor's
 exact value at 1 % or a capacitor's value at no less than its voltage, in the footprint's size; basic parts first,
 always in stock. It prints what it found and `result.json` lists it under `lcsc_auto`; a part it could not match
-stays blank (the critic lists it): give that one an MPN or `lcsc=`. `--no-lcsc` skips it (it is off when `CI` is set).
+stays blank (the critic lists it): give that one an MPN or `lcsc=`. For a pin header or a crystal it still could not match, the run then
+searches by footprint and value ("1x6P 2.54mm pin header", "32.768kHz 3215") and lists the likeliest part under
+`lcsc_suggested` (and as a critic note): never put in the BOM, since a search that loose can find a near miss. Say
+each one to the engineer, and give `lcsc=` only for the ones they confirm. `--no-lcsc` skips it (it is off when `CI` is set).
 
 ## Parts by symbol: pins by name, checked both ways, and an ERC
 

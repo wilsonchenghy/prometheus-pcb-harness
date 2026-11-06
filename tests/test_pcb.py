@@ -1703,3 +1703,27 @@ def test_symbol_from_a_pin_table(tmp_path):
         parts.SYM_DIRS.remove(tmp_path)
     with pytest.raises(ValueError, match="pads"):
         symgen.write(dict(spec, pins=spec["pins"][:5]), str(tmp_path))
+
+
+def test_lcsc_suggested_by_value_and_package_never_in_the_bom(monkeypatch):
+    """a part whose MPN finds nothing gets a suggestion by footprint and value (basic first, the right package, no
+    right-angle header for a vertical one), marked for the engineer and kept out of lcsc"""
+    import critic
+    import parts
+    import pcb
+    row = lambda n, mfr, pkg, d, stock=10000, basic=False: {"lcsc": n, "mfr": mfr, "package": pkg, "description": d,
+                                                            "stock": stock, "is_basic": basic}
+    cat = {"32.768kHz 3215": [row(1, "SC-32S", "SMD3215-2P", "32.768kHz 7pF SMD3215-2P", 99999),
+                              row(2, "Q13FC13500004", "SMD3215-2P", "12.5pF 32.768kHz SMD3215-2P", basic=True),
+                              row(3, "X32", "SMD3225-4P", "32.768kHz SMD3225-4P", basic=True)],
+           "1x6P 2.54mm pin header": [row(4, "R-1x6P", "Push-Pull,P=2.54mm", "1x6P 2.54mm Right Angle", 99999),
+                                      row(5, "PZ254V-11-06P", "Plugin,P=2.54mm", "1x6P 2.54mm Pin Header")]}
+    monkeypatch.setattr(parts, "_jlc", lambda q: cat.get(q, []))
+    b = pcb.Board("s", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("Y1", "Crystal:Crystal_SMD_3215-2Pin_3.2x1.5mm", (8, 10), 0, "32.768k", "Epson FC-135 32.768KA")
+    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical", (20, 4), 0, "I2C", "header")
+    got = parts.suggest_lcsc(b)
+    assert {r: g["lcsc"] for r, g in got.items()} == {"Y1": "C2", "J2": "C5"}
+    assert not b.comps["Y1"].get("lcsc") and not b.comps["J2"].get("lcsc")
+    notes = [n for n in critic.review(b) if n["kind"] == "lcsc suggested"]
+    assert len(notes) == 2 and "add lcsc=" in notes[0]["text"] and notes[0]["why"]
