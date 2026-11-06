@@ -4745,10 +4745,16 @@ def export_kicad(board: Board, out_dir: str, origin: Tuple[float, float] = (150.
     for ref in sorted(board.comps, key=lambda r: (re.sub(r"\d", "", r), r)):
         pcb_.append(_kicad_footprint(board, ref, board.comps[ref], netnum, tx, ty, labels.get(ref, "keep"),
                                      body_dir=os.path.join(out_dir, "3d")))
+    hole_refs, k_h = [], 0                               # (H1, H2 ... past any part the script named so: two
+    for _ in board.holes:                                #  footprints with one reference and KiCad's Specctra
+        k_h += 1                                         #  export, FreeRouting's input, fails without a word)
+        while f"H{k_h}" in board.comps:
+            k_h += 1
+        hole_refs.append(f"H{k_h}")
     for i, (x, y, d) in enumerate(board.holes):          # mounting holes: a bare (non-plated) hole each
         pcb_.append(["footprint", _Q(f"MountingHole:MountingHole_{d:g}mm"), ["layer", _Q("F.Cu")],
                      ["uuid", _uuid(board.name, "hole", i)], ["at", tx(x), ty(y), 0],
-                     ["property", _Q("Reference"), _Q(f"H{i + 1}"), ["at", 0, -d / 2 - 1.0, 0], ["layer", _Q("F.Fab")],
+                     ["property", _Q("Reference"), _Q(hole_refs[i]), ["at", 0, -d / 2 - 1.0, 0], ["layer", _Q("F.Fab")],
                       ["uuid", _uuid(board.name, "hole", i, "ref")], ["effects", ["font", ["size", 1, 1], ["thickness", 0.15]]]],
                      ["property", _Q("Value"), _Q(f"hole {d:g} mm"), ["at", 0, d / 2 + 1.0, 0], ["layer", _Q("F.Fab")],
                       ["uuid", _uuid(board.name, "hole", i, "val")], ["effects", ["font", ["size", 1, 1], ["thickness", 0.15]]]],

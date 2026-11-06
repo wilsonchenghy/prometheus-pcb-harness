@@ -2348,3 +2348,18 @@ def test_a_via_moved_off_its_pad_takes_every_track_end_in_its_ring():
     b.track("A", "F", [(x2 - 1.5, y2), (x2, y2)], 0.25)
     assert not pcb.neck_vias(b)
     assert not any("dangling" in p for p in b.check()) and len(b.islands("A")) == 1
+
+
+def test_mounting_holes_take_references_no_part_has(tmp_path):
+    """a script that names parts H1, H2 (headers): the exported mounting holes are numbered past them, so no two
+    footprints share a reference (KiCad's Specctra export, FreeRouting's input, failed without a word)"""
+    import re
+    import pcb
+    b = pcb.Board("hr", [(0, 0), (30, 0), (30, 20), (0, 20)])
+    b.place("H1", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (10.0, 10.0), 0, "")
+    b.place("H2", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (20.0, 10.0), 0, "")
+    b.hole((3.5, 3.5))
+    b.hole((26.5, 16.5))
+    txt = next(p for p in pcb.export_kicad(b, str(tmp_path)) if p.endswith(".kicad_pcb"))
+    refs = re.findall(r'\(property "Reference" "([^"]*)"', open(txt).read())
+    assert len(refs) == len(set(refs)) == 4
