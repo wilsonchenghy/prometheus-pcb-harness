@@ -159,9 +159,12 @@ def board_data(b) -> dict:
     for ref, num, L, g, d in shapes:
         by_ref.setdefault(ref, []).append({"num": num, "layer": L, "net": pn.get((ref, num)), "poly": _poly(g, 0.005),
                                            "drill": d, "at": [round(g.centroid.x, 3), round(g.centroid.y, 3)]})
+    import pcb
+    # (each label where the fab prints it, or None where it stays off the silkscreen: what the "made" look shows)
+    silk = pcb.place_refs(b) if b.comps and not any(c.get("unplaced") or c.get("at") is None for c in b.comps.values()) else {}
     for ref, c in b.comps.items():
         cy = b.courtyard(ref)
-        comps.append({"ref": ref, "value": c.get("value", ""), "mpn": c.get("mpn", ""), "fp": c["fp"],
+        comps.append({"silk": silk.get(ref, "center") if silk else "center", "ref": ref, "value": c.get("value", ""), "mpn": c.get("mpn", ""), "fp": c["fp"],
                       "at": [round(c["at"][0], 3), round(c["at"][1], 3)], "rot": c["rot"], "side": c.get("side", "F"),
                       "courtyard": _poly(cy) if cy is not None else [], "pads": by_ref.get(ref, []),
                       "height": height_of(c["fp"]), "kind": kind_of(ref, c["fp"]),
