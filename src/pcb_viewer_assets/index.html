@@ -916,8 +916,8 @@ function build3d() {
 const BODY = { ic: [0x141416, .55, 0], res: [0x161616, .5, 0], diode: [0x1a1a1a, .5, 0], led: [0xf2f6f2, .3, 0], inductor: [0x2a2c30, .7, 0],
                electrolytic: [0x1b2f78, .35, .15], cap: [0xc79b60, .55, 0], connector: [0xf1ede2, .6, 0], pot: [0x2b66e0, .4, 0],
                switch: [0x2a2a2c, .5, 0], crystal: [0xd4d7da, .25, .85], fuse: [0xe6d8b4, .6, 0], other: [0x2a2a2a, .5, 0] };
-function styleModel(m) {
-  const kinds = {}; for (const c of B.comps) kinds[c.ref] = c.kind;
+function styleModel(m) {                                 // (a radio module: a chip elsewhere, its own look here)
+  const kinds = {}; for (const c of B.comps) kinds[c.ref] = c.fp.startsWith("RF_Module:") ? "module" : c.kind;
   const lin = (hex) => new THREE.Color(hex).convertSRGBToLinear();
   const metal = new THREE.MeshStandardMaterial({ color: lin(0xd8dbe0), metalness: .9, roughness: .26 });
   const gold = new THREE.MeshStandardMaterial({ color: lin(0xe9b95c), metalness: .55, roughness: .3 });   // (half metal: with no
@@ -944,6 +944,12 @@ function styleModel(m) {
           seen.set(mat, n); } }
       o.material = seen.get(mat); return; }
     const k = kinds[ref] || "other";
+    if (k === "module") {                                      // (KiCad's module: its black board and antenna, its can a
+      const part = lum > .4 ? "pads" : lum > .06 ? "can" : "board";   //  dark grey there, tinned steel on the real one)
+      if (!seen.has("module" + part)) seen.set("module" + part, part === "pads" ? gold : part === "can"
+        ? new THREE.MeshStandardMaterial({ color: lin(0xc4c8cc), metalness: .85, roughness: .32 })
+        : new THREE.MeshStandardMaterial({ color: lin(0x15171a), roughness: .55, metalness: 0 }));
+      o.material = seen.get("module" + part); return; }
     const solid = ["ic", "res", "diode", "inductor", "switch", "other"].includes(k);   // (one material in KiCad's export:
     if (!solid && lum < .42 && k !== "electrolytic") { o.material = metal; return; }  // the whole part in its body's)
     const key = k + (k === "electrolytic" && lum < .42 ? "lid" : "");
