@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Found by building 30 boards (boards/) and judging every one with KiCad 9's DRC, a random-board fuzz with KiCad as the
+Found by building 26 boards (boards/) and judging every one with KiCad 9's DRC, a random-board fuzz with KiCad as the
 second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
 
 **Fixed**
@@ -27,6 +27,10 @@ second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
   - The built-in router now runs neck_vias too.
   - tidy merges two vias of one net drilled into each other.
 - FreeRouting fan-out stubs follow each pad's long axis; at the ends of an SSOP row they ran into the next pin.
+- The built-in router's way out of a fine-pitch pin is no wider than the pin.
+- FreeRouting runs are repeatable: the same input gives the same tracks and Gerbers.
+- A saved routing (routes/, board_state.pkl) lacking the script's own copper is not reused.
+- Viewer: no negative-width SVG on load.
 - The fan-out keeps out of keep-outs.
 - The schematic shorted facing pins (a dual pot's units end to end) and joined ground stubs across other pins.
 - The house check of a 4-layer board without a preset uses jlcpcb-4.

@@ -1,6 +1,6 @@
 # Boards
 
-Thirty-ish small designs built with the harness, from a coin-cell badge to a 4-port USB hub, each as a script you
+Twenty-six small designs built with the harness, from a coin-cell badge to a 4-port USB hub, each as a script you
 can read and rerun: `board.py` (the design, with every assumed pin and value in its docstring), `req.json` (what it
 must meet), `routes/` (its placement and copper, so a rerun takes seconds) and `out/` (Gerbers, JLCPCB BOM,
 pick-and-place, a picture, `result.json`).
@@ -39,7 +39,7 @@ Remaining critic warnings (mostly "via neck": a via close to a pad of its own ne
 | [17 8 x 8 WS2812B matrix](17_ws2812b_matrix_8x8) | 4 | 133 | 68 x 80 | clean |
 | [18 ESP32-C3-MINI-1 dev board](18_esp32c3_devboard) | 4 | 20 | 30 x 56 | clean |
 | [19 STM32F103 "Blue Pill"](19_stm32f103_bluepill) | 4 | 35 | 60 x 26 | **not clean**: see its NOTES.md |
-| [23 4-port USB 2.0 hub (FE1.1s)](23_usb_hub_fe11s) | 4 | 28 | 78 x 46 | **not clean**: see its NOTES.md |
+| [23 4-port USB 2.0 hub (FE1.1s)](23_usb_hub_fe11s) | 4 | 29 | 78 x 46 | **not clean**: one 0.01 mm clearance slip, see its NOTES.md |
 
 ## Before ordering any of these
 
