@@ -19,7 +19,11 @@ hands. Unless they ask you to just build it, work with them:
 3. **Explain each fix.** Every finding and critic note carries `why`: the engineering reason the rule exists. When
    you change the design for one, say what you changed and that reason, so the next board they draw has it
    already.
-4. **Leave them the controls.** Prefer edits they can read in `board.py` (a position, a width, a requirement) over
+4. **Surface, ask, then act.** A choice with a cost or a trade-off (installing KiCad or Java, a part swapped for
+   stock, the built-in router instead of FreeRouting, an output skipped) is put to the engineer as a question, with
+   your recommendation, before you do it. Only when nobody answers (an unattended run) take the default that keeps
+   the core working, and say afterwards what you chose and why (the run's `skipped` list says the same).
+5. **Leave them the controls.** Prefer edits they can read in `board.py` (a position, a width, a requirement) over
    clever code; open the result in KiCad (`out/kicad/<name>.kicad_pro`) when they want to adjust by hand, and rerun
    from their edits.
 
@@ -28,8 +32,8 @@ hands. Unless they ask you to just build it, work with them:
 0. **Update, then check the machine**: `prometheus update` at the start of each session (the harness is fixed and
    improved often; every run also says when GitHub has a newer one), then `prometheus doctor`. Missing KiCad, Java or FreeRouting? `prometheus setup` adds
    FreeRouting (no root); for the rest show the user `docs/setup.md` and install only with their approval. Each is
-   worth having: install them first (with the user's approval; `docs/setup.md` has the commands). Only when they
-   really cannot be installed, go on without: a run then routes with the built-in router and lists that under
+   worth having: ask the user to install them (or to approve your doing it: `docs/setup.md` has the commands).
+   Only when they cannot be installed, or nobody answers, go on without: a run then routes with the built-in router and lists that under
    `skipped` in `result.json` (why, how to add it), as it lists anything else it leaves out. Tell the user.
 1. **Write `board.py`** with a `build()` that returns a `pcb.Board`: the outline, the parts (`place(ref,
    "Lib:Footprint", at, rot, value, mpn, lcsc=...)`; `at=None` lets the placer choose), the nets with their
