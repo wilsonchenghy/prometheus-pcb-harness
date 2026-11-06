@@ -190,6 +190,12 @@ fill a cart in one go, or follow a line's links to search it at each shop.</p>
     return path
 
 
+# a via beside an SMD pad of its own net keeps at least this much copper neck between them (mm), unless it is a
+# via-in-pad: closer, the solder wicks down the open via in reflow and the part (a small passive above all) can
+# tombstone. Shared by the critic's check and the router's via placement
+VIA_PAD_NECK = 0.2
+
+
 # Design-rule presets: each house's STANDARD capabilities (no extra charge), conservative, mm (hole_gap: drill wall to
 # drill wall between nets; hole_gap_same: within one net, e.g. stitching vias; default the same). Houses revise these:
 # check the house's capabilities page for your order (layer count, copper weight, thickness change them).
