@@ -65,6 +65,8 @@ WHY = {
              "more.",
     "layers": "You set the layer count: more layers cost more but give room for planes and routing.",
     "assembly": "JLCPCB assembles only the parts it stocks, named by their LCSC number.",
+    "via neck": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a "
+                 "small part can tombstone. A short neck of track between them keeps the solder on the pad.",
     "lcsc suggested": "A part found by its value and package, not its exact part number, can be a near miss (another "
                       "load capacitance, another height): only you can say it is the part you designed for.",
     "clearance": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum "
@@ -241,6 +243,20 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
     if ics and not any(GROUND.match(p["net"]) for p in board.pours):
         notes.append(_note("warning", "ground", "no ground pour: return currents and decoupling want one",
                            hint="b.pour(\"GND\", \"B\", outline)"))
+    if board.vias:                                       # (a via against an SMD pad of its own net: solder wicks)
+        from shapely.geometry import Point
+        from fab import VIA_PAD_NECK
+        smd = [(r, n, g) for r, n, L, g, d in board.pad_shapes() if not d]
+        for v in board.vias:
+            ring = Point(v["at"]).buffer(v["dia"] / 2, 16)
+            for r, n, g in smd:
+                if pn.get((r, n)) != v["net"] or g.contains(ring):     # (another net, or a via-in-pad: all on the pad)
+                    continue
+                gap = ring.distance(g)
+                if gap < VIA_PAD_NECK - 1e-6:
+                    notes.append(_note("warning", "via neck", f"via {v['net']} at ({v['at'][0]:.2f}, {v['at'][1]:.2f}) is "
+                                       f"{gap:.2f} mm from {r}.{n} (keep {VIA_PAD_NECK} mm of track between them)", [r],
+                                       hint="move the via off the pad, or route a short neck to it"))
     if not board.holes and not spec.get("holes"):
         notes.append(_note("info", "holes", "no mounting holes", hint="b.hole((x, y), d=3.2)"))
     if not spec.get("assembly"):

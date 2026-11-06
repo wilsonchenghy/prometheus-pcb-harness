@@ -1727,3 +1727,26 @@ def test_lcsc_suggested_by_value_and_package_never_in_the_bom(monkeypatch):
     assert not b.comps["Y1"].get("lcsc") and not b.comps["J2"].get("lcsc")
     notes = [n for n in critic.review(b) if n["kind"] == "lcsc suggested"]
     assert len(notes) == 2 and "add lcsc=" in notes[0]["text"] and notes[0]["why"]
+
+
+def test_a_via_against_its_own_pad_is_warned_a_via_in_pad_or_a_neck_is_not():
+    """solder wicking: a via touching an SMD pad of its net is a warning; one inside the pad (via-in-pad), one a neck
+    away, or one against another net's pad (that is clearance's) is not"""
+    import critic
+    import fab
+    import pcb
+    b = pcb.Board("v", [(0, 0), (20, 0), (20, 10), (0, 10)])
+    b.place("C1", "Capacitor_SMD:C_0402_1005Metric", (10, 5), 0, "100n")
+    b.net("GND", [("C1", "2")])
+    b.net("V", [("C1", "1")])
+    x2 = b.pad("C1", "2")[0]
+    neck = lambda: [n for n in critic.review(b) if n["kind"] == "via neck"]
+    b.via("GND", (x2 + 0.55, 5), 0.3, 0.6)                    # ring touching the pad
+    assert len(neck()) == 1 and neck()[0]["severity"] == "warning" and neck()[0]["why"]
+    b.vias.clear()
+    b.via("GND", (x2 + 0.3 + 0.3 + fab.VIA_PAD_NECK + 0.05, 5), 0.3, 0.6)     # a neck away
+    b.via("GND", (x2, 5), 0.2, 0.4)                                            # via-in-pad
+    assert neck() == []
+    b.vias.clear()
+    b.via("GND", (x2 + 0.2, 5), 0.3, 0.6)                     # centre on the pad, ring half off it: the worst case
+    assert len(neck()) == 1
