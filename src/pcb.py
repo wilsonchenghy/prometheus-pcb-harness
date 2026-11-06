@@ -3867,10 +3867,10 @@ _FP_DROP = {"version", "generator", "generator_version", "tedit", "embedded_font
             "duplicate_pad_numbers_are_jumpers", "jumper_pad_groups", "component_classes"}
 
 
-def place_refs(board: "Board", sizes: Sequence[float] = (1.0, 0.8), gap: float = 0.25) -> Dict[str, Optional[Tuple]]:
+def place_refs(board: "Board", sizes: Sequence[float] = (0.8,), gap: float = 0.25) -> Dict[str, Optional[Tuple]]:
     """reference designators placed for the silkscreen as a fab expects them: each part's label next to its body,
     clear of every pad (silkscreen over exposed copper is clipped off by the fab), of the drills, of the board edge,
-    of the other parts' bodies and of the other labels; 1.0 mm text, else 0.8 mm (the usual fab minimum), else
+    of the other parts' bodies and of the other labels; 0.8 mm text (KiCad's and the usual fab's minimum), else
     none (the label stays on the assembly layer, as on a dense board). {ref: (x, y, angle, size) or None}, board mm.
     Memoised on the board's state (the Gerbers and the KiCad export both ask)."""
     key = (board._state_key(), tuple(sizes), gap,
@@ -4006,7 +4006,7 @@ def _kicad_footprint(board: "Board", ref: str, c: Dict, netnum: Dict[str, int], 
                         w[:] = ["at", round(px, 4), round(-py, 4), ang]
                     if isinstance(w, list) and w and w[0] == "effects":
                         for f_ in _find(w, "font"):
-                            f_[:] = ["font", ["size", size, size], ["thickness", round(size * 0.15, 3)]]
+                            f_[:] = ["font", ["size", size, size], ["thickness", max(0.15, round(size * 0.15, 3))]]   # (0.15: the fab's line)
         elif v[0] == "property" and v[1] == "Value" and c["value"]:
             v[2] = _Q(c["value"])
         elif v[0] == "fp_text" and v[1] == "value" and c["value"]:
