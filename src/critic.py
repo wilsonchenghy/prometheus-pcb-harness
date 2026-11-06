@@ -65,6 +65,8 @@ WHY = {
              "more.",
     "layers": "You set the layer count: more layers cost more but give room for planes and routing.",
     "assembly": "JLCPCB assembles only the parts it stocks, named by their LCSC number.",
+    "lcsc suggested": "A part found by its value and package, not its exact part number, can be a near miss (another "
+                      "load capacitance, another height): only you can say it is the part you designed for.",
     "clearance": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum "
                  "gap is the floor.",
     "short": "Two nets touch: the circuit cannot work and may be damaged at power-up.",
@@ -246,6 +248,11 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
         if missing and len(missing) < len(board.comps):
             notes.append(_note("info", "assembly", f"{len(missing)} of {len(board.comps)} parts have no LCSC number "
                                "(JLCPCB assembly)", missing))
+    for r, c in board.comps.items():                     # (parts.suggest_lcsc's finds: for the engineer to adopt)
+        g = c.get("lcsc_suggested")
+        if g and not c.get("lcsc"):
+            notes.append(_note("info", "lcsc suggested", f"{r}: no LCSC number; JLCPCB has {g['lcsc']} ({g['part']}, by "
+                               f"'{g['query']}'): add lcsc= if it is the right part", [r], hint=f"lcsc=\"{g['lcsc']}\""))
     order = {"error": 0, "warning": 1, "info": 2}
     for r, c in board.comps.items():                     # (a chip without its symbol: drawn as pad numbers, unchecked)
         if _is_ic(c) and not re.match(r"(J|P|CN|CON)\d", r) and not c["fp"].startswith("Connector") \
