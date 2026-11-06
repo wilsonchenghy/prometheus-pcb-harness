@@ -4115,16 +4115,31 @@ def _place_refs(board: "Board", sizes: Sequence[float], gap: float) -> Dict[str,
                     cands += [(cx + dx, y1 + gap + th / 2, a), (cx + dx, y0 - gap - th / 2, a)]
                 for dy in (0.0, -th / 2, th / 2):
                     cands += [(x1 + gap + tw / 2, cy + dy, a), (x0 - gap - tw / 2, cy + dy, a)]
-            for x, y, a in cands:
+            def fits(x, y, a):
                 tw, th = (w, h) if a == 0.0 else (h, w)
                 bb = box(x - tw / 2, y - th / 2, x + tw / 2, y + th / 2)
-                if (inside.contains(bb) and not bb.intersects(pads[L]) and not bb.intersects(holes)
-                        and not bb.intersects(bodies) and not bb.intersects(body) and not bb.intersects(strokes)
-                        and bb.distance(bodies) > bb.distance(body) + 0.3      # (read as its own part's, not a neighbour's)
-                        and not any(bb.intersects(t) for t in taken[L])):
-                    found = (round(x, 3), round(y, 3), a, size)
-                    taken[L].append(bb.buffer(gap))
-                    break
+                ok = (inside.contains(bb) and not bb.intersects(pads[L]) and not bb.intersects(holes)
+                      and not bb.intersects(bodies) and not bb.intersects(body) and not bb.intersects(strokes)
+                      and bb.distance(bodies) > bb.distance(body) + 0.3      # (read as its own part's, not a neighbour's)
+                      and not any(bb.intersects(t) for t in taken[L]))
+                return bb if ok else None
+            hit = next(((x, y, a, bb) for x, y, a in cands for bb in [fits(x, y, a)] if bb), None)
+            if hit is None:                              # (no slot on its sides: the nearest free spot round it,
+                scan = sorted(((cx + i * 0.1, cy + j * 0.1, a) for i in range(-30, 31) for j in range(-30, 31)
+                               for a in (0.0, 90.0)),     #  0.1 mm steps out to 3 mm, nearest first)
+                              key=lambda t: (abs(t[0] - cx) - (x1 - x0) / 2) ** 2 + (abs(t[1] - cy) - (y1 - y0) / 2) ** 2)
+                for x, y, a in scan:
+                    tw, th = (w, h) if a == 0.0 else (h, w)
+                    if box(x - tw / 2, y - th / 2, x + tw / 2, y + th / 2).distance(body) > 1.0:
+                        continue
+                    bb = fits(x, y, a)
+                    if bb:
+                        hit = (x, y, a, bb)
+                        break
+            if hit:
+                x, y, a, bb = hit
+                found = (round(x, 3), round(y, 3), a, size)
+                taken[L].append(bb.buffer(gap))
             if found:
                 break
         out[r] = found
