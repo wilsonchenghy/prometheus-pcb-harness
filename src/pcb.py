@@ -1013,11 +1013,36 @@ class Board:
 
     def tidy(self) -> int:
         """dead vias taken away: a via that meets its own net's copper on fewer than two layers joins nothing (KiCad
-        warns "via dangling"); the track ends meeting in it are brought to its centre first, so they still meet.
-        Kept only when check() finds nothing new. Returns how many vias it removed"""
+        warns "via dangling"); the track ends meeting in it are brought to its centre first, so they still meet. And
+        of two vias of one net drilled closer than the hole gap, one goes, its tracks brought to the other. Each kept
+        only when check() finds nothing new. Returns how many vias it removed"""
         from shapely.geometry import Point
         before = set(self.check())
         vias0, tracks0 = list(self.vias), [dict(t, pts=list(t["pts"])) for t in self.tracks]
+        merged = 0                                       # two vias of one net drilled into each other (two routing
+        for v in list(self.vias):                        # passes' drops at one pad): one goes, the tracks that met
+            if v not in self.vias:                       # it brought on to the other
+                continue
+            for w in [w for w in self.vias if w is not v and w["net"] == v["net"]]:
+                if math.dist(v["at"], w["at"]) - (v["drill"] + w["drill"]) / 2 >= self.hole_gap - 1e-6:
+                    continue
+                for t in list(self.tracks):              # (a snapshot: the joins added here are not walked again)
+                    if t["net"] == w["net"]:
+                        for i in (0, -1):
+                            if 1e-6 < math.dist(t["pts"][i], v["at"]) and math.dist(t["pts"][i], w["at"]) < w["dia"] / 2:
+                                j_ = {k_: x_ for k_, x_ in t.items() if k_ not in ("fan", "user")}
+                                self.tracks.append({**j_, "pts": [tuple(t["pts"][i]), tuple(v["at"])]})
+                self.vias.remove(w)
+                merged += 1
+        if merged:
+            self.__dict__.pop("_cu_memo", None)
+            if set(self.check()) - before:               # (it broke something: as they were)
+                self.vias, self.tracks = list(vias0), [dict(t, pts=list(t["pts"])) for t in tracks0]
+                self.__dict__.pop("_cu_memo", None)
+                merged = 0
+            else:
+                before = set(self.check())
+                vias0, tracks0 = list(self.vias), [dict(t, pts=list(t["pts"])) for t in self.tracks]
         self.vias = []                                   # (each net's copper without its vias: what a via meets;
         self.__dict__.pop("_cu_memo", None)              # pour islands kept, the ones only a via joins too)
         cu = self.copper(prune=False)
@@ -1043,14 +1068,14 @@ class Board:
                         self.tracks.append({**t, "pts": [tuple(e), tuple(v["at"])]})
         changed = len(vias0) - len(keep_v)
         if not changed:
-            return 0
+            return merged
         self.vias = keep_v
         self.__dict__.pop("_cu_memo", None)
         if set(self.check()) - before:                   # (it broke something: put it all back)
             self.vias, self.tracks = vias0, tracks0
             self.__dict__.pop("_cu_memo", None)
-            return 0
-        return changed
+            return merged
+        return changed + merged
 
     def drop_loops(self) -> int:
         """tracks a net does not need: one whose removal leaves every pin of its net joined as before (a second run

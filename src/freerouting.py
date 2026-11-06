@@ -340,7 +340,10 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
             if max(x1_ - x0_, y1_ - y0_) < 1.5 * min(x1_ - x0_, y1_ - y0_):
                 continue                                   # (a square pad: an exposed pad or a BGA ball, not a pin)
             reach = short if k % 2 == 0 else long
-            if abs(dx) > abs(dy):                          # a pin on the left or right side
+            if (x1_ - x0_) > (y1_ - y0_):                  # a pin on the left or right side: by the pad's long axis
+                #                                            (not by where it lies from the centre: the end pins of
+                #                                            a long SSOP row lie further out along the row than
+                #                                            across it, and a stub along the row runs into the next)
                 ex = x1_ if dx > 0 else x0_
                 pts = [(round(cx, 4), round(cy, 4)), (round(ex + (reach if dx > 0 else -reach), 4), round(cy, 4))]
             else:

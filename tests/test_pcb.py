@@ -2270,3 +2270,37 @@ def test_autoplace_keeps_parts_off_the_scripts_copper():
     assert not pcb.autoplace(b)
     feed = LineString([b.pad("R1", "2"), b.pad("R2", "1")]).buffer(0.5)
     assert not [r for r in b.comps if r not in ("R1", "R2") and b.courtyard(r).intersects(feed)]
+
+
+def test_fine_pitch_escapes_follow_the_pads_long_axis():
+    """the stubs drawn out of a fine-pitch part's pins before FreeRouting run along each pad's long axis: the end
+    pins of a long SSOP row lie further out along the row than across it, and a stub along the row ran into the
+    next pin (0.155 mm at 0.635 mm pitch)"""
+    import freerouting
+    import pcb
+    b = pcb.Board("e", [(0, 0), (30, 0), (30, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("U1", "Package_SO:SSOP-28_3.9x9.9mm_P0.635mm", (15.0, 10.0), 90, "")
+    for i in range(1, 15):
+        b.net(f"N{i}", [("U1", str(i)), ("U1", str(29 - i))])
+    assert freerouting.escape_fine_pitch(b) == 28
+    assert not [p for p in b.check() if "apart" in p or "short" in p]
+
+
+def test_tidy_merges_two_vias_of_one_net_drilled_into_each_other():
+    """two vias of one net closer than the hole gap (two routing passes' drops at one spot) become one, the tracks
+    that met the second brought to the first"""
+    import pcb
+    b = pcb.Board("tv", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_0805_2012Metric", (5.0, 6.0), 0, "1k")
+    b.place("R2", "Resistor_SMD:R_0805_2012Metric", (15.0, 6.0), 0, "1k")
+    b.net("A", [("R1", "2"), ("R2", "1")])
+    (x1, y1), (x2, y2) = b.pad("R1", "2"), b.pad("R2", "1")
+    b.track("A", "F", [(x1, y1), (10.0, y1)], 0.3)
+    b.via("A", (10.0, y1))
+    b.via("A", (10.3, y1))                               # (drilled 0.0 mm from the first)
+    b.track("A", "B", [(10.3, y1), (x2 - 1.5, y2)], 0.3)
+    b.via("A", (x2 - 1.5, y2))                           # (and up again to R2.1)
+    b.track("A", "F", [(x2 - 1.5, y2), (x2, y2)], 0.3)
+    assert any("drills" in p for p in b.check())
+    assert b.tidy() >= 1 and len(b.vias) == 2
+    assert not any("drills" in p for p in b.check()) and len(b.islands("A")) == 1
