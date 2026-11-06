@@ -666,10 +666,56 @@ def _schematic(out: Path, script: str = "") -> dict:
             "pins": pins}
 
 
+def _boards_file() -> Path:
+    from vendor_parts import CACHE
+    return CACHE / "boards.json"
+
+
+def _throwaway(out: str) -> bool:
+    import tempfile
+    return out.startswith(str(Path(tempfile.gettempdir()).resolve())) or "/pytest-of-" in out
+
+
+def remember(out_dir) -> None:
+    """this board's run folder in the list the viewer's switcher shows (every board a viewer has opened, newest first)"""
+    out = str(Path(out_dir).resolve())
+    if _throwaway(out):                                  # (a test's or a temporary folder: not a board to come back to)
+        return
+    f = _boards_file()
+    try:
+        known = [o for o in json.loads(f.read_text()) if o != out] if f.exists() else []
+    except Exception:
+        known = []
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps([out] + known[:49]))
+
+
+def boards(current: Path) -> list:
+    """the boards in the switcher: each remembered run folder still holding a run, with its name, verdict and age"""
+    f = _boards_file()
+    try:
+        outs = json.loads(f.read_text()) if f.exists() else []
+    except Exception:
+        outs = []
+    got = []
+    for o in outs:
+        p = Path(o) / "result.json"
+        if not p.exists():
+            continue
+        try:
+            r = json.loads(p.read_text())
+        except Exception:
+            continue
+        got.append({"out": o, "name": r.get("board") or Path(o).parent.name, "folder": Path(r.get("script") or o).parent.name,
+                    "clean": bool(r.get("clean")), "time": p.stat().st_mtime, "current": Path(o) == current})
+    return sorted(got, key=lambda b: -b["time"])
+
+
 def make_handler(out_dir: str):
     out = Path(out_dir).resolve()
     cache = _Cache(str(out))
     cache.watch()
+    remember(out)
 
     class H(BaseHTTPRequestHandler):
         def log_message(self, *a):                       # (quiet: the run's own output stays readable)
@@ -729,6 +775,22 @@ def make_handler(out_dir: str):
                     return self._json(json.loads(p.read_text()) if p.exists() else {})
                 if path == "/api/board":
                     return self._json(cache.board())
+                if path == "/api/boards":               # (the switcher: every board a viewer has opened)
+                    return self._json({"boards": boards(out)})
+                if path == "/api/open":                 # (?out= one of those: its own viewer, reused or started)
+                    import urllib.parse as up
+                    import urllib.request
+                    want = up.parse_qs(self.path.split("?", 1)[-1]).get("out", [""])[0]
+                    if want not in {b["out"] for b in boards(out)}:
+                        return self._json({"error": "not a board this viewer knows"})
+                    url = launch(want, open_browser=False)
+                    for _ in range(40):                  # (a viewer just started: up in a second or two)
+                        try:
+                            urllib.request.urlopen(url, timeout=0.5)
+                            break
+                        except Exception:
+                            time.sleep(0.25)
+                    return self._json({"url": url})
                 if path == "/api/live":                 # (the script's saved edits: rev goes up with each one shown)
                     return self._json({"rev": cache.rev, **cache.last})
                 if path == "/api/datasheet":            # (?ref=U1: its pins against its datasheet)
@@ -805,7 +867,7 @@ def serve(out_dir: str, port: int = 0, open_browser: bool = True, block: bool = 
     return srv, url
 
 
-def launch(out_dir: str) -> Optional[str]:
+def launch(out_dir: str, open_browser: bool = True) -> Optional[str]:
     """``prometheus view OUT_DIR`` in the background, once per folder: it opens the browser and outlives the run; a viewer
     already up for the folder is reused (its page follows the new run), so a run-edit-run loop opens one tab"""
     import socket
@@ -827,7 +889,8 @@ def launch(out_dir: str) -> Optional[str]:
         s.bind(("127.0.0.1", 0))
         port = s.getsockname()[1]
     url = f"http://127.0.0.1:{port}/"
-    pr = subprocess.Popen([sys.executable, "-m", "pcb_cli", "view", str(Path(out_dir).resolve()), "--port", str(port)],
+    pr = subprocess.Popen([sys.executable, "-m", "pcb_cli", "view", str(Path(out_dir).resolve()), "--port", str(port)]
+                          + ([] if open_browser else ["--no-open"]),       # (the switcher: the page goes there itself)
                           cwd=os.path.dirname(os.path.abspath(__file__)), start_new_session=True,
                           stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     f.write_text(json.dumps({"url": url, "pid": pr.pid, "code": code}))
