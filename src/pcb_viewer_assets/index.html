@@ -248,6 +248,7 @@ const FONT = "IBM Plex Mono";
 let B = null, R = null, P = null, flipped = false, look = "board", threeReady = false, selNet = null;
 const layerOn = { F: true, B: true, pads: true, vias: true, silk: true, court: false, pins: true };
 const COLOR = { F: "#e5844c", B: "#3ec7e8" };     // (copper as copper, not yellow)
+const EDITOR = { F: "#c83434", B: "#4d7fc4", "1": "#c2c200", "2": "#c27cc2" };   // ("Layers": KiCad's own layer colours)
 const tip = $("#tip");
 function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block"; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; }
 const hideTip = () => tip.style.display = "none";
@@ -392,17 +393,18 @@ function drawLayout() {
   const host = $("#lsvg"); host.innerHTML = ""; defs(host);
   if (!B || B.error) return;
   const svg = el("g", { id: "lroot" }, host);
-  const glow = look === "glow", made = look === "board";
+  const glow = look === "glow", made = look === "board", xray = look === "xray";
   el("path", { d: [B.outline, ...(B.cutouts || [])].map(ring).join(" "), "fill-rule": "evenodd", fill: made ? "#0b3a26" : glow ? "rgba(14,17,21,.92)" : "#0d0f12", stroke: made ? "#e8e0c8" : "rgba(255,255,255,.35)", "stroke-width": 0.14 }, svg);
   const layers = made ? [topL()] : [botL(), topL()];
   for (const L of layers) {
     if (!layerOn[L]) continue; const g = el("g", { filter: glow ? "url(#glow)" : "" }, svg);
     for (const c of B.copper.filter(c => c.layer === L)) {
-      const isTop = L === topL(), fill = made ? "#1d6b46" : COLOR[L];
+      const isTop = L === topL(), fill = made ? "#1d6b46" : xray ? (EDITOR[L] || COLOR[L]) : COLOR[L];
       const poured = B.pours.some(p => p.net === c.net && p.layer === L);
-      const op = made ? .95 : glow ? (poured ? (isTop ? .16 : .09) : (isTop ? .9 : .4)) : (isTop ? .8 : .45);
-      const pourLine = glow && poured;                  // (a pour: a line of light round its edge, barely filled)
-      const p = el("path", { d: polyPath(c.poly), fill, "fill-rule": "evenodd", "data-net": c.net, opacity: pourLine ? (isTop ? .06 : .04) : op,
+      const op = made ? .95 : glow ? (poured ? (isTop ? .16 : .09) : (isTop ? .9 : .4)) : (isTop ? .9 : .6);
+      const pourLine = (glow || xray) && poured;        // (a pour: a line round its edge, barely filled: the tracks
+                                                        //  in it stay readable, as a layout editor draws zones)
+      const p = el("path", { d: polyPath(c.poly), fill, "fill-rule": "evenodd", "data-net": c.net, opacity: pourLine ? (xray ? (isTop ? .16 : .1) : (isTop ? .06 : .04)) : op,
         ...(pourLine ? {} : {}) }, g);
       if (pourLine) el("path", { d: polyPath(c.poly), fill: "none", stroke: fill, "stroke-width": 0.07, opacity: isTop ? .55 : .3, "pointer-events": "none" }, g);
       hover(p, `<span class="m">${esc(c.net)}</span> · ${L}.Cu`, c.net);
@@ -424,7 +426,7 @@ function drawLayout() {
   for (const h of B.holes) el("circle", { cx: X(h[0]), cy: Y(h[1]), r: h[2] / 2, fill: "#07080a", stroke: "rgba(255,255,255,.25)", "stroke-width": 0.08 }, svg);
   if (layerOn.court) { const g = el("g", { fill: "none", stroke: "rgba(255,255,255,.45)", "stroke-width": 0.06, "stroke-dasharray": "0.3 0.25" }, svg);
     for (const c of B.comps) if (c.courtyard.length && (c.side || "F") === topL()) el("path", { d: polyPath(c.courtyard) }, g); }
-  if (layerOn.silk) { const g = el("g", { fill: made ? "#eef3e8" : "rgba(255,255,255,.8)", "font-size": 0.95, "text-anchor": "middle", "dominant-baseline": "middle", style: `pointer-events:none;font-family:'${FONT}';font-weight:500` }, svg);
+  if (layerOn.silk) { const g = el("g", { fill: made ? "#eef3e8" : xray ? "#f2eda1" : "rgba(255,255,255,.8)", "font-size": 0.95, "text-anchor": "middle", "dominant-baseline": "middle", style: `pointer-events:none;font-family:'${FONT}';font-weight:500` }, svg);
     for (const c of B.comps) if ((c.side || "F") === topL()) el("text", { x: X(c.at[0]), y: Y(c.at[1]) }, g).textContent = c.ref; }
   // findings as numbered pins on the board
   window._pins = [];
@@ -850,6 +852,9 @@ function styleModel(m) {
         if (c.r > .6 && c.g > .5 && c.b < .1) { seen.set(mat, gold); }   // (the exposed copper: ENIG gold)
         else if (mat.metalness > .5 && Math.abs(c.r - c.g) < .02 && Math.abs(c.g - c.b) < .02)   // (HASL pads: tin, lit)
           seen.set(mat, new THREE.MeshStandardMaterial({ color: lin(0xc9ccd0), roughness: .35, metalness: .55, side: THREE.DoubleSide }));
+        else if (lum > .75 && !(mat.metalness > .5))   // (the silkscreen: white ink printed on the mask, so on top
+          seen.set(mat, new THREE.MeshStandardMaterial({ color: lin(0xf4f4ef), roughness: .7, metalness: 0,
+            polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4, side: THREE.DoubleSide }));   //  of it, crisp)
         else { n.side = THREE.DoubleSide; n.roughness = .38;
           if (n.transparent && n.opacity > .95) { n.transparent = false; n.opacity = 1; }   // (the core: solid, no vias seen through its edge)
           else if (n.transparent && c.g > c.r && c.g > c.b) { n.color = lin(0x1d5e3c); n.opacity = .88; }   // (the mask: a fab's
