@@ -22,9 +22,9 @@ def build():
     b = Board("pam8403_stereo_amp", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=2.0)
     b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (W - 3.2, 8.0), 90,
             "USB-C 5V", "GCT USB4105-GF-A", overhang=True, symbol="Connector:USB_C_Receptacle_USB2.0_16P")
-    b.place("J2", "Connector_Audio:Jack_3.5mm_CUI_SJ1-3523N_Horizontal", (6.5, 20.0), 270, "LINE IN",
+    b.place("J2", "Connector_Audio:Jack_3.5mm_CUI_SJ1-3523N_Horizontal", (3.1, 20.0), 270, "LINE IN",
             "CUI SJ1-3523N", overhang=True)
-    b.place("RV1", "Potentiometer_THT:Potentiometer_Alps_RK097_Dual_Horizontal", (12.0, 32.0), 270, "10k log dual",
+    b.place("RV1", "Potentiometer_THT:Potentiometer_Alps_RK097_Dual_Horizontal", (12.0, 35.0), 270, "10k log dual",
             "Alps RK09712200MC", overhang=True,
             symbol="Device:R_Potentiometer_Dual")
     b.place("U1", None, (25.0, 17.0), 270, "PAM8403", "Diodes PAM8403DR", symbol="Prometheus:PAM8403", lcsc="C112426")

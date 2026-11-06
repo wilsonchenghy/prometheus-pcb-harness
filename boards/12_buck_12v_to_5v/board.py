@@ -39,7 +39,7 @@ def build():
     b = Board("buck_12v_to_5v", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=1.5)
     b.place("J1", TB, (5.3, 14.0), 270, "VIN 7-24V", "Phoenix 1729128")
     b.place("J2", TB, (W - 5.3, 18.0), 90, "5V OUT", "Phoenix 1729128")
-    for x, y in ((3.5, 3.5), (W - 3.5, H - 3.5)):
+    for x, y in ((3.5, 3.5), (W - 3.5, 3.5)):           # (bottom corners: J2's body reaches the top right)
         b.hole((x, y), 3.2)
     b.place("U1", None, (UX, UY), 0, "LMR33630ADDA", "TI LMR33630ADDAR", symbol="Regulator_Switching:LMR33630ADDA")
     # the hot loop: 220 nF across pins 2 (VIN) / 1 (GND), the 10 uF just outside it

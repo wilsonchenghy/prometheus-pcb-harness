@@ -3012,8 +3012,14 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
         ends = [(t, i) for t in board.tracks if t["net"] == v["net"] for i in (0, -1)
                 if math.hypot(t["pts"][i][0] - v["at"][0], t["pts"][i][1] - v["at"][1]) < 0.02]
         pad_at = g0.representative_point().coords[0]
+        mrr = g0.minimum_rotated_rectangle.exterior.coords   # (the track off the pad: as wide as the net needs,
+        minor = min(math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2]))   # up to the pad's own width - a 0.2 mm
+        wide = round(max(width, min(board.net_width(v["net"]), minor)), 3)   # tie on a 1.5 A ground failed the
+        #                                                    current check - else ``width`` where only that fits)
+        w_try = [width]
 
         def lands(at):
+            width = w_try[0]
             if against(v, at) or any(Point(at).buffer(v["dia"] / 2).distance(others[L]) < board.clear - 1e-6
                                      for L in board.layers if not others[L].is_empty):
                 return False
@@ -3031,13 +3037,20 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
         tries = [(round(v["at"][0] + r * math.cos(a0 + da), 4), round(v["at"][1] + r * math.sin(a0 + da), 4))
                  for r in [reach * k / 20 for k in range(1, 21)]
                  for da in [math.radians(t) for t in (0, 30, -30, 60, -60, 90, -90, 120, -120, 150, -150, 180)]]
-        at = next((p_ for p_ in tries if lands(p_)), None)
+        at = None
+        for w_ in dict.fromkeys([wide, width]):
+            w_try[0] = w_
+            at = next((p_ for p_ in tries if lands(p_)), None)
+            if at is not None:
+                break
         if at is None:
             left.append(f"via {v['net']} at {v['at']}: against {r0}.{n0}, no room to move it a neck away")
             continue
         for t, i in ends:
             t["pts"] = list(t["pts"]); t["pts"][i] = at
-        board.tracks.append({"net": v["net"], "layer": L0, "pts": [tuple(round(c, 4) for c in pad_at), at], "w": width, "amps": None})
+        board.tracks.append({"net": v["net"], "layer": L0, "pts": [tuple(round(c, 4) for c in pad_at), at], "w": w_try[0],
+                             "amps": None, **({"neck": True} if w_try[0] < board.net_width(v["net"]) - 1e-6
+                                              and minor < board.net_width(v["net"]) - 1e-6 else {})})
         v["at"] = at
         board.__dict__.pop("_cu_memo", None)
     return left

@@ -2235,3 +2235,20 @@ def test_schematic_keeps_facing_pins_apart(tmp_path):
     if not shutil.which("kicad-cli"):
         pytest.skip("no kicad-cli to read the sheet back")
     assert kicad_sch.check(b, path) == []
+
+
+def test_a_via_moved_off_its_pad_keeps_the_nets_width():
+    """neck_vias moves a via off a pad of its own net with a track as wide as the net needs (up to the pad's
+    width), not a 0.2 mm tie that then fails the current check"""
+    import pcb
+    b = pcb.Board("nv", [(0, 0), (20, 0), (20, 12), (0, 12)], rules="jlcpcb-2")
+    b.place("C1", "Capacitor_SMD:C_0805_2012Metric", (8.0, 6.0), 0, "10u")
+    b.place("C2", "Capacitor_SMD:C_0805_2012Metric", (14.0, 6.0), 0, "10u")
+    b.net("GND", [("C1", "2"), ("C2", "2")], amps=1.5)
+    b.net("V", [("C1", "1"), ("C2", "1")], amps=0.1)
+    x, y = b.pad("C1", "2")
+    b.via("GND", (x + 1.0, y))                            # (its ring right against the pad)
+    assert not pcb.neck_vias(b)
+    t = b.tracks[-1]
+    assert t["net"] == "GND" and t["w"] >= b.net_width("GND") - 1e-6
+    assert not any("too narrow" in p for p in b.check())
