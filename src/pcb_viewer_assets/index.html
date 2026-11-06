@@ -76,6 +76,12 @@ h4 { margin: 4px 0 10px; }
 /* the datasheet panel: the maker's PDF over the canvas, the cited text marked on its page */
 .dsheet { position: absolute; inset: 14px; z-index: 30; display: none; flex-direction: column; background: #fff; border: 1px solid var(--line); box-shadow: 0 24px 60px -24px rgba(17,24,39,.45); }
 .dsheet.on { display: flex; }
+.dsheet.dock { left: auto; width: calc(48% - 14px); }
+#schem.proof #ssvg { width: 52% !important; } #schem.proof .sevi { right: calc(48% + 18px); }
+.dsstep { display: none; align-items: center; gap: 8px; } .dsheet.dock .dsstep { display: flex; } .dsheet.dock #dstitle { display: none; }
+.dsstep b { font: 500 11px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--text); }
+.dsstep .st { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 2px 7px; border: 1px solid var(--line); }
+.dsstep .st.ok { color: var(--green); border-color: #c4e3d0; background: #e7f4ec; } .dsstep .st.bad { color: var(--red); border-color: #f3c6c3; background: #ffecec; } .dsstep .st.mute { color: var(--text3); }
 .dsh-top { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 44px; border-bottom: 1px solid var(--line); flex: none; }
 .dsh-top .k { font: 500 11px var(--mono); letter-spacing: .18em; text-transform: uppercase; color: var(--text2); }
 .dsh-top .k b { color: var(--text); font-weight: 500; }
@@ -263,7 +269,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     </div>
     <div class="float looks" id="looks"><button class="on" data-m="board">As made</button><button data-m="glow">Light</button><button data-m="xray">Layers</button></div>
     <div id="msg"></div>
-    <div class="dsheet" id="dsheet"><div class="dsh-top"><span class="k" id="dstitle">Datasheet</span><span class="sp"></span>
+    <div class="dsheet" id="dsheet"><div class="dsh-top"><span class="k" id="dstitle">Datasheet</span><span class="dsstep"><button id="pfprev" title="Previous pin (←)">‹</button><b id="pfpin"></b><span class="st" id="pfst"></span><button id="pfnext" title="Next pin (→)">›</button></span><span class="sp"></span>
       <button id="dsprev" title="Previous page">‹</button><span class="k" id="dspage"></span><button id="dsnext" title="Next page">›</button>
       <a id="dsopen" target="_blank" rel="noopener">open original ↗</a><button id="dsclose" title="Close (Esc)">✕</button></div>
       <div class="dsh-note" id="dsnote"></div><div class="dsh-body" id="dsbody"><div class="dsh-pagebox" id="dspagebox"><canvas id="dscanvas"></canvas><div id="dsmarks"></div></div></div></div>
@@ -1054,7 +1060,8 @@ async function openDatasheet(o) {                       // o: {ref | url, page, 
 }
 async function dsShow() {
   const { doc, find } = dsCur, page = await doc.getPage(dsCur.page);
-  const w = $("#dsbody").clientWidth - 40, vp0 = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: Math.min(2, Math.max(.6, w / vp0.width)) });
+  const w = $("#dsbody").clientWidth - 40, vp0 = page.getViewport({ scale: 1 }), docked = $("#dsheet").classList.contains("dock");
+  const vp = page.getViewport({ scale: Math.min(2, Math.max(docked ? 1.5 : .6, w / vp0.width)) });   // (docked: readable, scrolled to the row)
   const cv = $("#dscanvas"), dpr = window.devicePixelRatio || 1;
   cv.width = vp.width * dpr; cv.height = vp.height * dpr; cv.style.width = vp.width + "px"; cv.style.height = vp.height + "px";
   await page.render({ canvasContext: cv.getContext("2d"), viewport: vp, transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : null }).promise;
@@ -1085,7 +1092,7 @@ async function dsShow() {
 }
 $("#dsprev").onclick = () => { if (dsCur && dsCur.page > 1) { dsCur.page--; dsShow(); } };
 $("#dsnext").onclick = () => { if (dsCur && dsCur.page < dsCur.doc.numPages) { dsCur.page++; dsShow(); } };
-$("#dsclose").onclick = () => $("#dsheet").classList.remove("on");
+$("#dsclose").onclick = () => proof ? closeProof() : $("#dsheet").classList.remove("on");
 // the evidence, on demand (a run never waits for it): the citations checked against their pages, and each part's
 // wired pins against its datasheet's pin table, a click from that row; the schematic's pin marks show the same
 const EV = {}; let EVC = null, evBusy = false;
@@ -1100,7 +1107,7 @@ async function openPin(ref, num) {
 async function checkAll() {
   if (evBusy) return; evBusy = true; drawEvidence(); drawSchemBar();
   EVC = await getJ("/api/evidence?cites=1"); drawEvidence();
-  for (const c of symParts()) { await evFor(c.ref); drawEvidence(); drawSchemMarks(); }
+  for (const c of symParts()) { await evFor(c.ref); drawEvidence(); drawSchemMarks(); proofStep(); }
   evBusy = false; drawEvidence(); drawSchemMarks();
 }
 function evRow(box, o) { const d = document.createElement("div"); d.className = "ev";
@@ -1129,6 +1136,38 @@ function drawEvidence() {
     for (const q of (e && e.pins) || []) evRow(box, { w: `pin ${q.num} · ${q.name}`, x: `→ ${q.net}${q.with && q.with.length ? " · " + q.with.join(", ") : ""}`, page: q.page, quote: q.quote,
       st: q.status, cls: q.status === "agrees" ? "ok" : q.status === "differs" ? "bad" : "mute", open: () => openPin(c.ref, q.num) }); }
 }
+// datasheet proof: the datasheet docked beside the schematic, one wired pin at a time - the pin ringed on the sheet,
+// its row boxed in its datasheet, ‹ › (or a click on any pin) to move
+let proof = null;
+function proofPins() { const sh = SHEETS && SHEETS[curSheet]; if (!sh) return [];
+  const ps = new Map(symParts().map(c => [c.ref, c]));
+  return (sh.pins || []).filter(p => { const c = ps.get(p.ref), pad = c && c.pads.find(q => q.num === p.num); return pad && pad.net; })
+    .filter(p => !(EV[p.ref] && EV[p.ref].error))         // (a datasheet that could not be read: nothing to show)
+    .sort((a, b) => (/^U/.test(b.ref) - /^U/.test(a.ref)) || a.ref.localeCompare(b.ref) || a.num.localeCompare(b.num, undefined, { numeric: true })); }
+async function openProof() {                             // (the chips first; each datasheet read before the walk starts)
+  $("#schem").classList.add("proof"); $("#dsheet").classList.add("dock", "on"); $("#dstitle").innerHTML = "Datasheet proof";
+  $("#dsnote").className = "dsh-note"; $("#dsnote").textContent = "Reading the datasheets…"; $("#dsmarks").innerHTML = "";
+  proof = { list: [], i: 0 }; drawSchemBar(); await checkAll();
+  proof.list = proofPins();
+  if (!proof.list.length) { $("#dsnote").textContent = "No part here has a datasheet that could be read."; return; }
+  await proofGo(0);
+}
+function closeProof() { proof = null; $("#schem").classList.remove("proof"); $("#dsheet").classList.remove("dock", "on"); drawSchemMarks();
+  const sh = SHEETS && SHEETS[curSheet]; if (sh) SZ.set(-6, -6, sh.w + 12, sh.h + 12); }
+async function proofGo(i) {
+  if (!proof || !proof.list.length) return; proof.i = (i + proof.list.length) % proof.list.length; const p = proof.list[proof.i];
+  SZ.set(p.x - 45, p.y - 30, 90, 60);                     // (the pin in the middle of the sheet's half)
+  await openPin(p.ref, p.num); proofStep();
+}
+function proofStep() { if (!proof || !proof.list.length) return; const p = proof.list[proof.i], c = B.comps.find(x => x.ref === p.ref);
+  const e = EV[p.ref], q = e && e.pins && e.pins.find(x => x.num === p.num), st = q ? q.status : e && e.error ? "not read" : "reading…";
+  $("#pfpin").textContent = `${p.ref} pin ${p.num} ${c ? pinName(c, p.num) : ""} · ${proof.i + 1} / ${proof.list.length}`;
+  const t = $("#pfst"); t.textContent = st; t.className = "st " + (st === "agrees" ? "ok" : st === "differs" ? "bad" : "mute"); }
+$("#pfprev").onclick = () => proofGo(proof.i - 1); $("#pfnext").onclick = () => proofGo(proof.i + 1);
+document.addEventListener("keydown", e => { if (!proof || e.target.tagName === "INPUT") return;
+  if (e.key === "ArrowRight") { e.stopImmediatePropagation(); proofGo(proof.i + 1); }
+  if (e.key === "ArrowLeft") { e.stopImmediatePropagation(); proofGo(proof.i - 1); } }, true);
+
 // the schematic's evidence bar: what the marks mean, each part's score, the check on demand
 function drawSchemBar() {
   const bar = $("#sevi"); if (!bar) return; const ps = symParts();
@@ -1136,9 +1175,9 @@ function drawSchemBar() {
   const done = ps.every(c => EV[c.ref]);
   const score = ps.filter(c => EV[c.ref]).map(c => { const e = EV[c.ref];
     return `<span>${esc(c.ref)} <b>${e.pins ? `${e.agree}/${e.total}` : "not read"}</b></span>`; }).join("");
-  bar.innerHTML = `<span>Datasheet pins</span><span class="lg"><i class="ok"></i>agrees</span><span class="lg"><i class="bad"></i>differs</span><span class="lg"><i></i>${done ? "not found" : "not checked"}</span>` +
-    score + `<button class="btn ${done ? "" : "primary"}">${evBusy ? "Reading…" : done ? "Check again" : "Check"}</button>`;
-  bar.querySelector("button").onclick = () => { if (done) { for (const k in EV) delete EV[k]; EVC = null; } checkAll(); };
+  bar.innerHTML = `<button class="btn primary">${proof ? "Close datasheet proof" : "Open datasheet proof"}</button>` +
+    `<span class="lg"><i class="ok"></i>agrees</span><span class="lg"><i class="bad"></i>differs</span><span class="lg"><i></i>${done ? "not found" : "not read yet"}</span>` + score;
+  bar.querySelector("button").onclick = () => proof ? closeProof() : openProof();
 }
 // the schematic's pin marks: each wired pin of a part with a datasheet, at its end on KiCad's sheet (its own mm)
 function drawSchemMarks() {
@@ -1153,7 +1192,11 @@ function drawSchemMarks() {
     const nm = pinName(c, p.num), on = (B.comps.filter(o => o.ref !== c.ref && o.pads.some(x => x.net === pad.net)).map(o => o.ref)).join(", ");
     hover(m, `<b>${esc(p.ref)} pin ${esc(p.num)}</b> · ${esc(nm)} → <span class="m">${esc(pad.net)}</span>${on ? " · " + esc(on) : ""}<br>` +
       (st ? `datasheet: ${esc(st)}${q.page ? ", p." + q.page : ""}` : "click: its row in the datasheet"));
-    m.addEventListener("click", ev => { ev.stopPropagation(); openPin(p.ref, p.num); }); }
+    m.addEventListener("click", ev => { ev.stopPropagation();
+      const k = proof ? proof.list.findIndex(x => x.ref === p.ref && x.num === p.num) : -1;
+      if (k >= 0) proofGo(k); else openPin(p.ref, p.num); });
+    if (proof && proof.list[proof.i] && proof.list[proof.i].ref === p.ref && proof.list[proof.i].num === p.num)
+      el("circle", { cx: p.x, cy: p.y, r: 2.4, fill: "none", stroke: "#b9852c", "stroke-width": .5, "pointer-events": "none" }, g); }
 }
 
 // ---------- data ----------
@@ -1177,7 +1220,7 @@ let pW = 0; new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.wid
   if (w && w !== pW && activeView() === "parts") { pW = w; drawParts(); } }).observe($("#psvg"));   // settles, not a frame late)
 window.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return;
   if (e.key === "f") fitLayout(true); for (const i of [1, 2, 3, 4]) if (e.key === String(i)) $$("#seg button")[i - 1].click();
-  if (e.key === "Escape") { selectNet(null); setLoupe(false); $("#dsheet").classList.remove("on"); }
+  if (e.key === "Escape") { selectNet(null); setLoupe(false); proof ? closeProof() : $("#dsheet").classList.remove("on"); }
   if (e.key === "l" && activeView() === "layout") setLoupe(!loupeOn);
   if (e.key === "e" && activeView() === "v3d") $("#explode").click(); });
 </script>
