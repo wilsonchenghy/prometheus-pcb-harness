@@ -257,23 +257,21 @@ class _Cache:
         self.key, self.data, self.lock = None, None, threading.Lock()
         self.live, self.undo = None, []                  # (the board a live edit moves parts on, and what it was)
         self.rev, self.last = 0, {}                      # (the script's saved edits shown so far; the last one's result)
+        self.script_m = self.state_m = None              # (the script's and the run's state's versions the board is)
 
     def watch(self, every: float = 0.5) -> None:
         """the board script, followed: each time it is saved, ``refresh`` (in the background, for the page's poll of
         /api/live)"""
         def run():
-            seen = None
-            while self.script() is None:                 # (the board before any edit: what an edit is measured from)
-                time.sleep(every)
-            with self.lock:
-                self._board()
             while True:
                 try:
                     script = self.script()
                     m = Path(script).stat().st_mtime if script and not script.endswith(".net") else None
-                    if m and seen and m != seen:
-                        self.refresh()
-                    seen = m or seen
+                    if m:
+                        with self.lock:                  # (built, or built again on a run's new state)
+                            self._board()
+                        if m != self.script_m:           # (a save since the version shown)
+                            self.refresh()
                 except Exception as e:                   # (a script mid-save, or one that does not run yet: said)
                     self.last = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}", "rev": self.rev}
                 time.sleep(every)
@@ -288,6 +286,7 @@ class _Cache:
         with self.lock:
             t0 = time.perf_counter()
             was = self._board()
+            self.script_m = Path(self.script()).stat().st_mtime
             b, _ = pcb_cli.load(self.script())
             if b.layers != was.layers or not b.outline.equals(was.outline):
                 self.last = {"ok": False, "rev": self.rev, "error": "the outline or the layers changed: run it again "
@@ -315,12 +314,26 @@ class _Cache:
             return got
 
     def _board(self):
-        """the run's board, built once for live edits (the script, the run's placement and copper)"""
+        """the run's board, for live edits (the script, the run's placement and copper): built once, and again
+        whenever a run saves its state (a viewer opens while its run is still routing)"""
         import pcb_cli
-        if self.live is None:
+        st = self.out / pcb_cli.STATE
+        sm = st.stat().st_mtime if st.exists() else 0
+        if self.live is None or sm != self.state_m:
+            if self.script_m is None:                    # (the script's version shown: a run's new state does not
+                self.script_m = Path(self.script()).stat().st_mtime   # make an edit since it count as seen)
+            self.state_m = sm
             b, _ = pcb_cli.load(self.script())
             self.live_key = pcb_cli.design_key(b)        # (the design's, as the script builds it: what a later run
-            pcb_cli.load_state(b, str(self.out), self.live_key)   # checks the saved state against, moves or not)
+            if not pcb_cli.load_state(b, str(self.out), self.live_key) and st.exists():   # checks it against)
+                import pickle                            # (the run's state of an earlier version of the script: its
+                with open(st, "rb") as f:                #  placement and copper still the start; refresh routes again
+                    sv = pickle.load(f)                  #  what the edit disturbs)
+                for r, c in sv["place"].items():
+                    if r in b.comps:
+                        b.comps[r].update(c)
+                        b.comps[r].pop("unplaced", None)
+                b.tracks, b.vias = sv["tracks"], sv["vias"]
             self.live = b
         return self.live
 
@@ -328,6 +341,7 @@ class _Cache:
         """a live edit kept: the run's state saved (later stages start from it), the page's board, what is left"""
         import pcb_cli
         pcb_cli.save_state(b, str(self.out), self.live_key)
+        self.state_m = (self.out / pcb_cli.STATE).stat().st_mtime   # (its own save: not a run's, no rebuild)
         self.data, self.key = board_data(b), _board_key(self.out, self.script())
         return {"ok": True, "board": self.data, "rerouted": sorted(redo), "unrouted": probs, "check": b.check(),
                 "seconds": round(time.perf_counter() - t0, 2)}
