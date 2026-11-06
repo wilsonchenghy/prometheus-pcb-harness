@@ -682,12 +682,18 @@ def remember(out_dir) -> None:
     if _throwaway(out):                                  # (a test's or a temporary folder: not a board to come back to)
         return
     f = _boards_file()
-    try:
-        known = [o for o in json.loads(f.read_text()) if o != out] if f.exists() else []
-    except Exception:
-        known = []
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps([out] + known[:49]))
+    with open(f.with_suffix(".lock"), "w") as lk:        # (two viewers starting at once: both kept, neither write lost)
+        try:
+            import fcntl
+            fcntl.flock(lk, fcntl.LOCK_EX)
+        except ImportError:                              # (Windows: no flock; a race there loses one entry, said here)
+            pass
+        try:
+            known = [o for o in json.loads(f.read_text()) if o != out] if f.exists() else []
+        except Exception:
+            known = []
+        f.write_text(json.dumps([out] + known[:49]))
 
 
 def boards(current: Path) -> list:
