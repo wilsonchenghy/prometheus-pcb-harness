@@ -117,6 +117,10 @@ def build():
         if p:
             b.net(p, [u(p), ("J3", str(i + 4))])
     b.nc("J1", "SBU1", "SBU2")
+    # VSS 47 sits between VDD 48 and PB9 with no way out to the pour on its own side: a short tie inward to a
+    # ground via under the chip's body (the pour on the back is whole there)
+    b.track("GND", "F", [(UX + 2.25, UY - 4.165), (UX + 2.25, UY - 2.4)], 0.25)
+    b.via("GND", (UX + 2.25, UY - 2.4), 0.3, 0.6)
     b.pour("GND", "B", OUT)
     b.pour("GND", "F", OUT)
     return b

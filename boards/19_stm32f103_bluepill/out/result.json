@@ -21,12 +21,12 @@
  "parts": 35,
  "nets": 47,
  "layers": 2,
- "seconds": 393.3,
+ "seconds": 621.7,
  "timings": {
-  "place+route": 386.26,
-  "critic": 0.054,
-  "check": 0.63,
-  "export": 4.9
+  "place+route": 615.12,
+  "critic": 0.626,
+  "check": 0.55,
+  "export": 4.18
  },
  "placement": {
   "U1": [
@@ -72,9 +72,9 @@
    "F"
   ],
   "U2": [
-   13.6,
-   13.15,
-   180,
+   12.133,
+   13.0,
+   0,
    "F"
   ],
   "Y1": [
@@ -90,9 +90,9 @@
    "F"
   ],
   "FB1": [
-   41.4,
-   15.6,
-   180,
+   38.35,
+   19.9,
+   270,
    "F"
   ],
   "C1": [
@@ -132,8 +132,8 @@
    "F"
   ],
   "C7": [
-   21.4,
-   15.0,
+   19.067,
+   9.967,
    180,
    "F"
   ],
@@ -144,15 +144,15 @@
    "F"
   ],
   "C9": [
-   44.6,
-   13.35,
+   42.25,
+   15.6,
    0,
    "F"
   ],
   "C10": [
-   44.0,
-   7.0,
-   0,
+   43.25,
+   7.8,
+   90,
    "F"
   ],
   "C11": [
@@ -168,39 +168,39 @@
    "F"
   ],
   "C13": [
-   14.75,
-   7.75,
-   270,
-   "F"
-  ],
-  "C14": [
-   9.95,
-   13.15,
-   90,
-   "F"
-  ],
-  "R1": [
-   10.0,
+   11.8,
    16.2,
    0,
    "F"
   ],
-  "R2": [
-   10.65,
-   8.05,
-   270,
+  "C14": [
+   17.8,
+   14.05,
+   0,
    "F"
   ],
-  "R3": [
-   57.8,
-   3.45,
+  "R1": [
+   10.2,
+   9.9,
+   0,
+   "F"
+  ],
+  "R2": [
+   6.05,
+   6.25,
    180,
    "F"
   ],
+  "R3": [
+   58.0,
+   23.5,
+   0,
+   "F"
+  ],
   "R4": [
-   58.3,
-   18.4,
-   90,
+   58.0,
+   8.5,
+   0,
    "F"
   ],
   "R5": [
@@ -210,9 +210,9 @@
    "F"
   ],
   "R6": [
-   46.367,
-   16.033,
-   180,
+   45.5,
+   9.533,
+   90,
    "F"
   ],
   "R7": [
@@ -222,9 +222,9 @@
    "F"
   ],
   "R8": [
-   51.567,
-   6.5,
-   180,
+   46.8,
+   6.067,
+   270,
    "F"
   ],
   "D1": [
@@ -234,9 +234,9 @@
    "F"
   ],
   "D2": [
-   58.75,
-   7.45,
-   90,
+   49.6,
+   6.85,
+   0,
    "F"
   ]
  },
@@ -254,26 +254,6 @@
   {
    "stage": "routing",
    "kind": "unreached",
-   "text": "route GND: could not reach U2.2 (blocked; move parts or widen a channel)",
-   "pins": [
-    "U2.2"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
-   "kind": "unreached",
-   "text": "route GND: could not reach C4.2 (blocked; move parts or widen a channel)",
-   "pins": [
-    "C4.2"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
-   "kind": "unreached",
    "text": "route GND: could not reach U1.47 (blocked; move parts or widen a channel)",
    "pins": [
     "U1.47"
@@ -283,28 +263,8 @@
   },
   {
    "stage": "routing",
-   "kind": "unreached",
-   "text": "route GND: could not reach U2.2 (blocked; move parts or widen a channel)",
-   "pins": [
-    "U2.2"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
-   "kind": "unreached",
-   "text": "route GND: could not reach C4.2 (blocked; move parts or widen a channel)",
-   "pins": [
-    "C4.2"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
    "kind": "other",
-   "text": "pair D+ / D-: tracks 73.83 and 21.04 mm long, 52.79 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
+   "text": "pair D+ / D-: tracks 67.51 and 44.90 mm long, 22.61 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
    "pins": [],
    "hint": "read the text",
    "why": ""
@@ -312,11 +272,15 @@
   {
    "stage": "routing",
    "kind": "split",
-   "text": "net GND is split in 4: U1.47 | U2.2 | C4.2",
+   "text": "net GND is split in 2: U1.47 | U1.8, U1.23, U1.35, J1.A1, J1.A12, J1.B1",
    "pins": [
-    "C4.2",
+    "J1.A1",
+    "J1.A12",
+    "J1.B1",
+    "U1.23",
+    "U1.35",
     "U1.47",
-    "U2.2"
+    "U1.8"
    ],
    "hint": "the pins listed in different groups are not joined: route the net again or move parts",
    "why": "A net in pieces is an open circuit between them."
@@ -324,11 +288,15 @@
   {
    "stage": "design",
    "kind": "split",
-   "text": "net GND is split in 4: U1.47 | U2.2 | C4.2",
+   "text": "net GND is split in 2: U1.47 | U1.8, U1.23, U1.35, J1.A1, J1.A12, J1.B1",
    "pins": [
-    "C4.2",
+    "J1.A1",
+    "J1.A12",
+    "J1.B1",
+    "U1.23",
+    "U1.35",
     "U1.47",
-    "U2.2"
+    "U1.8"
    ],
    "hint": "the pins listed in different groups are not joined: route the net again or move parts",
    "why": "A net in pieces is an open circuit between them."
@@ -336,23 +304,7 @@
   {
    "stage": "design",
    "kind": "other",
-   "text": "pair D+ / D-: tracks 73.83 and 21.04 mm long, 52.79 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
-   "pins": [],
-   "hint": "read the text",
-   "why": ""
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
-   "pins": [],
-   "hint": "read the text",
-   "why": ""
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
+   "text": "pair D+ / D-: tracks 67.51 and 44.90 mm long, 22.61 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
    "pins": [],
    "hint": "read the text",
    "why": ""
@@ -367,6 +319,36 @@
   }
  ],
  "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (7.00, 9.75) is 0.00 mm from J1.A12 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (7.00, 9.75) is 0.00 mm from J1.B1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for C8: left on the assembly layer",
+   "refs": [
+    "C8"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
   {
    "severity": "info",
    "kind": "holes",
