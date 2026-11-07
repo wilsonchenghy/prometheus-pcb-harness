@@ -1,4 +1,4 @@
-{"size_mm": [50, 40], "layers": 2, "house": "jlcpcb-2",
+{"size_mm": [40, 28.5], "layers": 2, "house": "jlcpcb-2",
  "nets": {"VBUS": {"amps": 1.5}, "LP": {"amps": 1.5}, "LN": {"amps": 1.5}, "RP": {"amps": 1.5}, "RN": {"amps": 1.5}},
  "near": [["C3", "U1", 3.0], ["C4", "U1", 3.0], ["C5", "U1", 3.0], ["C8", "U1", 3.0]],
  "edge": ["J1", "J2", "SW1"], "holes": {"count": 2, "d": 3.2}}

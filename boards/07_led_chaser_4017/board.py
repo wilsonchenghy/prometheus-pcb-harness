@@ -1,6 +1,6 @@
 """LED chaser: an NE555 astable clocks a CD4017 decade counter whose ten outputs light ten LEDs in a ring, one at a
 time; a 100k trimmer sets the speed (~0.7-30 Hz). 5-12 V in on a 2-pin screw terminal, a reverse-polarity diode.
-Difficulty 2/5. 2 layers, 56 x 56 mm, JLCPCB.
+Difficulty 2/5. 2 layers, 32 x 35 mm, JLCPCB.
 
 Values: f = 1.44 / ((R1 + 2 (R2 + RV1)) C1) with R1 = 1k, R2 = 1k, RV1 = 0-100k, C1 = 1 uF -> ~0.7 Hz to ~480 Hz
 (NE555 datasheet, astable). One LED is on at a time, so all ten share one cathode resistor R3 (470 ohm: ~10-20 mA
@@ -11,18 +11,18 @@ from pcb import Board
 
 R06, C06, C08 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric", "Capacitor_SMD:C_0805_2012Metric"
 TB2 = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"
-W, H = 56.0, 56.0
+W, H = 32.0, 35.0
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
-CX, CY, RING = W / 2, H / 2, 19.0
+CX, CY, RING = W / 2, 21.0, 11.0          # (the ring above J1, D11 and RV1)
 
 
 def build():
     b = Board("led_chaser_4017", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=3.0)
     b.place("J1", TB2, (4.5, 4.0), 0, "5-12V", "Phoenix 1729128", overhang=True)
-    b.place("U1", None, (CX - 6.0, CY + 1.0), 90, "NE555", "TI NE555DR", symbol="Timer:NE555D", lcsc="C7593")
-    b.place("U2", "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm", (CX + 5.0, CY), 0, "CD4017", "TI CD4017BM96",
+    b.place("U1", None, (CX - 3.5, CY), 90, "NE555", "TI NE555DR", symbol="Timer:NE555D", lcsc="C7593")
+    b.place("U2", "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm", (CX + 3.2, CY), 0, "CD4017", "TI CD4017BM96",
             symbol="4xxx:4017", lcsc="C7437")
-    b.place("RV1", "Potentiometer_SMD:Potentiometer_Bourns_3314J_Vertical", (CX - 6.0, CY - 8.5), 0, "100k",
+    b.place("RV1", "Potentiometer_SMD:Potentiometer_Bourns_3314J_Vertical", None, 0, "100k",
             "Bourns 3314J-1-104E")
     for ref, fp, val, note in (("R1", R06, "1k", "555 R1"), ("R2", R06, "1k", "555 R2"), ("R3", R06, "470", "LED common"),
                                ("C1", C08, "1u", "timing"), ("C2", C06, "10n", "CONT"), ("C3", C06, "100n", "555 VCC"),

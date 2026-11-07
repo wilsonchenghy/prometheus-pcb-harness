@@ -4,7 +4,7 @@ bias (A up to 3V3, B down to GND), an SM712 asymmetric TVS (-7 / +12 V, the RS-4
 a 3-pin 5.08 mm screw terminal J1 (1 A, 2 B, 3 GND) and a 1x05 2.54 mm UART header J2 (1 3V3, 2 GND, 3 RO, 4 DIR,
 5 DI). DIR drives DE and /RE together: low (default, 10 k pull-down) = receive, high = transmit. RO has a 10 k
 pull-up so the host's RX idles high while the receiver is off.
-Difficulty: 3/5. 2 layers, 1 oz, 32 x 22 mm, JLCPCB, GND poured on both sides.
+Difficulty: 3/5. 2 layers, 1 oz, 31 x 18.5 mm, JLCPCB, GND poured on both sides.
 
 Assumptions (datasheets not fetched in this run):
 - Pin map from KiCad's Interface_UART:SP3485EN symbol (same as MAX3485: RO nRE DE DI GND A B VCC).
@@ -20,7 +20,7 @@ from pcb import Board
 
 R06, R08, C06 = "Resistor_SMD:R_0603_1608Metric", "Resistor_SMD:R_0805_2012Metric", "Capacitor_SMD:C_0603_1608Metric"
 TB3 = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"
-W, H = 32.0, 22.0
+W, H = 31.0, 18.5
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
 FIXED = {"C1": ((15.6, 15.2), 90)}              # VCC 100n by U1.8
 

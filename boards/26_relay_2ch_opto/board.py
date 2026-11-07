@@ -2,7 +2,7 @@
 logic side isolated from the coil side, as the common "JD-VCC" modules do), a flyback diode across each coil, an LED
 per channel, a 4-pin logic header (VCC, IN1, IN2, GND; active low, as common modules), a 3-pin coil-supply header
 (JD-VCC, VCC, GND: jumper JD-VCC to VCC for one supply) and a 3-way 5.08 mm screw terminal per relay (NO, COM, NC).
-Difficulty 2/5. 2 layers, 56 x 46 mm, JLCPCB.
+Difficulty 2/5. 2 layers, 48 x 41.5 mm, JLCPCB.
 
 For low-voltage loads only (SELV, <= 30 V DC, 5 A): no mains creepage slots are cut. Relay pins from KiCad's
 Relay:SANYOU_SRD_Form_C symbol: 2 and 5 coil, 1 COM; 3 drawn as the normally-open contact and 4 as the normally
@@ -14,21 +14,22 @@ from pcb import Board
 
 R06 = "Resistor_SMD:R_0603_1608Metric"
 TB3 = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-3-5.08_1x03_P5.08mm_Horizontal"
-W, H = 56.0, 46.0
+KX = 19.0                                             # relay column
+W, H = KX + 29.0, 41.5                                # (terminals 25 mm right of the relays, 4 mm in from the edge)
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
 
 
 def build():
     b = Board("relay_2ch_opto", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=2.0)
-    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (2.6, 13.0), 0, "VCC IN1 IN2 GND",
+    b.place("J1", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (2.6, 23.4), 0, "VCC IN1 IN2 GND",
             "XFCN PZ254V-11-04P")
-    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical", (2.6, 32.0), 0, "JD-VCC VCC GND",
+    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical", (2.6, 32.5), 0, "JD-VCC VCC GND",
             "XFCN PZ254V-11-03P")
-    for ch, y in ((1, 33.0), (2, 12.0)):
-        b.place(f"K{ch}", "Relay_THT:Relay_SPDT_SANYOU_SRD_Series_Form_C", (21.0, y), 0, "SRD-05VDC-SL-C",
+    for ch, y in ((1, 25.2), (2, 8.5)):
+        b.place(f"K{ch}", "Relay_THT:Relay_SPDT_SANYOU_SRD_Series_Form_C", (KX, y), 0, "SRD-05VDC-SL-C",
                 "Songle SRD-05VDC-SL-C", symbol="Relay:SANYOU_SRD_Form_C")
         b.place(f"J{ch + 2}", TB3, (W - 4.0, y - 3.0), 90, "NO COM NC", "Phoenix 1729131", overhang=True)
-        b.place(f"U{ch}", "Package_DIP:SMDIP-4_W7.62mm", (11.0, y), 0, "PC817", "Sharp PC817XNNSZ0F",
+        b.place(f"U{ch}", "Package_DIP:SMDIP-4_W7.62mm", (10.0, y), 0, "PC817", "Sharp PC817XNNSZ0F",
                 symbol="Isolator:PC817")
         b.place(f"Q{ch}", "Package_TO_SOT_SMD:SOT-23", None, 0, "S8050", "CJ S8050 J3Y", lcsc="C2146")
         b.place(f"D{ch}", "Diode_SMD:D_SOD-123", None, 0, "1N4148W", "Diodes 1N4148W-7-F")
@@ -36,9 +37,8 @@ def build():
         for k, (val, note) in enumerate((("1k", "opto LED"), ("1k", "base"), ("10k", "base pull-down"),
                                          ("1k", "channel LED"))):
             b.place(f"R{ch}{k + 1}", R06, None, 0, val, note=note)
-    b.hole((44.0, H - 3.0), d=3.2)
-    b.hole((3.5, H - 3.5), d=3.2)
-    b.hole((42.5, 22.8), d=3.2)                          # (between the relays: clear of K2's coil pad)
+    for xy in ((3.5, 3.5), (3.5, H - 3.5), (W - 3.5, H - 3.5)):   # (bottom right: J4 reaches the corner)
+        b.hole(xy, d=3.2)
 
     b.net("VCC", [("J1", "1"), ("J2", "2"), ("R11", "1"), ("R21", "1"), ("R14", "1"), ("R24", "1")], amps=0.1)
     b.net("GND", [("J1", "4")], amps=0.1)                    # logic ground: only the header (opto LEDs return to INx)
@@ -63,5 +63,5 @@ def build():
         b.track(f"COM{ch}", "F", [(xc, yc), (xt - 12.0, yc), (xt - 10.0, y2), (xt, y2)], 2.0)
         b.track(f"NC{ch}", "F", [(xnc, ync), (xt - 9.0, ync), (xt - 6.0, y3), (xt, y3)], 2.0)
     b.erc_allow("GND", "the logic ground only reaches the header: the opto LEDs return through the INx pins")
-    b.pour("JDGND", "B", [(0, 0), (40.0, 0), (40.0, H), (0, H)])
+    b.pour("JDGND", "B", [(0, 0), (KX + 19.0, 0), (KX + 19.0, H), (0, H)])
     return b

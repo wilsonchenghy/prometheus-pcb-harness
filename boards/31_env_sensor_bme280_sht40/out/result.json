@@ -1,6 +1,6 @@
 {
  "board": "env_sensor_bme280_sht40",
- "script": "/home/user/prometheus-pcb-harness/boards/31_env_sensor_bme280_sht40/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/31_env_sensor_bme280_sht40/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "harness (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 13,
  "nets": 5,
  "layers": 2,
- "seconds": 2.4,
+ "seconds": 80.3,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.05,
-  "check": 0.12,
-  "export": 1.7
+  "place+route": 77.43,
+  "critic": 0.219,
+  "check": 0.07,
+  "export": 1.64
  },
  "placement": {
   "J1": [
@@ -37,73 +37,73 @@
   ],
   "J2": [
    10.0,
-   18.8,
+   14.3,
    180,
    "F"
   ],
   "J3": [
    2.5,
-   16.08,
+   15.1,
    0,
    "F"
   ],
   "U3": [
    9.6,
-   11.0,
+   8.75,
    90,
    "F"
   ],
   "U1": [
-   21.0,
-   11.0,
+   19.5,
+   6.5,
    0,
    "F"
   ],
   "U2": [
-   26.5,
-   11.0,
+   20.0,
+   12.0,
    0,
    "F"
   ],
   "C1": [
-   6.65,
-   10.65,
-   90,
+   6.2,
+   7.5,
+   180,
    "F"
   ],
   "C2": [
-   13.85,
-   12.2,
-   0,
+   6.2,
+   10.0,
+   180,
    "F"
   ],
   "C3": [
-   19.4,
-   7.6,
+   17.9,
+   3.1,
    90,
    "F"
   ],
   "C4": [
-   22.6,
-   7.6,
+   21.1,
+   3.1,
    90,
    "F"
   ],
   "C5": [
-   27.5,
-   8.3,
+   21.0,
+   9.3,
    0,
    "F"
   ],
   "R1": [
-   21.25,
-   15.05,
-   270,
+   22.5,
+   15.5,
+   0,
    "F"
   ],
   "R2": [
-   18.4,
-   4.3,
+   17.5,
+   15.5,
    180,
    "F"
   ]
@@ -113,9 +113,9 @@
   {
    "severity": "warning",
    "kind": "via neck",
-   "text": "via VIN at (8.75, 9.75) is 0.00 mm from U3.1 (keep 0.2 mm of track between them)",
+   "text": "via 3V3 at (9.50, 4.50) is 0.00 mm from J1.2 (keep 0.2 mm of track between them)",
    "refs": [
-    "U3"
+    "J1"
    ],
    "hint": "move the via off the pad, or route a short neck to it",
    "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
@@ -123,7 +123,7 @@
   {
    "severity": "warning",
    "kind": "via neck",
-   "text": "via 3V3 at (19.75, 9.50) is 0.00 mm from U1.8 (keep 0.2 mm of track between them)",
+   "text": "via SCL at (20.50, 8.00) is 0.00 mm from U1.4 (keep 0.2 mm of track between them)",
    "refs": [
     "U1"
    ],
@@ -133,17 +133,7 @@
   {
    "severity": "warning",
    "kind": "via neck",
-   "text": "via 3V3 at (21.25, 15.75) is 0.00 mm from R1.1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "R1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via GND at (9.50, 10.25) is 0.00 mm from U3.2 (keep 0.2 mm of track between them)",
+   "text": "via GND at (9.50, 7.75) is 0.00 mm from U3.2 (keep 0.2 mm of track between them)",
    "refs": [
     "U3"
    ],
@@ -226,6 +216,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/31_env_sensor_bme280_sht40/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/31_env_sensor_bme280_sht40/out/kicad8.zip"
  }
 }

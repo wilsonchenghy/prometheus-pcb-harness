@@ -6,7 +6,7 @@ INA219AIDR (SOIC-8) measures the shunt through the datasheet's optional input fi
 across), and the bus voltage at IN-. 1x04 2.54 mm header J2: VCC (3.0-5.5 V), GND, SDA, SCL; 10 k pull-ups on SDA /
 SCL to VCC; A0 and A1 strapped to GND by 0 ohm resistors R4 / R5: I2C address 0x40 (lift a strap and wire the pin to
 VCC, SDA or SCL for the other 15 addresses). The load's ground must be common with the header's GND.
-Difficulty: 3/5. 2 layers, 1 oz, 36 x 20 mm, JLCPCB. VIN+ / VIN- are copper pours on F (3.2 A), GND on B and on F's
+Difficulty: 3/5. 2 layers, 1 oz, 36 x 13 mm, JLCPCB. VIN+ / VIN- are copper pours on F (3.2 A), GND on B and on F's
 left half.
 
 Assumptions (datasheet not fetched in this run, values from memory of TI SBOS448):
@@ -23,22 +23,22 @@ from pcb import Board
 
 R06, C06 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric"
 TB = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"
-W, H = 36.0, 20.0
+W, H = 36.0, 13.0
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
 XS = 22.5                                       # shunt column
 XP = 18.3                                       # left edge of the VIN+ / VIN- pours
-FIXED = {"R6": ((XP, 12.0), 180),         # 10 R filter, VIN+ -> IN+ (pad 1 in the VIN+ pour)
-         "R7": ((XP, 8.6), 180),          # 10 R filter, VIN- -> IN-
-         "C1": ((15.0, 5.7), 270)}               # VS 100n by pin 5
+FIXED = {"R6": ((XP, 8.4), 180),         # 10 R filter, VIN+ -> IN+ (pad 1 in the VIN+ pour)
+         "R7": ((XP, 5.0), 180),          # 10 R filter, VIN- -> IN-
+         "C1": ((15.0, 2.1), 270)}               # VS 100n by pin 5
 
 
 def build():
     b = Board("ina219_power_monitor", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=1.0)
-    b.place("J1", TB, (W - 5.2, 7.5), 90, "1 VIN- / 2 VIN+", "Phoenix 1729128")
-    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (2.5, 13.8), 0, "I2C",
+    b.place("J1", TB, (W - 5.2, 3.9), 90, "1 VIN- / 2 VIN+", "Phoenix 1729128")
+    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (2.5, 10.2), 0, "I2C",
             "XFCN PZ254V-11-04P", lcsc="C2829861")
-    b.place("U1", None, (12.5, 10.0), 0, "INA219", "TI INA219AIDR", symbol="Sensor_Energy:INA219AxD", lcsc="C138706")
-    b.place("R1", "Resistor_SMD:R_2512_6332Metric", (XS, 10.0), 270, "0R1 1% 3W", "Bourns CRA2512-FZ-R100ELF",
+    b.place("U1", None, (12.5, 6.4), 0, "INA219", "TI INA219AIDR", symbol="Sensor_Energy:INA219AxD", lcsc="C138706")
+    b.place("R1", "Resistor_SMD:R_2512_6332Metric", (XS, 6.4), 270, "0R1 1% 3W", "Bourns CRA2512-FZ-R100ELF",
             note="current shunt")
     for ref, fp, val, note in (("C1", C06, "100n", "VS decoupling"), ("C2", C06, "100n", "input filter, IN+ to IN-"),
                                ("R2", R06, "10k", "SDA pull-up"), ("R3", R06, "10k", "SCL pull-up"),
@@ -57,8 +57,8 @@ def build():
     b.net("SCL", [("J2", "4"), u("SCL"), ("R3", "2")])
     b.net("A0", [u("A0"), ("R4", "1")])
     b.net("A1", [u("A1"), ("R5", "1")])
-    b.pour("VIN+", "F", [(XP, 10.3), (W, 10.3), (W, H), (XP, H)])
-    b.pour("VIN-", "F", [(XP, 0), (W, 0), (W, 9.7), (XP, 9.7)])
+    b.pour("VIN+", "F", [(XP, 6.7), (W, 6.7), (W, H), (XP, H)])
+    b.pour("VIN-", "F", [(XP, 0), (W, 0), (W, 6.1), (XP, 6.1)])
     b.pour("GND", "F", [(0, 0), (XP - 1.6, 0), (XP - 1.6, H), (0, H)])
     b.pour("GND", "B", OUT)
     return b

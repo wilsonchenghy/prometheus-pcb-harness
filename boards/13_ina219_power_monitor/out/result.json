@@ -1,6 +1,6 @@
 {
  "board": "ina219_power_monitor",
- "script": "/home/user/prometheus-pcb-harness/boards/13_ina219_power_monitor/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/13_ina219_power_monitor/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "harness (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,83 +21,83 @@
  "parts": 12,
  "nets": 10,
  "layers": 2,
- "seconds": 2.1,
+ "seconds": 7.8,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.055,
-  "check": 0.05,
-  "export": 1.51
+  "place+route": 5.52,
+  "critic": 0.269,
+  "check": 0.03,
+  "export": 1.3
  },
  "placement": {
   "J1": [
    30.8,
-   7.5,
+   3.9,
    90,
    "F"
   ],
   "J2": [
    2.5,
-   13.8,
+   10.2,
    0,
    "F"
   ],
   "U1": [
    12.5,
-   10.0,
+   6.4,
    0,
    "F"
   ],
   "R1": [
    22.5,
-   10.0,
+   6.4,
    270,
    "F"
   ],
   "C1": [
    15.0,
-   5.7,
+   2.1,
    270,
    "F"
   ],
   "C2": [
-   15.85,
-   14.55,
+   15.75,
+   11.0,
    0,
    "F"
   ],
   "R2": [
-   6.6,
-   8.75,
-   90,
+   7.0,
+   6.5,
+   270,
    "F"
   ],
   "R3": [
-   8.5,
-   5.5,
-   0,
+   7.0,
+   2.5,
+   270,
    "F"
   ],
   "R4": [
-   6.8,
-   12.8,
-   90,
+   11.0,
+   1.5,
+   0,
    "F"
   ],
   "R5": [
-   9.9,
-   15.25,
+   7.0,
+   10.5,
    90,
    "F"
   ],
   "R6": [
    18.3,
-   12.0,
+   8.4,
    180,
    "F"
   ],
   "R7": [
    18.3,
-   8.6,
+   5.0,
    180,
    "F"
   ]
@@ -106,33 +106,13 @@
  "critic": [
   {
    "severity": "warning",
-   "kind": "via neck",
-   "text": "via SDA at (10.00, 9.25) is 0.00 mm from U1.3 (keep 0.2 mm of track between them)",
+   "kind": "label",
+   "text": "no room on the silkscreen for J1: left on the assembly layer",
    "refs": [
-    "U1"
+    "J1"
    ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via SCL at (10.00, 8.00) is 0.00 mm from U1.4 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VCC at (15.00, 8.00) is 0.00 mm from U1.5 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
   },
   {
    "severity": "info",
@@ -175,6 +155,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/13_ina219_power_monitor/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/13_ina219_power_monitor/out/kicad8.zip"
  }
 }

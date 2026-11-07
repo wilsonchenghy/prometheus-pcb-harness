@@ -5,7 +5,7 @@ pull-ups, two STEMMA QT / Qwiic JST-SH 4-pin connectors (J1 in at the bottom edg
 4 SCL, 5 SDA). A 1 mm routed slot (b.cutout) between the power side and the sensor side keeps the LDO's and the
 connectors' heat (and the host's, through the cable copper) away from the sensors; only the two bridges above and
 below it carry the four nets and the pours across.
-Difficulty: 2/5. 2 layers, 1 oz, 30 x 22 mm, JLCPCB, GND poured on both layers.
+Difficulty: 2/5. 2 layers, 1 oz, 24.5 x 17.5 mm, JLCPCB, GND poured on both layers.
 
 I2C addresses: BME280 0x76 (SDO to GND, datasheet p.32, cited), SHT40-AD1B 0x44 (fixed by the part number).
 BME280 in I2C mode: CSB tied to VDDIO (p.32).
@@ -31,13 +31,17 @@ R06, C06 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric"
 SH4 = "Connector_JST:JST_SH_SM04B-SRSS-TB_1x04-1MP_P1.00mm_Horizontal"
 DS_BME = "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf"
 DS_LDO = "https://www.diodes.com/assets/Datasheets/AP2112.pdf"
-W, H = 30.0, 22.0
+W, H = 24.5, 17.5
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
-SLOT = [(15.5, 5.0), (16.5, 5.0), (16.5, 17.0), (15.5, 17.0)]    # thermal slot, bridges above and below
-FIXED = {"C3": ((19.4, 7.6), 90),              # 100n at BME280 VDD (pin 8, bottom row left)
-         "C4": ((22.6, 7.6), 90),               # 100n at BME280 VDDIO (pin 6, bottom row)
-         "C5": ((27.5, 8.3), 0),                # 100n at SHT40 VDD (pin 3)
-         }                                      # C1 / C2 (LDO in / out): the placer, within 3 mm of U3 (req.json near)
+SLOT = [(15.5, 3.5), (16.5, 3.5), (16.5, H - 3.5), (15.5, H - 3.5)]  # thermal slot, bridges above and below
+U1X, U1Y = 19.5, 6.5                                  # BME280; the SHT40 above it
+U2X, U2Y = 20.0, 12.0
+FIXED = {"C3": ((U1X - 1.6, U1Y - 3.4), 90),   # 100n at BME280 VDD (pin 8, bottom row left)
+         "C4": ((U1X + 1.6, U1Y - 3.4), 90),    # 100n at BME280 VDDIO (pin 6, bottom row)
+         "C5": ((U2X + 1.0, U2Y - 2.7), 0),     # 100n at SHT40 VDD (pin 3)
+         "C1": ((6.2, H / 2 - 1.25), 180),      # LDO in 1u, pad 1 toward U3 pin 1 (VIN)
+         "C2": ((6.2, H / 2 + 1.25), 180),      # LDO out 1u, pad 1 toward U3 pin 5 (VOUT)
+         }
 
 
 def build():
@@ -46,12 +50,12 @@ def build():
     b.place("J1", SH4, (10.0, 3.2), 0, "Qwiic IN", "JST SM04B-SRSS-TB(LF)(SN)", overhang=True, lcsc="C160390")
     b.place("J2", SH4, (10.0, H - 3.2), 180, "Qwiic OUT", "JST SM04B-SRSS-TB(LF)(SN)", overhang=True,
             lcsc="C160390")
-    b.place("J3", "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical", (2.5, 16.08), 0,
+    b.place("J3", "Connector_PinHeader_2.54mm:PinHeader_1x05_P2.54mm_Vertical", (2.5, H - 2.4), 0,
             "VIN 3V3 GND SCL SDA", "XFCN PZ254V-11-05P", lcsc="C2829862")
-    b.place("U3", None, (9.6, 11.0), 90, "AP2112K-3.3", "Diodes AP2112K-3.3TRG1", symbol="Regulator_Linear:AP2112K-3.3",
+    b.place("U3", None, (9.6, H / 2), 90, "AP2112K-3.3", "Diodes AP2112K-3.3TRG1", symbol="Regulator_Linear:AP2112K-3.3",
             lcsc="C51118")
-    b.place("U1", None, (21.0, 11.0), 0, "BME280", "Bosch BME280", symbol="Sensor:BME280", lcsc="C92489")
-    b.place("U2", None, (26.5, 11.0), 0, "SHT40", "Sensirion SHT40-AD1B-R2", symbol="Sensor_Humidity:SHT4x")
+    b.place("U1", None, (U1X, U1Y), 0, "BME280", "Bosch BME280", symbol="Sensor:BME280", lcsc="C92489")
+    b.place("U2", None, (U2X, U2Y), 0, "SHT40", "Sensirion SHT40-AD1B-R2", symbol="Sensor_Humidity:SHT4x")
     for ref, fp, val, note in (("C1", C06, "1u", "LDO in"), ("C2", C06, "1u", "LDO out"),
                                ("C3", C06, "100n", "BME280 VDD"), ("C4", C06, "100n", "BME280 VDDIO"),
                                ("C5", C06, "100n", "SHT40 VDD"),

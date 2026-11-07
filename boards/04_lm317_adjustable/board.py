@@ -2,7 +2,7 @@
 set by a 2k multi-turn trimpot, fed from a 5.5 x 2.1 mm DC barrel jack through a 1N5822 Schottky (reverse-polarity
 protection), input and output electrolytics plus ceramics, a 10 uF ADJ bypass with the datasheet's two protection
 diodes, a 5.0 mm screw terminal out and a red power LED on the protected input. All through-hole: hand-solderable.
-Difficulty: 2/5. 2 layers, 56 x 40 mm, JLCPCB, ground poured on both sides, 4 x M3 holes.
+Difficulty: 2/5. 2 layers, 44 x 34 mm, JLCPCB, ground poured on both sides, 4 x M3 holes.
 
 Values (LM317 datasheet, TI SLVS044, https://www.ti.com/lit/ds/symlink/lm317.pdf):
 - VOUT = 1.25 V x (1 + R2 / R1) + IADJ x R2, R1 = 220R (5.7 mA through it: above the ~3.5 mA minimum load),
@@ -25,33 +25,33 @@ RAX = "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal"
 CDISC = "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm"
 D41 = "Diode_THT:D_DO-41_SOD81_P7.62mm_Horizontal"
 TB = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal"
-W, H = 56.0, 40.0
+W, H = 44.0, 34.0
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
 DS = "https://www.ti.com/lit/ds/symlink/lm317.pdf"
 
 
 def build():
     b = Board("lm317_adjustable", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=2.0)
-    b.place("J1", "Connector_BarrelJack:BarrelJack_Horizontal", (15.0, 20.0), 0, "DC 15-30V", "CUI PJ-002A",
+    b.place("J1", "Connector_BarrelJack:BarrelJack_Horizontal", (15.0, 17.0), 0, "DC 15-30V", "CUI PJ-002A",
             symbol="Connector:Barrel_Jack_Switch")
-    b.place("J2", TB, (W - 5.3, 17.5), 90, "VOUT", "Phoenix 1729128")
+    b.place("J2", TB, (W - 5.3, 13.0), 90, "VOUT", "Phoenix 1729128")
     for x, y in ((3.5, 3.5), (W - 3.5, 3.5), (3.5, H - 3.5), (W - 3.5, H - 3.5)):
         b.hole((x, y), 3.2)
-    b.place("U1", None, (30.0, 22.0), 0, "LM317", "TI LM317T", symbol="Regulator_Linear:LM317_TO-220")
-    b.place("D1", "Diode_THT:D_DO-201AD_P5.08mm_Vertical_AnodeUp", None, 0, "1N5822", "MDD 1N5822",
+    b.place("U1", None, (23.0, 17.0), 0, "LM317", "TI LM317T", symbol="Regulator_Linear:LM317_TO-220")
+    b.place("D1", "Diode_THT:D_DO-201AD_P5.08mm_Vertical_AnodeUp", (19.0, 5.0), 0, "1N5822", "MDD 1N5822",
             note="reverse polarity")
-    b.place("D2", D41, None, 0, "1N4002", "MDD 1N4002", note="VOUT -> VIN protection")
+    b.place("D2", D41, (27.5, 5.0), 0, "1N4002", "MDD 1N4002", note="VOUT -> VIN protection")
     b.place("D3", D41, None, 0, "1N4002", "MDD 1N4002", note="ADJ -> VOUT protection")
-    b.place("RV1", "Potentiometer_THT:Potentiometer_Bourns_3296W_Vertical", None, 0, "2k", "Bourns 3296W-1-202LF",
+    b.place("RV1", "Potentiometer_THT:Potentiometer_Bourns_3296W_Vertical", (14.0, 26.5), 0, "2k", "Bourns 3296W-1-202LF",
             note="VOUT set")
     b.place("R1", RAX, None, 0, "220 1%", "Yageo MFR-25FBF52-220R", note="VO to ADJ")
     b.place("R2", RAX, None, 0, "4.7k", "Yageo MFR-25FBF52-4K7", note="power LED")
-    b.place("C1", "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm", None, 0, "100u 35V", "Panasonic EEU-FR1V101",
+    b.place("C1", "Capacitor_THT:CP_Radial_D8.0mm_P3.50mm", (9.0, 5.0), 0, "100u 35V", "Panasonic EEU-FR1V101",
             note="input bulk")
-    b.place("C2", CDISC, None, 0, "100n 50V", "Kemet C320C104K5R5TA", note="VI bypass")
+    b.place("C2", CDISC, (26.5, 12.5), 0, "100n 50V", "Kemet C320C104K5R5TA", note="VI bypass")
     b.place("C3", "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm", None, 0, "10u 25V", "Panasonic EEU-FR1E100",
             note="CADJ")
-    b.place("C4", "Capacitor_THT:CP_Radial_D6.3mm_P2.50mm", None, 0, "47u 25V", "Panasonic EEU-FR1E470",
+    b.place("C4", "Capacitor_THT:CP_Radial_D6.3mm_P2.50mm", (34.0, 25.5), 0, "47u 25V", "Panasonic EEU-FR1E470",
             note="output")
     b.place("C5", CDISC, None, 0, "100n 50V", "Kemet C320C104K5R5TA", note="output ceramic")
     b.place("D4", "LED_THT:LED_D3.0mm", None, 0, "red", "Kingbright L-934ID", note="power")

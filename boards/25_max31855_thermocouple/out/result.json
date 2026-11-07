@@ -1,14 +1,16 @@
 {
  "board": "max31855_thermocouple",
- "script": "/home/user/prometheus-pcb-harness/boards/25_max31855_thermocouple/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/25_max31855_thermocouple/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
-  "warnings": {}
+  "warnings": {
+   "silk_overlap": 1
+  }
  },
- "router": "harness (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,77 +23,77 @@
  "parts": 11,
  "nets": 10,
  "layers": 2,
- "seconds": 2.4,
+ "seconds": 9.6,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.191,
-  "check": 0.07,
-  "export": 1.58
+  "place+route": 6.96,
+  "critic": 0.631,
+  "check": 0.04,
+  "export": 1.27
  },
  "placement": {
   "J1": [
    5.2,
-   11.75,
+   10.75,
    270,
    "F"
   ],
   "J2": [
-   27.5,
-   16.35,
+   23.0,
+   15.1,
    0,
    "F"
   ],
   "U1": [
    17.5,
-   10.0,
+   9.0,
    0,
    "F"
   ],
   "U2": [
-   23.0,
-   4.0,
+   19.0,
+   2.4,
    0,
    "F"
   ],
   "FB1": [
    10.4,
-   9.1,
+   8.1,
    0,
    "F"
   ],
   "FB2": [
    10.4,
-   10.9,
+   9.9,
    0,
    "F"
   ],
   "C2": [
    13.0,
-   10.0,
+   9.0,
    90,
    "F"
   ],
   "C1": [
    14.5,
-   6.5,
+   5.5,
    0,
    "F"
   ],
   "C3": [
-   19.2,
-   4.15,
-   270,
-   "F"
-  ],
-  "C4": [
-   24.0,
-   8.333,
+   15.7,
+   2.4,
    90,
    "F"
   ],
+  "C4": [
+   19.6,
+   5.2,
+   0,
+   "F"
+  ],
   "R1": [
-   15.8,
-   4.0,
+   18.5,
+   13.5,
    0,
    "F"
   ]
@@ -100,40 +102,12 @@
  "critic": [
   {
    "severity": "warning",
-   "kind": "via neck",
-   "text": "via VIN at (21.75, 5.00) is 0.00 mm from U2.1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via CS at (16.50, 4.00) is 0.00 mm from R1.2 (keep 0.2 mm of track between them)",
-   "refs": [
-    "R1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via CS at (19.00, 9.00) is 0.00 mm from U1.6 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
    "kind": "label",
-   "text": "no room on the silkscreen for C2: left on the assembly layer",
+   "text": "no room on the silkscreen for C2, J2, U2: left on the assembly layer",
    "refs": [
-    "C2"
+    "C2",
+    "J2",
+    "U2"
    ],
    "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
    "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
@@ -168,6 +142,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/25_max31855_thermocouple/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/25_max31855_thermocouple/out/kicad8.zip"
  }
 }

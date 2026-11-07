@@ -1,4 +1,4 @@
-{"size_mm": [67, 40], "layers": 2, "house": "jlcpcb-2",
+{"size_mm": [67, 30], "layers": 2, "house": "jlcpcb-2",
  "nets": {"V+": {"amps": 8.0}, "GND": {"amps": 8.0}, "OUT1": {"amps": 2.0}, "OUT2": {"amps": 2.0},
           "OUT3": {"amps": 2.0}, "OUT4": {"amps": 2.0}},
  "near": [["D1", "J2", 6.0], ["D2", "J3", 6.0], ["D3", "J4", 6.0], ["D4", "J5", 6.0],

@@ -3,7 +3,7 @@ at 2.5 V) switch four loads (solenoids, relays, motors, LED strips) to ground fr
 100R gate resistor, 100k gate pull-down (the load stays off while the MCU boots or the header is unplugged), SS34
 flyback diode across the load (cathode to V+), and a green LED on the logic input. 5.0 mm screw terminals: V+ / GND
 in (5-24 V, 8 A total) and one V+ / OUT pair per load (2 A each); a 1x6 2.54 mm logic header (GND, IN1-IN4, GND).
-Difficulty: 2/5. 2 layers, 67 x 40 mm, JLCPCB, 4 x M3 holes; V+ poured on top along the terminal row, ground poured
+Difficulty: 2/5. 2 layers, 67 x 30 mm, JLCPCB, 4 x M3 holes; V+ poured on top along the terminal row, ground poured
 on the bottom.
 
 Choices and assumptions:
@@ -26,7 +26,7 @@ from pcb import Board
 
 R06 = "Resistor_SMD:R_0603_1608Metric"
 TB = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal"
-W, H = 67.0, 40.0
+W, H = 67.0, 30.0
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
 TY = 5.3                                              # the terminal row (wire entries face the bottom edge)
 XS = [4.5 + 12.0 * i for i in range(5)]               # J1 (V+ in), J2..J5 (loads)

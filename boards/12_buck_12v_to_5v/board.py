@@ -2,7 +2,7 @@
 integrated high- and low-side FETs, HSOP-8 with exposed pad), 10 uH shielded inductor, ceramic input and output
 capacitors, 5.0 mm screw terminals in and out, a green power LED on the output and the power-good flag (pulled up
 to VOUT) on a test pad.
-Difficulty: 3/5. 2 layers, 50 x 30 mm, JLCPCB, ground poured on both sides.
+Difficulty: 3/5. 2 layers, 45.5 x 22.5 mm, JLCPCB, ground poured on both sides.
 
 Values from the LMR33630 datasheet (SNVSAN3F, https://www.ti.com/lit/ds/symlink/lmr33630.pdf):
 - Feedback (Eq. 3, p. 21): RFBB = RFBT / (VOUT / VREF - 1), VREF = 1 V, RFBT = 100k (recommended) -> RFBB = 25.0k,
@@ -18,7 +18,7 @@ Assumptions: no input reverse-polarity or TVS protection (not asked; add an SMBJ
 copper (the datasheet prefers 2 oz for heat at 3 A: order 2 oz for continuous full load at high ambient).
 Currents: VIN 2.5 A (3 A x 5 V / 7 V / 0.85), SW, VOUT and GND 3 A.
 Layout: hot loop = C2 (220 nF) straddling pins 2 / 1, C1 right behind it, all on top; VIN (terminal -> C5 / C1 -> C2
--> pin 2) and VOUT (L1 -> J2 straight, a bus down the four COUT pads) drawn by hand on top, 1.2-1.5 mm, no vias in
+-> pin 2) and VOUT (L1 -> J2 along the bus, a bus down the four COUT pads) drawn by hand on top, 1.2-1.5 mm, no vias in
 the power path (the built-in router had taken VIN under the board through 0.3 mm vias); each COUT ground pad has a
 0.4 mm via to the bottom ground right beside it. Terminals: pin 1 = + on both (J1 VIN, J2 5 V).
 L1 (Coilcraft XAL6060) has no LCSC stock match: hand-place or substitute a 10 uH, >= 5.5 A Isat shielded part.
@@ -29,16 +29,16 @@ from pcb import Board
 
 R06, C06, C12 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric", "Capacitor_SMD:C_1210_3225Metric"
 TB = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal"
-W, H = 50.0, 30.0
+W, H = 45.5, 22.5
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
 DS = "https://www.ti.com/lit/ds/symlink/lmr33630.pdf"
-UX, UY = 22.0, 14.0                                   # U1, the regulator
+UX, UY = 21.0, 14.0                                   # U1, the regulator
 
 
 def build():
     b = Board("buck_12v_to_5v", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=1.5)
-    b.place("J1", TB, (5.3, 14.0), 270, "VIN 7-24V", "Phoenix 1729128")
-    b.place("J2", TB, (W - 5.3, 18.0), 90, "5V OUT", "Phoenix 1729128")
+    b.place("J1", TB, (5.3, 15.0), 270, "VIN 7-24V", "Phoenix 1729128")
+    b.place("J2", TB, (W - 5.3, 13.5), 90, "5V OUT", "Phoenix 1729128")
     for x, y in ((3.5, 3.5), (W - 3.5, 3.5)):           # (bottom corners: J2's body reaches the top right)
         b.hole((x, y), 3.2)
     b.place("U1", None, (UX, UY), 0, "LMR33630ADDA", "TI LMR33630ADDAR", symbol="Regulator_Switching:LMR33630ADDA")
@@ -48,10 +48,10 @@ def build():
     b.place("C3", C06, (UX + 4.6, UY + 1.25), 90, "100n", "Samsung CL10B104KB8NNNC", note="CBOOT, BOOT to SW")
     b.place("C4", C06, (UX + 4.6, UY - 1.8), 270, "1u 16V", "Samsung CL10B105KO8NNNC", note="CVCC")
     b.place("L1", "Inductor_SMD:L_Coilcraft_XAL6060-XXX", (UX + 9.5, UY + 4.0), 0, "10u", "Coilcraft XAL6060-103MEB")
-    b.place("C5", "Capacitor_SMD:CP_Elec_6.3x7.7", (UX - 7.2, UY - 7.6), 270, "47u 35V", "Panasonic EEE-FK1V470P", note="input bulk")
+    b.place("C5", "Capacitor_SMD:CP_Elec_6.3x7.7", (UX - 6.2, UY - 7.6), 270, "47u 35V", "Panasonic EEE-FK1V470P", note="input bulk")
     # COUT beside L1's output pad, ground pads toward U1, each with a via to the bottom ground right by it
     for ref, at in (("C6", (UX + 9.5, UY - 2.0)), ("C7", (UX + 9.5, UY - 5.4)), ("C8", (UX + 9.5, UY - 8.8)),
-                    ("C9", (UX + 14.8, UY - 2.0))):
+                    ("C9", (UX + 14.8, UY - 5.4))):
         b.place(ref, C12, at, 0 if ref == "C9" else 180, "22u 16V", "Murata GRM32ER71C226KE18L", note="COUT")
     b.place("R1", R06, None, 0, "100k 1%", note="RFBT")
     b.place("R2", R06, None, 0, "24.9k 1%", note="RFBB")
@@ -82,12 +82,12 @@ def build():
     b.track("VIN", "F", [c1, c5], 1.5)
     b.track("VIN", "F", [c1, (c2[0] - 1.0, c1[1]), c2], 1.2)
     b.track("VIN", "F", [c2, vin], 0.8)
-    # the output drawn by hand on top too: L1 -> J2 straight, and a bus down the COUT pads
+    # the output drawn by hand on top too: L1 -> J2 off the bus, and a bus down the COUT pads
     l2, j2 = b.pad("L1", "2"), b.pad("J2", "1")
     c6, c7, c8, c9 = (b.pad(r, "1") for r in ("C6", "C7", "C8", "C9"))
-    b.track("VOUT", "F", [l2, (j2[0], l2[1])], 1.5)
+    b.track("VOUT", "F", [(l2[0], j2[1]), j2], 1.5)
     b.track("VOUT", "F", [(l2[0], l2[1] - 2.0), (l2[0], c6[1]), c6, c8], 1.2)
-    b.track("VOUT", "F", [c6, c9], 1.2)
+    b.track("VOUT", "F", [c7, c9], 1.2)
     for ref in ("C6", "C7", "C8", "C9", "C1"):
         x, y = b.pad(ref, "2")
         b.via("GND", {"C1": (x, y + 1.6), "C9": (x + 1.45, y)}.get(ref, (x - 1.45, y)), 0.4, 0.8)

@@ -2,7 +2,7 @@
 charger at 1 A (R_PROG = 1.2k) with red CHRG and green STDBY LEDs -> JST-PH 2-pin cell; DW01A + FS8205A protect the
 cell in its negative leg (over-charge, over-discharge, over-current, short). The load is taken from a 2-pin 2.54 mm
 header on the bottom edge (pin 1 OUT+ = cell +, pin 2 OUT- = protected negative, the board's ground).
-Difficulty: 2/5. 2 layers, 34 x 22 mm, JLCPCB, ground poured on both sides.
+Difficulty: 2/5. 2 layers, 34 x 17.5 mm, JLCPCB, ground poured on both sides.
 
 Choices and assumptions (no questions asked: an unattended build):
 - R_PROG 1.2k: TP4056 datasheet table "RPROG 1.2k -> IBAT 1000 mA" (I_BAT = 1200 V / R_PROG).
@@ -17,7 +17,7 @@ Choices and assumptions (no questions asked: an unattended build):
 - Currents: VBUS / charge path 1 A; the cell and load path 2 A (the DW01A + FS8205A trip near 3 A).
 - Layout: the 2 A copper (BAT -> C2 -> cell + and output header, cell - -> Q1 S1) and OD are drawn by hand on top
   (1.0 / 0.6 mm), so the cell current never passes a 0.3 mm via; the parts round them are placed by hand. No mounting
-  holes (a 34 x 22 mm module, meant to be soldered or taped in).
+  holes (a 34 x 17.5 mm module, meant to be soldered or taped in).
 - LCSC: TP4056 C16581, JST B2B-PH-K-S C131337, green LED C72043 given; the rest found by the run (lcsc_auto).
 
     cd boards/06_tp4056_lipo_charger && prometheus board.py out/ --spec req.json --json --no-view
@@ -25,14 +25,14 @@ Choices and assumptions (no questions asked: an unattended build):
 from pcb import Board
 
 R06, C06, C08 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric", "Capacitor_SMD:C_0805_2012Metric"
-W, H = 34.0, 22.0
+W, H = 34.0, 17.5
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
 TP_DS = "https://www.lcsc.com/datasheet/lcsc_datasheet_2410121619_TOPPOWER-Nanjing-Extension-Microelectronics-TP4056-42-ESOP8_C16581.pdf"
 
 
 def build():
     b = Board("tp4056_lipo_charger", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=1.5)
-    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (3.2, H / 2), 270, "USB-C",
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (3.2, 9.0), 270, "USB-C",
             "GCT USB4105-GF-A", overhang=True, symbol="Connector:USB_C_Receptacle_USB2.0_16P")
     b.place("J2", "Connector_JST:JST_PH_B2B-PH-K_1x02_P2.00mm_Vertical", (W - 3.5, 6.0), 270, "BAT",
             "JST B2B-PH-K-S", lcsc="C131337")
@@ -46,14 +46,14 @@ def build():
     b.place("C2", C08, (17.8, 6.6), 270, "10u", note="BAT output")
     for ref, fp, val, at, rot, note in (
             ("C1", C08, "10u", (9.6, 6.4), 270, "VCC input"), ("C3", C06, "100n", (25.0, 11.45), 0, "DW01A VCC"),
-            ("R1", R06, "1.2k", (11.0, 15.2), 0, "PROG: 1 A"), ("R2", R06, "1k", (14.5, 17.2), 180, "CHRG LED"),
-            ("R3", R06, "1k", (19.5, 17.2), 180, "STDBY LED"), ("R4", R06, "100", (21.6, 11.8), 270, "DW01A supply"),
-            ("R5", R06, "1k", (20.9, 9.0), 180, "DW01A CS"), ("R6", R06, "5.1k", (5.0, 17.6), 0, "CC1")):
+            ("R1", R06, "1.2k", (11.0, 15.2), 0, "PROG: 1 A"), ("R2", R06, "1k", (23.3, 15.6), 0, "CHRG LED"),
+            ("R3", R06, "1k", (30.3, 15.6), 0, "STDBY LED"), ("R4", R06, "100", (21.6, 11.8), 270, "DW01A supply"),
+            ("R5", R06, "1k", (20.9, 9.0), 180, "DW01A CS"), ("R6", R06, "5.1k", (5.0, 15.8), 0, "CC1")):
         b.place(ref, fp, at, rot, val, note=note)
-    b.place("R7", R06, None, 0, "5.1k", note="CC2")     # (one part left to the placer: with every part fixed and
-    # tracks drawn, the harness takes the board as routed by the script and routes nothing)
-    b.place("D1", "LED_SMD:LED_0603_1608Metric", (14.5, 19.5), 0, "red", note="charging")
-    b.place("D2", "LED_SMD:LED_0603_1608Metric", (19.5, 19.5), 0, "green", "Hubei KENTO KT-0603G", note="charged",
+    b.place("R7", R06, (5.5, 2.0), 270, "5.1k", note="CC2")      # (below J1, as R6 is above it: the CC lines then
+    # leave J1 on the outside of its VBUS pins)
+    b.place("D1", "LED_SMD:LED_0603_1608Metric", (19.8, 15.6), 0, "red", note="charging")
+    b.place("D2", "LED_SMD:LED_0603_1608Metric", (26.8, 15.6), 0, "green", "Hubei KENTO KT-0603G", note="charged",
             lcsc="C72043")
     b.cite("R1", "PROG resistor for 1 A", "1.2k", 4, "1.2k", url=TP_DS)
 
