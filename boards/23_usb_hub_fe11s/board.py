@@ -88,8 +88,9 @@ def build():
     b.nc("U1", "PWRJ", "DRV", "LED1/EESCL", "LED2", "TESTJ/EESDA")
     b.nc("J1", "SBU1", "SBU2")
     b.pour("GND", "B", OUT)
-    b.pour("GND", "F", [(31, 22), (47, 22), (47, 38), (31, 38)])   # (round the SSOP on top too: its ground pins drop
-    #                                                      into copper)
+    # round the SSOP on top too, so its ground pins drop into copper: it carries the chip's own return (well under
+    # 0.1 A); the ports' 2 A comes back through the bottom pour
+    b.pour("GND", "F", [(31, 22), (47, 22), (47, 38), (31, 38)], amps=0.3)
     # VBUS and GND off the receptacle's 0.5 mm-pitch pins by hand at 0.52 mm (2 A), each VBUS pin pair outward
     # (the data and CC pins between them leave straight down)
     for pin, dx in (("A9", -2.2), ("A4", 2.2)):
