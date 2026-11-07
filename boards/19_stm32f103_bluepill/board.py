@@ -121,6 +121,12 @@ def build():
     # ground via under the chip's body (the pour on the back is whole there)
     b.track("GND", "F", [(UX + 2.25, UY - 4.165), (UX + 2.25, UY - 2.4)], 0.25)
     b.via("GND", (UX + 2.25, UY - 2.4), 0.3, 0.6)
+    # VSSA 8, between NRST 7 and VDDA 9, likewise: inward to its own via under the body
+    b.track("GND", "F", [(UX + 4.16, UY + 0.75), (UX + 2.4, UY + 0.75)], 0.25)
+    b.via("GND", (UX + 2.4, UY + 0.75), 0.3, 0.6)
+    # the HSE crystal's two ground pads (2 and 4, on opposite corners) tied under its body, between the signal pads
+    yx, yy = FIXED["Y1"][0]
+    b.track("GND", "F", [(yx - 1.1, yy + 0.85), (yx + 1.1, yy - 0.85)], 0.2)
     b.pour("GND", "B", OUT)
     b.pour("GND", "F", OUT)
     return b
