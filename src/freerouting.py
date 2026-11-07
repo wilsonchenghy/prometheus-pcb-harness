@@ -214,6 +214,24 @@ def _read_kicad_copper(path: str, board) -> Tuple[list, list]:
     return segs, vias
 
 
+def _drop_pins(dsn: str, pins) -> str:
+    """a Specctra design with ``pins`` ({net: {"REF-PIN", ...}}) out of their nets' pin lists (their pads stay, as
+    obstacles): FreeRouting then leaves those branches to the harness"""
+    pins = {n: ps for n, ps in pins.items() if ps}
+    if not pins:
+        return dsn
+
+    def fix(m):
+        drop = pins.get(m.group(1).strip('"'))
+        if not drop:
+            return m.group(0)
+        keep = [t for t in m.group(3).split() if t.replace('"', "") not in drop]
+        return f"(net {m.group(1)}{m.group(2)}{' '.join(keep)})"
+    i, end = dsn.index("(network"), dsn.find("(wiring") % (len(dsn) + 1)
+    body = re.sub(r'\(net ("[^"]*"|\S+)(\s*\(pins\s+)([^()]*)\)', fix, dsn[i:end])
+    return dsn[:i] + body + dsn[end:]
+
+
 def _drop_nets(dsn: str, nets) -> str:
     """a Specctra design with ``nets`` out of its network (their pads and wires stay, as obstacles): FreeRouting
     then leaves them alone"""
@@ -261,6 +279,9 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     k = {"um": 1.0, "mm": 0.001, "mil": 1 / 25.4, "inch": 1 / 25400.0}.get(unit.group(1) if unit else "um", 1.0)
     txt = re.sub(r"\(clearance ([\d.]+)", lambda m: f"(clearance {float(m.group(1)) + FR_MARGIN * 1000 * k:.4f}",
                  txt)                                    # KiCad users do by hand), the real rule judged after
+    txt = _drop_pins(txt, {n: {f"{r}-{num}" for r, num in board.pin_loads(n)} for n in board.nets})
+    #                                                    (a branch to a low-current pin is the harness's, at its own
+    #                                                     width: FreeRouting routes every net at one width)
     txt = _drop_nets(txt, {p["net"] for p in board.pours})   # (poured nets left to the harness, and the copper
     txt = txt.replace("(type route)", "(type protect)")      #  already drawn kept as it is)
     with open(dsn, "w") as f:
@@ -313,6 +334,7 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
     import numpy as np
     pn = board.pad_net()
     poured = {p["net"] for p in board.pours}
+    low_: Dict[str, dict] = {}
     n = 0
     for ref, c in board.comps.items():
         if c.get("overhang") or ref.upper().startswith("J"):
@@ -339,6 +361,10 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
             net = pn.get((ref, num))
             if not net or net not in board.nets:         # (a poured net's pin too: its way out to the pour is
                 continue                                  #  kept, not left to whatever FreeRouting leaves free)
+            if net not in low_:
+                low_[net] = board.pin_loads(net)
+            if (ref, num) in low_[net] and net not in poured:   # (a low-current branch: the harness's own router
+                continue                                  #  draws it, way out and all, at its width)
             x0_, y0_, x1_, y1_ = g.bounds
             cx, cy = g.centroid.x, g.centroid.y
             dx, dy = cx - ox, cy - oy

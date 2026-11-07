@@ -2585,3 +2585,62 @@ def test_a_wide_nets_way_out_of_a_fine_pitch_pin_is_no_wider_than_the_pin():
     out = [t for t in b.tracks if t["net"] == "P" and any(math.dist(p, (x, y)) < 1e-3 for p in t["pts"])]
     assert out and max(t["w"] for t in out) <= 0.4 + 1e-6
     assert not [p for p in b.check() if "apart" in p or "short" in p]
+
+
+def _branch_board(**net_kw):
+    """a 3 A trunk R1 - R2, a decoupling capacitor C1 and a sense pin R3.1 hanging off it (issue #97)"""
+    import pcb
+    b = pcb.Board("br", [(0, 0), (30, 0), (30, 16), (0, 16)], rules="jlcpcb-2")
+    b.place("R1", "Resistor_SMD:R_2512_6332Metric", (5.0, 8.0), 90, "")
+    b.place("R2", "Resistor_SMD:R_2512_6332Metric", (25.0, 8.0), 90, "")
+    b.place("C1", "Capacitor_SMD:C_0603_1608Metric", (15.0, 12.0), 0, "100n")
+    b.place("R3", "Resistor_SMD:R_0603_1608Metric", (15.0, 3.0), 0, "")
+    b.net("P", [("C1", "1"), ("R1", "1"), ("R2", "1"), ("R3", "1")], amps=3.0, **net_kw)
+    return b
+
+
+def test_a_branch_to_a_low_current_pin_is_judged_by_its_load():
+    """a net's amps= is the trunk's: a stub whose only pins downstream draw little (a pin given loads=, a
+    decoupling capacitor by default) may be narrow, the trunk between the full-current pins may not, and a stub
+    that closes a loop carries the trunk's current again"""
+    import pcb
+    narrow = lambda b: [p for p in b.check() if "too narrow" in p]
+
+    def draw(b):
+        (x1, y1), (x2, y2) = b.pad("R1", "1"), b.pad("R2", "1")
+        b.track("P", "F", [(x1, y1), (15.0, y1), (x2, y2)], b.net_width("P"))          # the trunk
+        b.track("P", "F", [(15.0, y1), (15.0, 10.0), b.pad("C1", "1")], 0.2)          # off the trunk's middle
+        b.track("P", "F", [b.pad("R3", "1"), (b.pad("R3", "1")[0], y1)], 0.2)         # ends on the trunk's copper
+        return b
+    b = draw(_branch_board(loads={("R3", "1"): 0.01}))
+    assert b.pin_loads("P") == {("C1", "1"): pcb.Board.CAP_BRANCH_AMPS, ("R3", "1"): 0.01}
+    assert b.pin_width("P", ("R3", "1")) == 0.2 and b.pin_width("P", ("R1", "1")) == b.net_width("P")
+    assert b.branch_amps("P") == {0: 3.0, 1: 0.5, 2: 0.01}
+    assert not narrow(b)
+    assert len(narrow(draw(_branch_board()))) == 1                       # R3 not given a load: its full 3 A
+    assert len(narrow(draw(_branch_board(loads={("C1", "1"): None, ("R3", "1"): 0.01})))) == 1   # C1 taken back
+    b.track("P", "F", [b.pad("C1", "1"), (25.0, 12.0), b.pad("R2", "1")], 0.2)        # a loop: in parallel with
+    assert b.branch_amps("P")[1] == 3.0 and len(narrow(b)) == 2                         # the trunk
+    with pytest.raises(ValueError):
+        _branch_board(loads={("R9", "1"): 0.1})
+
+
+def test_the_router_routes_a_low_current_branch_at_its_own_width():
+    """the built-in router draws the trunk at the net's width and each low-current pin's branch at its own"""
+    import pcb
+    b = _branch_board(loads={("R3", "1"): 0.01})
+    assert not pcb.route(b, "P", width=b.net_width("P"))
+    from shapely.geometry import Point
+    pad = {r: g for r, n, L, g, _ in b.pad_shapes() if n == "1"}
+    near = lambda ref: [t["w"] for t in b.tracks if any(pad[ref].contains(Point(p)) for p in t["pts"])]
+    assert max(near("C1")) == 0.2 and max(near("R3")) == 0.2 and max(near("R1")) == b.net_width("P")
+    assert b.nets["P"]["pins"] == [("C1", "1"), ("R1", "1"), ("R2", "1"), ("R3", "1")]   # (put back as it was)
+    assert not [p for p in b.check() if "too narrow" in p or "split" in p]
+
+
+def test_freerouting_leaves_the_low_current_branches_to_the_harness():
+    """FreeRouting routes a net at one width: the low-current pins go out of its nets' pin lists"""
+    import freerouting
+    dsn = '(pcb (network (net P\n (pins C1-1 R1-1 "R2-1" R3-1)\n) (net G (pins C1-2 R3-2)))(wiring))'
+    got = freerouting._drop_pins(dsn, {"P": {"C1-1", "R2-1"}, "G": set()})
+    assert "(net P\n (pins R1-1 R3-1)" in got and "(net G (pins C1-2 R3-2))" in got and got.endswith("(wiring))")
