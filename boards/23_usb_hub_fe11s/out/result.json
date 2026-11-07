@@ -21,12 +21,12 @@
  "parts": 29,
  "nets": 25,
  "layers": 2,
- "seconds": 173.8,
+ "seconds": 208.3,
  "timings": {
-  "place+route": 167.8,
-  "critic": 0.169,
+  "place+route": 201.91,
+  "critic": 0.234,
   "check": 0.24,
-  "export": 4.49
+  "export": 5.0
  },
  "placement": {
   "J1": [
@@ -208,29 +208,49 @@
   {
    "stage": "routing",
    "kind": "current",
-   "text": "pour GND on F.Cu near (26.8, 12.0) has a neck narrower than 0.5 mm between its pads (2.0 A, 1.0 oz): widen it or add the other layer in parallel",
+   "text": "pour GND on F.Cu near (45.9, 26.6) has a neck narrower than 0.5 mm between its pads (2.0 A, 1.0 oz): widen it or add the other layer in parallel",
    "pins": [],
    "hint": "widen the track or pour, or set the net's width= / amps=",
    "why": "A trace too narrow for its current heats up (IPC-2221 relates width, copper weight and temperature rise); too hot, it degrades or lifts.",
    "at": [
-    26.8,
-    12.0
+    45.9,
+    26.6
    ]
   },
   {
    "stage": "design",
    "kind": "current",
-   "text": "pour GND on F.Cu near (26.8, 12.0) has a neck narrower than 0.5 mm between its pads (2.0 A, 1.0 oz): widen it or add the other layer in parallel",
+   "text": "pour GND on F.Cu near (45.9, 26.6) has a neck narrower than 0.5 mm between its pads (2.0 A, 1.0 oz): widen it or add the other layer in parallel",
    "pins": [],
    "hint": "widen the track or pour, or set the net's width= / amps=",
    "why": "A trace too narrow for its current heats up (IPC-2221 relates width, copper weight and temperature rise); too hot, it degrades or lifts.",
    "at": [
-    26.8,
-    12.0
+    45.9,
+    26.6
    ]
   }
  ],
  "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (35.75, 39.00) is 0.00 mm from J1.A12 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (35.75, 39.00) is 0.00 mm from J1.B1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
   {
    "severity": "info",
    "kind": "assembly",
