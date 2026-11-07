@@ -23,12 +23,12 @@
  "parts": 29,
  "nets": 25,
  "layers": 2,
- "seconds": 139.3,
+ "seconds": 104.5,
  "timings": {
-  "place+route": 133.66,
-  "critic": 0.189,
+  "place+route": 99.15,
+  "critic": 0.196,
   "check": 0.15,
-  "export": 4.42
+  "export": 4.26
  },
  "placement": {
   "J1": [
