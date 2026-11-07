@@ -2672,6 +2672,10 @@ def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
         tune_pairs(board)
         probs = [p_ for p_ in probs if not p_.startswith("pair ")] + \
             [p_ for p_ in board.check() if p_.startswith("pair ")]
+    if any(" drills " in p_ for p_ in board.check()):  # (a via the passes since the nudge left against a drill:
+        nudge_vias(board)                                #  parted once more, as the check holds it)
+        neck_vias(board)
+        probs = [p_ for p_ in probs if " drills " not in p_] + [p_ for p_ in board.check() if " drills " in p_]
     return probs
 
 
@@ -3788,7 +3792,7 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
                    for L, sg, w in segs):
                 return False
             return all(_drill_gap(at, v["drill"], w)
-                       >= (board.hole_gap if w["net"] != v["net"] else 0.254) - 1e-6
+                       >= board.hole_gap - 1e-6
                        for w in board.vias + holes if w is not v)
         a0 = math.atan2(v["at"][1] - pad_at[1], v["at"][0] - pad_at[0])   # straight off the pad first, then turning
         tries = [(round(v["at"][0] + r * math.cos(a0 + da), 4), round(v["at"][1] + r * math.sin(a0 + da), 4))
