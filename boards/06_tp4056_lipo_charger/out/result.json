@@ -21,9 +21,9 @@
  "parts": 18,
  "nets": 16,
  "layers": 2,
- "seconds": 9.6,
+ "seconds": 10.6,
  "timings": {
-  "route": 6.87,
+  "route": 7.85,
   "critic": 0.079,
   "check": 0.08,
   "export": 1.78

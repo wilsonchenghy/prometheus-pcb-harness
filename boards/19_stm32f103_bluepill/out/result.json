@@ -2,7 +2,7 @@
  "board": "stm32f103_bluepill",
  "script": "/home/user/prometheus-pcb-harness/boards/19_stm32f103_bluepill/board.py",
  "stage": "all",
- "clean": false,
+ "clean": true,
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
@@ -21,12 +21,12 @@
  "parts": 35,
  "nets": 47,
  "layers": 2,
- "seconds": 330.0,
+ "seconds": 49.4,
  "timings": {
-  "place+route": 323.13,
-  "critic": 0.312,
-  "check": 0.67,
-  "export": 4.56
+  "place+route": 42.37,
+  "critic": 0.404,
+  "check": 0.34,
+  "export": 4.34
  },
  "placement": {
   "U1": [
@@ -240,32 +240,7 @@
    "F"
   ]
  },
- "findings": [
-  {
-   "stage": "routing",
-   "kind": "drill",
-   "text": "via GND and J1 pad S1 drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
-   "pins": [],
-   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
-   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
-   "at": [
-    7.5,
-    10.0
-   ]
-  },
-  {
-   "stage": "design",
-   "kind": "drill",
-   "text": "via GND and J1 pad S1 drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
-   "pins": [],
-   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
-   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
-   "at": [
-    7.5,
-    10.0
-   ]
-  }
- ],
+ "findings": [],
  "critic": [
   {
    "severity": "info",

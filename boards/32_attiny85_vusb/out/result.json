@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 19,
  "nets": 15,
  "layers": 2,
- "seconds": 33.7,
+ "seconds": 2.5,
  "timings": {
-  "place+route": 30.29,
-  "critic": 0.112,
-  "check": 0.09,
-  "export": 2.25
+  "routes/": 0.0,
+  "critic": 0.087,
+  "check": 0.08,
+  "export": 1.64
  },
  "placement": {
   "J1": [

@@ -10,7 +10,7 @@
    "track_dangling": 1
   }
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -23,12 +23,12 @@
  "parts": 20,
  "nets": 22,
  "layers": 2,
- "seconds": 25.8,
+ "seconds": 3.8,
  "timings": {
-  "place+route": 21.51,
-  "critic": 0.127,
-  "check": 0.15,
-  "export": 2.83
+  "routes/": 0.0,
+  "critic": 0.164,
+  "check": 0.27,
+  "export": 2.82
  },
  "placement": {
   "U1": [

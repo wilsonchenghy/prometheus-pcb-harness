@@ -24,9 +24,9 @@
  "seconds": 2.5,
  "timings": {
   "routes/": 0.0,
-  "critic": 0.213,
-  "check": 0.13,
-  "export": 1.53
+  "critic": 0.195,
+  "check": 0.11,
+  "export": 1.6
  },
  "placement": {
   "J1": [
