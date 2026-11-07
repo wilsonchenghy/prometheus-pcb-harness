@@ -3669,7 +3669,8 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
     from shapely.geometry import LineString, Point
     from shapely.ops import unary_union
     gap = board.hole_gap if gap is None else gap
-    same = 0.254                                         # (one net's drills: the houses' same-net gap)
+    same = gap                                           # (one net's drills too: the check holds every pair of drills
+    #                                                      to the hole gap - the web between them, whatever their nets)
     left: List[str] = []
 
     def ends(v):
