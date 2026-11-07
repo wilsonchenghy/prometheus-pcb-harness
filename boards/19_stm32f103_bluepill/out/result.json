@@ -2,7 +2,7 @@
  "board": "stm32f103_bluepill",
  "script": "/home/user/prometheus-pcb-harness/boards/19_stm32f103_bluepill/board.py",
  "stage": "all",
- "clean": true,
+ "clean": false,
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
@@ -21,12 +21,12 @@
  "parts": 35,
  "nets": 47,
  "layers": 2,
- "seconds": 423.6,
+ "seconds": 330.0,
  "timings": {
-  "place+route": 416.53,
-  "critic": 0.487,
-  "check": 0.33,
-  "export": 3.86
+  "place+route": 323.13,
+  "critic": 0.312,
+  "check": 0.67,
+  "export": 4.56
  },
  "placement": {
   "U1": [
@@ -72,7 +72,7 @@
    "F"
   ],
   "U2": [
-   12.133,
+   11.2,
    14.0,
    0,
    "F"
@@ -90,8 +90,8 @@
    "F"
   ],
   "FB1": [
-   41.2,
-   19.35,
+   38.5,
+   21.5,
    270,
    "F"
   ],
@@ -132,27 +132,27 @@
    "F"
   ],
   "C7": [
-   19.0,
-   11.5,
-   180,
+   22.85,
+   16.05,
+   270,
    "F"
   ],
   "C8": [
-   39.55,
-   10.5,
+   40.05,
+   10.4,
    0,
    "F"
   ],
   "C9": [
-   42.25,
-   16.6,
+   42.5,
+   17.0,
    0,
    "F"
   ],
   "C10": [
-   41.75,
+   40.2,
    5.5,
-   0,
+   180,
    "F"
   ],
   "C11": [
@@ -168,14 +168,14 @@
    "F"
   ],
   "C13": [
-   11.8,
+   10.9,
    17.2,
    0,
    "F"
   ],
   "C14": [
-   17.65,
-   15.45,
+   16.0,
+   15.0,
    0,
    "F"
   ],
@@ -192,55 +192,80 @@
    "F"
   ],
   "R3": [
-   23.4,
-   14.1,
-   270,
+   20.9,
+   11.45,
+   90,
    "F"
   ],
   "R4": [
-   58.0,
-   2.0,
-   0,
+   54.0,
+   15.0,
+   270,
    "F"
   ],
   "R5": [
-   58.0,
-   26.5,
+   30.5,
+   21.0,
    0,
    "F"
   ],
   "R6": [
-   58.0,
-   22.5,
-   0,
+   47.0,
+   16.0,
+   270,
    "F"
   ],
   "R7": [
-   16.333,
-   7.467,
-   0,
+   16.5,
+   6.5,
+   90,
    "F"
   ],
   "R8": [
-   55.067,
-   11.2,
-   180,
-   "F"
-  ],
-  "D1": [
-   16.333,
-   5.6,
+   29.0,
+   6.0,
    0,
    "F"
   ],
+  "D1": [
+   17.0,
+   10.0,
+   180,
+   "F"
+  ],
   "D2": [
-   55.85,
-   8.45,
-   270,
+   24.5,
+   6.0,
+   180,
    "F"
   ]
  },
- "findings": [],
+ "findings": [
+  {
+   "stage": "routing",
+   "kind": "drill",
+   "text": "via GND and J1 pad S1 drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
+   "pins": [],
+   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
+   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
+   "at": [
+    7.5,
+    10.0
+   ]
+  },
+  {
+   "stage": "design",
+   "kind": "drill",
+   "text": "via GND and J1 pad S1 drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
+   "pins": [],
+   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
+   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
+   "at": [
+    7.5,
+    10.0
+   ]
+  }
+ ],
  "critic": [
   {
    "severity": "info",

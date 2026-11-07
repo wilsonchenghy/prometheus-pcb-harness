@@ -1,14 +1,12 @@
 {
  "board": "tp4056_lipo_charger",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/06_tp4056_lipo_charger/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/06_tp4056_lipo_charger/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
-  "warnings": {
-   "track_dangling": 1
-  }
+  "warnings": {}
  },
  "router": "freerouting (through KiCad)",
  "skipped": [],
@@ -23,12 +21,12 @@
  "parts": 18,
  "nets": 16,
  "layers": 2,
- "seconds": 14.4,
+ "seconds": 9.6,
  "timings": {
-  "route": 11.37,
-  "critic": 0.093,
-  "check": 0.07,
-  "export": 1.84
+  "route": 6.87,
+  "critic": 0.079,
+  "check": 0.08,
+  "export": 1.78
  },
  "placement": {
   "J1": [
@@ -199,6 +197,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/06_tp4056_lipo_charger/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/06_tp4056_lipo_charger/out/kicad8.zip"
  }
 }

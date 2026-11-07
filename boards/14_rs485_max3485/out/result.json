@@ -1,6 +1,6 @@
 {
  "board": "rs485_max3485",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/14_rs485_max3485/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/14_rs485_max3485/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 11,
  "nets": 8,
  "layers": 2,
- "seconds": 6.9,
+ "seconds": 2.2,
  "timings": {
-  "place+route": 4.67,
-  "critic": 0.047,
-  "check": 0.03,
-  "export": 1.41
+  "routes/": 0.0,
+  "critic": 0.063,
+  "check": 0.06,
+  "export": 1.45
  },
  "placement": {
   "J1": [
@@ -138,6 +138,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/14_rs485_max3485/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/14_rs485_max3485/out/kicad8.zip"
  }
 }

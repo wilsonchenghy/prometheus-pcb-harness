@@ -1,6 +1,6 @@
 {
  "board": "relay_2ch_opto",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/26_relay_2ch_opto/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 22,
  "nets": 22,
  "layers": 2,
- "seconds": 14.8,
+ "seconds": 4.0,
  "timings": {
-  "place+route": 10.67,
-  "critic": 0.618,
-  "check": 0.04,
-  "export": 2.19
+  "routes/": 0.0,
+  "critic": 0.887,
+  "check": 0.08,
+  "export": 2.29
  },
  "placement": {
   "J1": [
@@ -218,6 +218,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/26_relay_2ch_opto/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/out/kicad8.zip"
  }
 }

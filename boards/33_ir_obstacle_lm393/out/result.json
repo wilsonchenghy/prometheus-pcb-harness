@@ -21,12 +21,12 @@
  "parts": 13,
  "nets": 8,
  "layers": 2,
- "seconds": 1.9,
+ "seconds": 3.6,
  "timings": {
   "routes/": 0.0,
-  "critic": 0.22,
-  "check": 0.03,
-  "export": 1.03
+  "critic": 0.527,
+  "check": 0.07,
+  "export": 2.1
  },
  "placement": {
   "D1": [

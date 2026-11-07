@@ -6,11 +6,9 @@
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
-  "warnings": {
-   "track_dangling": 1
-  }
+  "warnings": {}
  },
- "router": "harness (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -23,12 +21,12 @@
  "parts": 20,
  "nets": 31,
  "layers": 2,
- "seconds": 4.4,
+ "seconds": 88.2,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.141,
-  "check": 0.48,
-  "export": 3.2
+  "place+route": 83.53,
+  "critic": 0.123,
+  "check": 0.27,
+  "export": 2.86
  },
  "placement": {
   "U1": [
@@ -98,8 +96,8 @@
    "F"
   ],
   "C5": [
-   11.75,
-   15.3,
+   11.8,
+   15.5,
    90,
    "F"
   ],
@@ -116,104 +114,44 @@
    "F"
   ],
   "C8": [
-   40.35,
-   3.15,
-   0,
-   "F"
-  ],
-  "R1": [
-   30.2,
-   20.05,
+   37.5,
+   13.0,
    270,
    "F"
   ],
+  "R1": [
+   3.5,
+   21.0,
+   180,
+   "F"
+  ],
   "R2": [
-   39.05,
-   16.7,
-   90,
+   39.5,
+   26.0,
+   180,
    "F"
   ],
   "R3": [
-   6.6,
-   20.9,
+   33.5,
+   12.0,
    0,
    "F"
   ],
   "D1": [
-   39.0,
-   21.55,
-   270,
+   38.5,
+   21.5,
+   90,
    "F"
   ],
   "D2": [
-   11.4,
-   20.9,
-   180,
+   33.5,
+   15.5,
+   0,
    "F"
   ]
  },
  "findings": [],
  "critic": [
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via D6 at (20.00, 8.80) is 0.00 mm from U1.10 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via A7 at (25.40, 15.20) is 0.00 mm from U1.22 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via D10 at (23.20, 8.80) is 0.00 mm from U1.14 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via A2 at (24.60, 17.00) is 0.13 mm from U1.25 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via A1 at (27.00, 16.80) is 0.00 mm from U1.24 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via D12 at (24.80, 10.60) is 0.00 mm from U1.16 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
   {
    "severity": "info",
    "kind": "holes",

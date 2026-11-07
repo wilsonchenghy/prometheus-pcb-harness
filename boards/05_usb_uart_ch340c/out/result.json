@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "harness (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 15,
  "nets": 14,
  "layers": 2,
- "seconds": 2.9,
+ "seconds": 18.9,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.445,
-  "check": 0.12,
-  "export": 1.88
+  "place+route": 15.94,
+  "critic": 0.253,
+  "check": 0.07,
+  "export": 1.82
  },
  "placement": {
   "J1": [
@@ -48,9 +48,9 @@
    "F"
   ],
   "C1": [
-   25.1,
-   15.2,
-   180,
+   15.5,
+   14.5,
+   90,
    "F"
   ],
   "C2": [
@@ -60,62 +60,62 @@
    "F"
   ],
   "C3": [
-   20.4,
+   19.8,
    8.7,
    180,
    "F"
   ],
   "C4": [
-   29.1,
-   1.05,
-   0,
-   "F"
-  ],
-  "R1": [
-   9.75,
-   11.15,
-   90,
-   "F"
-  ],
-  "R2": [
-   9.75,
-   6.25,
+   20.6,
+   4.1,
    270,
    "F"
   ],
+  "R1": [
+   11.5,
+   9.5,
+   0,
+   "F"
+  ],
+  "R2": [
+   7.5,
+   1.0,
+   0,
+   "F"
+  ],
   "R3": [
-   15.55,
-   6.35,
+   19.5,
+   15.0,
    0,
    "F"
   ],
   "R4": [
-   18.7,
-   13.85,
-   0,
+   16.5,
+   5.5,
+   180,
    "F"
   ],
   "R5": [
-   14.95,
-   15.1,
-   270,
+   11.5,
+   13.5,
+   180,
    "F"
   ],
   "D1": [
-   19.6,
-   6.15,
+   24.0,
+   15.5,
    180,
    "F"
   ],
   "D2": [
-   20.2,
-   11.35,
-   180,
+   16.0,
+   9.5,
+   270,
    "F"
   ],
   "D3": [
-   14.25,
-   11.7,
+   10.0,
+   17.0,
    0,
    "F"
   ]
@@ -125,59 +125,9 @@
   {
    "severity": "warning",
    "kind": "via neck",
-   "text": "via CTS at (28.50, 3.75) is 0.00 mm from U1.9 (keep 0.2 mm of track between them)",
+   "text": "via GND at (18.75, 8.25) is 0.00 mm from C3.2 (keep 0.2 mm of track between them)",
    "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via RXD at (23.25, 9.50) is 0.00 mm from U1.3 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via TXD at (23.25, 10.75) is 0.00 mm from U1.2 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VBUS at (7.75, 6.50) is 0.00 mm from J1.A9 (keep 0.2 mm of track between them)",
-   "refs": [
-    "J1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VBUS at (7.75, 6.50) is 0.00 mm from J1.B4 (keep 0.2 mm of track between them)",
-   "refs": [
-    "J1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VBUS at (28.00, 12.50) is 0.00 mm from U1.16 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
+    "C3"
    ],
    "hint": "move the via off the pad, or route a short neck to it",
    "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
@@ -185,10 +135,9 @@
   {
    "severity": "warning",
    "kind": "label",
-   "text": "no room on the silkscreen for J2, U1: left on the assembly layer",
+   "text": "no room on the silkscreen for J2: left on the assembly layer",
    "refs": [
-    "J2",
-    "U1"
+    "J2"
    ],
    "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
    "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."

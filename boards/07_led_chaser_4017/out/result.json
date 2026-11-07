@@ -1,6 +1,6 @@
 {
  "board": "led_chaser_4017",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/07_led_chaser_4017/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/07_led_chaser_4017/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 23,
  "nets": 19,
  "layers": 2,
- "seconds": 33.5,
+ "seconds": 2.6,
  "timings": {
-  "place+route": 30.09,
-  "critic": 0.106,
-  "check": 0.05,
-  "export": 2.12
+  "routes/": 0.0,
+  "critic": 0.105,
+  "check": 0.08,
+  "export": 1.83
  },
  "placement": {
   "J1": [
@@ -204,6 +204,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/07_led_chaser_4017/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/07_led_chaser_4017/out/kicad8.zip"
  }
 }

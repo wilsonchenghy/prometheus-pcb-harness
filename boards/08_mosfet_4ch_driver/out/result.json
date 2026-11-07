@@ -1,6 +1,6 @@
 {
  "board": "mosfet_4ch_driver",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/08_mosfet_4ch_driver/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -21,12 +21,12 @@
  "parts": 31,
  "nets": 18,
  "layers": 2,
- "seconds": 4.0,
+ "seconds": 3.6,
  "timings": {
   "routes/": 0.0,
-  "critic": 0.458,
-  "check": 0.1,
-  "export": 2.53
+  "critic": 0.505,
+  "check": 0.12,
+  "export": 2.33
  },
  "placement": {
   "J1": [
@@ -264,6 +264,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/08_mosfet_4ch_driver/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/out/kicad8.zip"
  }
 }

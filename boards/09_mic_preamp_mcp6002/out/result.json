@@ -1,6 +1,6 @@
 {
  "board": "mic_preamp_mcp6002",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/09_mic_preamp_mcp6002/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/09_mic_preamp_mcp6002/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 18,
  "nets": 12,
  "layers": 2,
- "seconds": 10.7,
+ "seconds": 2.3,
  "timings": {
-  "place+route": 8.26,
-  "critic": 0.266,
+  "routes/": 0.0,
+  "critic": 0.286,
   "check": 0.03,
-  "export": 1.44
+  "export": 1.4
  },
  "placement": {
   "J1": [
@@ -188,6 +188,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/09_mic_preamp_mcp6002/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/09_mic_preamp_mcp6002/out/kicad8.zip"
  }
 }
