@@ -1,0 +1,139 @@
+{
+ "board": "drv8833_motor",
+ "script": "/home/user/prometheus-pcb-harness/boards/10_drv8833_motor/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 13,
+ "nets": 16,
+ "layers": 2,
+ "seconds": 2.9,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.13,
+  "check": 0.13,
+  "export": 2.08
+ },
+ "placement": {
+  "J1": [
+   5.2,
+   10.825,
+   270,
+   "F"
+  ],
+  "J2": [
+   33.8,
+   3.9,
+   90,
+   "F"
+  ],
+  "J3": [
+   33.8,
+   15.8,
+   90,
+   "F"
+  ],
+  "J4": [
+   7.5,
+   27.0,
+   90,
+   "F"
+  ],
+  "U1": [
+   23.0,
+   10.5,
+   180,
+   "F"
+  ],
+  "C1": [
+   13.3,
+   9.35,
+   270,
+   "F"
+  ],
+  "C2": [
+   15.9,
+   10.049999999999999,
+   270,
+   "F"
+  ],
+  "C3": [
+   17.45,
+   11.6,
+   90,
+   "F"
+  ],
+  "C4": [
+   17.6,
+   8.6,
+   270,
+   "F"
+  ],
+  "R1": [
+   23.5,
+   21.5,
+   270,
+   "F"
+  ],
+  "R2": [
+   17.5,
+   21.5,
+   270,
+   "F"
+  ],
+  "R3": [
+   20.5,
+   21.5,
+   270,
+   "F"
+  ],
+  "D1": [
+   19.5,
+   18.0,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "J2": "C7509570",
+  "J3": "C7509570",
+  "C1": "C9807",
+  "C2": "C1590",
+  "C3": "C327204",
+  "C4": "C100082",
+  "R1": "C25804",
+  "R2": "C25804",
+  "R3": "C21190",
+  "D1": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/10_drv8833_motor/out/kicad8.zip"
+ }
+}

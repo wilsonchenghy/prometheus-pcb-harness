@@ -1,0 +1,223 @@
+{
+ "board": "relay_2ch_opto",
+ "script": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 22,
+ "nets": 22,
+ "layers": 2,
+ "seconds": 3.5,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.69,
+  "check": 0.06,
+  "export": 2.08
+ },
+ "placement": {
+  "J1": [
+   2.6,
+   23.4,
+   0,
+   "F"
+  ],
+  "J2": [
+   2.6,
+   32.5,
+   0,
+   "F"
+  ],
+  "K1": [
+   19.0,
+   25.2,
+   0,
+   "F"
+  ],
+  "J3": [
+   44.0,
+   22.2,
+   90,
+   "F"
+  ],
+  "U1": [
+   10.0,
+   25.2,
+   0,
+   "F"
+  ],
+  "Q1": [
+   17.5,
+   36.5,
+   270,
+   "F"
+  ],
+  "D1": [
+   14.0,
+   20.0,
+   0,
+   "F"
+  ],
+  "D3": [
+   7.2,
+   33.9,
+   0,
+   "F"
+  ],
+  "R11": [
+   6.5,
+   30.5,
+   270,
+   "F"
+  ],
+  "R12": [
+   13.5,
+   36.5,
+   90,
+   "F"
+  ],
+  "R13": [
+   17.0,
+   40.5,
+   180,
+   "F"
+  ],
+  "R14": [
+   10.5,
+   35.5,
+   90,
+   "F"
+  ],
+  "K2": [
+   19.0,
+   8.5,
+   0,
+   "F"
+  ],
+  "J4": [
+   44.0,
+   5.5,
+   90,
+   "F"
+  ],
+  "U2": [
+   10.0,
+   8.5,
+   0,
+   "F"
+  ],
+  "Q2": [
+   9.0,
+   14.0,
+   0,
+   "F"
+  ],
+  "D2": [
+   14.0,
+   3.5,
+   0,
+   "F"
+  ],
+  "D4": [
+   10.0,
+   30.5,
+   0,
+   "F"
+  ],
+  "R21": [
+   3.0,
+   10.5,
+   270,
+   "F"
+  ],
+  "R22": [
+   9.0,
+   3.5,
+   180,
+   "F"
+  ],
+  "R23": [
+   8.0,
+   18.5,
+   90,
+   "F"
+  ],
+  "R24": [
+   13.5,
+   31.5,
+   270,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for J3, K2: left on the assembly layer",
+   "refs": [
+    "J3",
+    "K2"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 22 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "U1",
+    "U2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C2691448",
+  "J2": "C2937625",
+  "K1": "C35449",
+  "J3": "C91154",
+  "D1": "C83528",
+  "D3": "C2286",
+  "R11": "C21190",
+  "R12": "C21190",
+  "R13": "C25804",
+  "R14": "C21190",
+  "K2": "C35449",
+  "J4": "C91154",
+  "D2": "C83528",
+  "D4": "C2286",
+  "R21": "C21190",
+  "R22": "C21190",
+  "R23": "C25804",
+  "R24": "C21190"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/out/kicad8.zip"
+ }
+}

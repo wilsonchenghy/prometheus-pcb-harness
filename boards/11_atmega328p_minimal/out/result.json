@@ -1,0 +1,195 @@
+{
+ "board": "atmega328p_minimal",
+ "script": "/home/user/prometheus-pcb-harness/boards/11_atmega328p_minimal/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 20,
+ "nets": 31,
+ "layers": 2,
+ "seconds": 4.0,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.142,
+  "check": 0.39,
+  "export": 2.86
+ },
+ "placement": {
+  "U1": [
+   22.0,
+   14.0,
+   0,
+   "F"
+  ],
+  "J3": [
+   6.0,
+   2.2,
+   90,
+   "F"
+  ],
+  "J4": [
+   6.0,
+   25.8,
+   90,
+   "F"
+  ],
+  "J2": [
+   43.8,
+   20.35,
+   0,
+   "F"
+  ],
+  "J5": [
+   2.2,
+   16.54,
+   0,
+   "F"
+  ],
+  "SW1": [
+   37.5,
+   7.5,
+   0,
+   "F"
+  ],
+  "Y1": [
+   14.5,
+   7.5,
+   0,
+   "F"
+  ],
+  "C1": [
+   15.3,
+   14.8,
+   90,
+   "F"
+  ],
+  "C2": [
+   15.3,
+   11.6,
+   270,
+   "F"
+  ],
+  "C3": [
+   28.7,
+   11.4,
+   90,
+   "F"
+  ],
+  "C4": [
+   28.7,
+   15.2,
+   90,
+   "F"
+  ],
+  "C5": [
+   11.8,
+   15.5,
+   90,
+   "F"
+  ],
+  "C6": [
+   9.8,
+   7.467,
+   90,
+   "F"
+  ],
+  "C7": [
+   18.65,
+   7.35,
+   0,
+   "F"
+  ],
+  "C8": [
+   37.5,
+   13.0,
+   270,
+   "F"
+  ],
+  "R1": [
+   3.5,
+   21.0,
+   180,
+   "F"
+  ],
+  "R2": [
+   39.5,
+   26.0,
+   180,
+   "F"
+  ],
+  "R3": [
+   33.5,
+   12.0,
+   0,
+   "F"
+  ],
+  "D1": [
+   38.5,
+   21.5,
+   90,
+   "F"
+  ],
+  "D2": [
+   33.5,
+   15.5,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  }
+ ],
+ "lcsc_auto": {
+  "J3": "C2840012",
+  "J4": "C2840012",
+  "J5": "C492420",
+  "SW1": "C116501",
+  "C1": "C14663",
+  "C2": "C14663",
+  "C3": "C14663",
+  "C4": "C14663",
+  "C5": "C15850",
+  "C6": "C1653",
+  "C7": "C1653",
+  "C8": "C14663",
+  "R1": "C25804",
+  "R2": "C21190",
+  "R3": "C21190",
+  "D1": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/11_atmega328p_minimal/out/kicad8.zip"
+ }
+}

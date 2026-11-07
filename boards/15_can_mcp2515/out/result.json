@@ -1,0 +1,249 @@
+{
+ "board": "can_mcp2515",
+ "script": "/home/user/prometheus-pcb-harness/boards/15_can_mcp2515/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 14,
+ "nets": 16,
+ "layers": 2,
+ "seconds": 2.9,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.277,
+  "check": 0.12,
+  "export": 1.89
+ },
+ "placement": {
+  "J1": [
+   38.8,
+   4.0,
+   90,
+   "F"
+  ],
+  "J2": [
+   2.5,
+   22.0,
+   0,
+   "F"
+  ],
+  "U1": [
+   15.0,
+   13.0,
+   180,
+   "F"
+  ],
+  "U2": [
+   29.0,
+   7.0,
+   0,
+   "F"
+  ],
+  "Y1": [
+   24.0,
+   17.0,
+   0,
+   "F"
+  ],
+  "JP1": [
+   33.0,
+   22.5,
+   90,
+   "F"
+  ],
+  "C1": [
+   11.0,
+   5.4,
+   0,
+   "F"
+  ],
+  "C2": [
+   22.8,
+   12.65,
+   270,
+   "F"
+  ],
+  "C3": [
+   25.133,
+   21.233,
+   90,
+   "F"
+  ],
+  "C4": [
+   25.2,
+   3.6,
+   0,
+   "F"
+  ],
+  "C5": [
+   31.0,
+   2.9,
+   0,
+   "F"
+  ],
+  "C6": [
+   6.3,
+   3.6,
+   270,
+   "F"
+  ],
+  "R1": [
+   39.433,
+   19.933,
+   90,
+   "F"
+  ],
+  "R2": [
+   7.3,
+   8.65,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via RXCAN at (26.50, 5.00) is 0.00 mm from U2.4 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U2"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VIO at (10.25, 8.00) is 0.00 mm from U1.18 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for J1: left on the assembly layer",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 14 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "Y1"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  },
+  {
+   "severity": "info",
+   "kind": "lcsc suggested",
+   "text": "Y1: no LCSC number; JLCPCB has C57131 (1C208000BC0R, by '8MHz 3225'): add lcsc= if it is the right part",
+   "refs": [
+    "Y1"
+   ],
+   "hint": "lcsc=\"C57131\"",
+   "why": "A part found by its value and package, not its exact part number, can be a near miss (another load capacitance, another height): only you can say it is the part you designed for."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C91154",
+  "U2": "C58988",
+  "C1": "C14663",
+  "C2": "C1653",
+  "C3": "C1653",
+  "C4": "C14663",
+  "C5": "C14663",
+  "C6": "C15850",
+  "R1": "C17437",
+  "R2": "C25804"
+ },
+ "lcsc_suggested": {
+  "Y1": {
+   "lcsc": "C57131",
+   "part": "1C208000BC0R",
+   "query": "8MHz 3225",
+   "stock": 24347,
+   "basic": false,
+   "why": "no match for its MPN; found by value and package"
+  }
+ },
+ "evidence": [
+  {
+   "ref": "C2",
+   "what": "crystal load capacitor (8 MHz)",
+   "value": "22p",
+   "url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP2515-Stand-Alone-CAN-Controller-with-SPI-20001801J.pdf",
+   "page": 56,
+   "quote": "8 MHz 22 pF 22 pF",
+   "found": null
+  },
+  {
+   "ref": "C3",
+   "what": "crystal load capacitor (8 MHz)",
+   "value": "22p",
+   "url": "https://ww1.microchip.com/downloads/en/DeviceDoc/MCP2515-Stand-Alone-CAN-Controller-with-SPI-20001801J.pdf",
+   "page": 56,
+   "quote": "8 MHz 22 pF 22 pF",
+   "found": null
+  },
+  {
+   "ref": "C4",
+   "what": "VCC decoupling",
+   "value": "100n",
+   "url": "https://www.nxp.com/docs/en/data-sheet/TJA1051.pdf",
+   "page": 13,
+   "quote": "100 nF",
+   "found": null
+  },
+  {
+   "ref": "U2",
+   "what": "S pin left low = normal mode",
+   "value": "GND",
+   "url": "https://www.nxp.com/docs/en/data-sheet/TJA1051.pdf",
+   "page": 6,
+   "quote": "pins S and EN (TJA1051T/E) have internal",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/15_can_mcp2515/out/kicad8.zip"
+ }
+}

@@ -1,0 +1,269 @@
+{
+ "board": "mosfet_4ch_driver",
+ "script": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 31,
+ "nets": 18,
+ "layers": 2,
+ "seconds": 3.3,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.418,
+  "check": 0.09,
+  "export": 2.19
+ },
+ "placement": {
+  "J1": [
+   4.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J2": [
+   16.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J3": [
+   28.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J4": [
+   40.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J5": [
+   52.5,
+   5.3,
+   0,
+   "F"
+  ],
+  "J6": [
+   39.85,
+   27.4,
+   90,
+   "F"
+  ],
+  "C1": [
+   9.5,
+   17.5,
+   90,
+   "F"
+  ],
+  "Q1": [
+   19.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D1": [
+   23.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R1": [
+   26.0,
+   22.5,
+   180,
+   "F"
+  ],
+  "R5": [
+   19.0,
+   22.0,
+   0,
+   "F"
+  ],
+  "R9": [
+   27.4,
+   25.3,
+   0,
+   "F"
+  ],
+  "D5": [
+   30.65,
+   26.0,
+   270,
+   "F"
+  ],
+  "Q2": [
+   31.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D2": [
+   35.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R2": [
+   34.0,
+   27.0,
+   180,
+   "F"
+  ],
+  "R6": [
+   30.5,
+   22.0,
+   0,
+   "F"
+  ],
+  "R10": [
+   23.5,
+   28.0,
+   180,
+   "F"
+  ],
+  "D6": [
+   20.0,
+   27.5,
+   90,
+   "F"
+  ],
+  "Q3": [
+   43.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D3": [
+   47.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R3": [
+   47.0,
+   22.5,
+   270,
+   "F"
+  ],
+  "R7": [
+   43.0,
+   22.0,
+   0,
+   "F"
+  ],
+  "R11": [
+   48.5,
+   18.5,
+   0,
+   "F"
+  ],
+  "D7": [
+   49.5,
+   22.0,
+   270,
+   "F"
+  ],
+  "Q4": [
+   55.0,
+   18.5,
+   0,
+   "F"
+  ],
+  "D4": [
+   59.5,
+   13.0,
+   180,
+   "F"
+  ],
+  "R4": [
+   56.5,
+   26.5,
+   270,
+   "F"
+  ],
+  "R8": [
+   53.5,
+   22.5,
+   180,
+   "F"
+  ],
+  "R12": [
+   59.0,
+   26.5,
+   270,
+   "F"
+  ],
+  "D8": [
+   59.0,
+   22.0,
+   90,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for J1: left on the assembly layer",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "J2": "C7509570",
+  "J3": "C7509570",
+  "J4": "C7509570",
+  "J5": "C7509570",
+  "C1": "C128462",
+  "D1": "C8678",
+  "R1": "C22775",
+  "R5": "C25803",
+  "R9": "C21190",
+  "D2": "C8678",
+  "R2": "C22775",
+  "R6": "C25803",
+  "R10": "C21190",
+  "D3": "C8678",
+  "R3": "C22775",
+  "R7": "C25803",
+  "R11": "C21190",
+  "D4": "C8678",
+  "R4": "C22775",
+  "R8": "C25803",
+  "R12": "C21190"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/out/kicad8.zip"
+ }
+}

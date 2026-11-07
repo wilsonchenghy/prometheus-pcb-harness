@@ -1,0 +1,5 @@
+{"size_mm": [44, 34], "layers": 2, "house": "jlcpcb-2",
+ "nets": {"VRAW": {"amps": 1.5}, "VIN": {"amps": 1.5}, "VOUT": {"amps": 1.5}, "GND": {"amps": 1.5}},
+ "near": [["C2", "U1", 6.0], ["C5", "U1", 10.0], ["R1", "U1", 8.0], ["C3", "U1", 10.0]],
+ "holes": {"count": 4, "d": 3.2},
+ "edge": ["J1", "J2"]}

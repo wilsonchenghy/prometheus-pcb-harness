@@ -1,0 +1,147 @@
+{
+ "board": "max31855_thermocouple",
+ "script": "/home/user/prometheus-pcb-harness/boards/25_max31855_thermocouple/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {
+   "silk_overlap": 1
+  }
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 11,
+ "nets": 10,
+ "layers": 2,
+ "seconds": 2.7,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.668,
+  "check": 0.06,
+  "export": 1.42
+ },
+ "placement": {
+  "J1": [
+   5.2,
+   10.75,
+   270,
+   "F"
+  ],
+  "J2": [
+   23.0,
+   15.1,
+   0,
+   "F"
+  ],
+  "U1": [
+   17.5,
+   9.0,
+   0,
+   "F"
+  ],
+  "U2": [
+   19.0,
+   2.4,
+   0,
+   "F"
+  ],
+  "FB1": [
+   10.4,
+   8.1,
+   0,
+   "F"
+  ],
+  "FB2": [
+   10.4,
+   9.9,
+   0,
+   "F"
+  ],
+  "C2": [
+   13.0,
+   9.0,
+   90,
+   "F"
+  ],
+  "C1": [
+   14.5,
+   5.5,
+   0,
+   "F"
+  ],
+  "C3": [
+   15.7,
+   2.4,
+   90,
+   "F"
+  ],
+  "C4": [
+   19.6,
+   5.2,
+   0,
+   "F"
+  ],
+  "R1": [
+   18.5,
+   13.5,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for C2, J2, U2: left on the assembly layer",
+   "refs": [
+    "C2",
+    "J2",
+    "U2"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3819527",
+  "FB1": "C80165",
+  "FB2": "C80165",
+  "C2": "C57112",
+  "C1": "C14663",
+  "C3": "C15849",
+  "C4": "C15849",
+  "R1": "C25804"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/25_max31855_thermocouple/out/kicad8.zip"
+ }
+}

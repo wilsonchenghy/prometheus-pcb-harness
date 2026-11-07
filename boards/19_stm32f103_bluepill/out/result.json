@@ -1,0 +1,327 @@
+{
+ "board": "stm32f103_bluepill",
+ "script": "/home/user/prometheus-pcb-harness/boards/19_stm32f103_bluepill/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 35,
+ "nets": 47,
+ "layers": 2,
+ "seconds": 49.4,
+ "timings": {
+  "place+route": 42.37,
+  "critic": 0.404,
+  "check": 0.34,
+  "export": 4.34
+ },
+ "placement": {
+  "U1": [
+   30.0,
+   14.0,
+   180,
+   "F"
+  ],
+  "J1": [
+   3.2,
+   14.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   4.5,
+   2.2,
+   90,
+   "F"
+  ],
+  "J3": [
+   4.5,
+   25.8,
+   90,
+   "F"
+  ],
+  "J4": [
+   13.0,
+   20.6,
+   90,
+   "F"
+  ],
+  "JP1": [
+   50.5,
+   18.0,
+   0,
+   "F"
+  ],
+  "SW1": [
+   45.5,
+   20.8,
+   0,
+   "F"
+  ],
+  "U2": [
+   11.2,
+   14.0,
+   0,
+   "F"
+  ],
+  "Y1": [
+   40.5,
+   13.5,
+   0,
+   "F"
+  ],
+  "Y2": [
+   40.0,
+   8.0,
+   0,
+   "F"
+  ],
+  "FB1": [
+   38.5,
+   21.5,
+   270,
+   "F"
+  ],
+  "C1": [
+   23.4,
+   10.6,
+   90,
+   "F"
+  ],
+  "C2": [
+   33.6,
+   7.4,
+   0,
+   "F"
+  ],
+  "C3": [
+   26.4,
+   20.6,
+   0,
+   "F"
+  ],
+  "C4": [
+   36.7,
+   10.6,
+   90,
+   "F"
+  ],
+  "C5": [
+   36.7,
+   16.6,
+   90,
+   "F"
+  ],
+  "C6": [
+   38.6,
+   17.4,
+   90,
+   "F"
+  ],
+  "C7": [
+   22.85,
+   16.05,
+   270,
+   "F"
+  ],
+  "C8": [
+   40.05,
+   10.4,
+   0,
+   "F"
+  ],
+  "C9": [
+   42.5,
+   17.0,
+   0,
+   "F"
+  ],
+  "C10": [
+   40.2,
+   5.5,
+   180,
+   "F"
+  ],
+  "C11": [
+   36.5,
+   6.95,
+   270,
+   "F"
+  ],
+  "C12": [
+   34.05,
+   21.25,
+   90,
+   "F"
+  ],
+  "C13": [
+   10.9,
+   17.2,
+   0,
+   "F"
+  ],
+  "C14": [
+   16.0,
+   15.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   6.75,
+   21.3,
+   90,
+   "F"
+  ],
+  "R2": [
+   10.0,
+   10.75,
+   0,
+   "F"
+  ],
+  "R3": [
+   20.9,
+   11.45,
+   90,
+   "F"
+  ],
+  "R4": [
+   54.0,
+   15.0,
+   270,
+   "F"
+  ],
+  "R5": [
+   30.5,
+   21.0,
+   0,
+   "F"
+  ],
+  "R6": [
+   47.0,
+   16.0,
+   270,
+   "F"
+  ],
+  "R7": [
+   16.5,
+   6.5,
+   90,
+   "F"
+  ],
+  "R8": [
+   29.0,
+   6.0,
+   0,
+   "F"
+  ],
+  "D1": [
+   17.0,
+   10.0,
+   180,
+   "F"
+  ],
+  "D2": [
+   24.5,
+   6.0,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 35 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "Y2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  },
+  {
+   "severity": "info",
+   "kind": "lcsc suggested",
+   "text": "Y2: no LCSC number; JLCPCB has C32346 (Q13FC13500004, by '32.768kHz 3215'): add lcsc= if it is the right part",
+   "refs": [
+    "Y2"
+   ],
+   "hint": "lcsc=\"C32346\"",
+   "why": "A part found by its value and package, not its exact part number, can be a near miss (another load capacitance, another height): only you can say it is the part you designed for."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C22465880",
+  "J3": "C22465880",
+  "J4": "C2691448",
+  "JP1": "C2937625",
+  "SW1": "C116501",
+  "FB1": "C80165",
+  "C1": "C14663",
+  "C2": "C14663",
+  "C3": "C14663",
+  "C4": "C14663",
+  "C5": "C57112",
+  "C6": "C15849",
+  "C7": "C1779",
+  "C8": "C1648",
+  "C9": "C1648",
+  "C10": "C1634",
+  "C11": "C1634",
+  "C12": "C14663",
+  "C13": "C15850",
+  "C14": "C15850",
+  "R1": "C23186",
+  "R2": "C23186",
+  "R3": "C22843",
+  "R4": "C25804",
+  "R5": "C25804",
+  "R6": "C25804",
+  "R7": "C21190",
+  "R8": "C21190"
+ },
+ "lcsc_suggested": {
+  "Y2": {
+   "lcsc": "C32346",
+   "part": "Q13FC13500004",
+   "query": "32.768kHz 3215",
+   "stock": 484538,
+   "basic": true,
+   "why": "no match for its MPN; found by value and package"
+  }
+ },
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/19_stm32f103_bluepill/out/kicad8.zip"
+ }
+}

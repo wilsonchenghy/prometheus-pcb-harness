@@ -1,0 +1,10 @@
+Comment,Designator,Footprint,LCSC Part #
+22u 10V,C1,C_1206_3216Metric,C5672
+SMBJ5.0A,D1,D_SMB,C113974
+green,D2,LED_0603_1608Metric,
+2A hold,F1,Fuse_1812_4532Metric,C210837
+USB-C,J1,USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal,C3020560
+5V OUT,J2,"TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal",C7509570
+5V,J3,PinHeader_1x04_P2.54mm_Vertical,C2691448
+5.1k,"R1,R2",R_0603_1608Metric,C23186
+1k,R3,R_0603_1608Metric,C21190

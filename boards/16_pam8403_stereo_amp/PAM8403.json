@@ -1,0 +1,12 @@
+{
+ "lib": "Prometheus",
+ "name": "PAM8403",
+ "ref": "U",
+ "footprint": "Package_SO:SOIC-16_3.9x9.9mm_P1.27mm",
+ "datasheet": "https://www.diodes.com/assets/Datasheets/PAM8403.pdf",
+ "description": "3 W stereo filterless class-D audio amplifier, SOP-16 (Diodes PAM8403, pin configuration): pin table from the datasheet's Pin Descriptions, page 2",
+ "pins": [[1, "+OUT_L", "output"], [2, "PGND", "power_in"], [3, "-OUT_L", "output"], [4, "PVDD", "power_in"],
+          [5, "~{MUTE}", "input"], [6, "VDD", "power_in"], [7, "INL", "input"], [8, "VREF", "passive"],
+          [9, "NC", "no_connect"], [10, "INR", "input"], [11, "GND", "power_in"], [12, "~{SHDN}", "input"],
+          [13, "PVDD", "power_in"], [14, "-OUT_R", "output"], [15, "PGND", "power_in"], [16, "+OUT_R", "output"]]
+}

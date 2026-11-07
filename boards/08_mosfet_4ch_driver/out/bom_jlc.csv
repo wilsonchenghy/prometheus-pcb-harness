@@ -1,0 +1,14 @@
+Comment,Designator,Footprint,LCSC Part #
+100u 35V,C1,CP_Elec_8x10,C128462
+SS34,"D1,D2,D3,D4",D_SMA,C8678
+green,"D5,D6,D7,D8",LED_0603_1608Metric,C72043
+V+ IN,J1,"TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal",C7509570
+LOAD1,J2,"TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal",C7509570
+LOAD2,J3,"TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal",C7509570
+LOAD3,J4,"TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal",C7509570
+LOAD4,J5,"TerminalBlock_Phoenix_MKDS-1,5-2_1x02_P5.00mm_Horizontal",C7509570
+LOGIC,J6,PinHeader_1x06_P2.54mm_Vertical,C492405
+AO3400A,"Q1,Q2,Q3,Q4",SOT-23,C20917
+100,"R1,R2,R3,R4",R_0603_1608Metric,C22775
+100k,"R5,R6,R7,R8",R_0603_1608Metric,C25803
+1k,"R9,R10,R11,R12",R_0603_1608Metric,C21190

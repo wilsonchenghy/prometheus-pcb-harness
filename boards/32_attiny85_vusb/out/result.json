@@ -1,0 +1,199 @@
+{
+ "board": "attiny85_vusb",
+ "script": "/home/user/prometheus-pcb-harness/boards/32_attiny85_vusb/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 19,
+ "nets": 15,
+ "layers": 2,
+ "seconds": 2.5,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.087,
+  "check": 0.08,
+  "export": 1.64
+ },
+ "placement": {
+  "J1": [
+   3.2,
+   13.0,
+   270,
+   "F"
+  ],
+  "J2": [
+   29.4,
+   23.4,
+   0,
+   "F"
+  ],
+  "J3": [
+   8.0,
+   2.6,
+   270,
+   "F"
+  ],
+  "U1": [
+   17.0,
+   14.5,
+   0,
+   "F"
+  ],
+  "U2": [
+   24.5,
+   4.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   24.5,
+   11.5,
+   90,
+   "F"
+  ],
+  "R2": [
+   16.0,
+   20.0,
+   0,
+   "F"
+  ],
+  "R3": [
+   23.5,
+   24.0,
+   0,
+   "F"
+  ],
+  "R4": [
+   11.5,
+   7.0,
+   0,
+   "F"
+  ],
+  "R5": [
+   9.967,
+   11.267,
+   0,
+   "F"
+  ],
+  "R6": [
+   19.5,
+   10.4,
+   0,
+   "F"
+  ],
+  "C1": [
+   23.2,
+   16.4,
+   90,
+   "F"
+  ],
+  "C2": [
+   20.45,
+   19.6,
+   90,
+   "F"
+  ],
+  "C3": [
+   15.6,
+   7.367,
+   90,
+   "F"
+  ],
+  "C4": [
+   15.5,
+   2.5,
+   90,
+   "F"
+  ],
+  "D1": [
+   2.5,
+   23.0,
+   90,
+   "F"
+  ],
+  "D2": [
+   17.5,
+   24.5,
+   180,
+   "F"
+  ],
+  "D3": [
+   9.0,
+   22.0,
+   180,
+   "F"
+  ],
+  "D4": [
+   16.033,
+   10.4,
+   0,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 19 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "D1",
+    "D2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C3020560",
+  "J2": "C492405",
+  "J3": "C2937625",
+  "R1": "C27592",
+  "R2": "C27592",
+  "R3": "C22843",
+  "R4": "C23186",
+  "R5": "C23186",
+  "R6": "C21190",
+  "C1": "C14663",
+  "C2": "C15850",
+  "C3": "C1615",
+  "C4": "C14663",
+  "D3": "C2480",
+  "D4": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/32_attiny85_vusb/out/kicad8.zip"
+ }
+}

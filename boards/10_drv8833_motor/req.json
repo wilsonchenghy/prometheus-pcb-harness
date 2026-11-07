@@ -1,0 +1,5 @@
+{"size_mm": [39, 29.5], "layers": 2, "house": "jlcpcb-2",
+ "nets": {"VM": {"amps": 3.0}, "GND": {"amps": 3.0}, "AOUT1": {"amps": 1.5}, "AOUT2": {"amps": 1.5},
+          "BOUT1": {"amps": 1.5}, "BOUT2": {"amps": 1.5}},
+ "near": [["C2", "U1", 3.0], ["C3", "U1", 3.0], ["C4", "U1", 3.0], ["C1", "U1", 6.0]],
+ "edge": ["J1", "J2", "J3", "J4"], "holes": {"count": 2, "d": 2.7}}
