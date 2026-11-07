@@ -6,6 +6,12 @@ Found by building 26 boards (on branch claude/pcb-collection) and judging every 
 second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
 
 **Fixed**
+- A chip's pin on the same net as its exposed pad (an RP2040's TESTEN beside its ground paddle) had to find its way
+  out between 0.4 mm-pitch neighbours to reach the pour, and was sometimes left unreached (#99). Before routing,
+  such a pin is now tied straight into the paddle by a track as wide as the pin (`pcb.tie_to_exposed_pad`, marked
+  `tie`), when that track clears every other pad by the clearance.
+- FreeRouting's prep no longer draws its fine-pitch escape stub out of a pin the script's own copper (or such a
+  tie) already leaves: the extra stub beside the drawn copper only crowded the neighbouring pins.
 - FreeRouting's prep drew its straight stub out of a fine-pitch pin into a keep-out (an ESP32-C3 module's GND pins
   into its own antenna keep-out, once KiCad 9's footprint made them read as fine-pitch pins). A stub that would
   cross a keep-out is left to FreeRouting.

@@ -2687,11 +2687,66 @@ def mark_user_copper(board: Board) -> None:
             it.setdefault("user", True)
 
 
+def tie_to_exposed_pad(board: Board) -> int:
+    """a QFN's (or any chip's) pin on the same net as its exposed pad, tied to it by a short track straight in
+    from the pin, as wide as the pin, as a designer draws it: from inside the pin ring it never has to find a way
+    out between fine-pitch neighbours to reach the pour (a TESTEN or GND pin beside the paddle). Returns how many
+    it drew; marked ``tie`` (and ``neck``: a pin entry), and drawn once"""
+    from shapely.geometry import LineString, Point
+    pn = board.pad_net()
+    n = 0
+    for ref, c in board.comps.items():
+        pads = [(num, L, g) for r, num, L, g, d in board.pad_shapes() if r == ref and num and not d]
+        if len(pads) < 8:
+            continue
+        ox, oy = c["at"]
+        centre = Point(ox, oy)
+        eps = [(num, L, g) for num, L, g in pads if g.buffer(1e-3).contains(centre)]
+        if not eps:
+            continue
+        e_num, e_L, e_g = max(eps, key=lambda p_: p_[2].area)
+        net = pn.get((ref, e_num))
+        if not net or net not in board.nets:
+            continue
+        others = [g for num, L, g in pads if L == e_L and pn.get((ref, num)) != net]
+        for num, L, g in pads:
+            if num == e_num or L != e_L or pn.get((ref, num)) != net or g.area >= e_g.area * 0.5:
+                continue
+            x0_, y0_, x1_, y1_ = g.bounds
+            if max(x1_ - x0_, y1_ - y0_) < 1.5 * min(x1_ - x0_, y1_ - y0_):
+                continue                                 # (a pin: long and narrow)
+            cx, cy = g.centroid.x, g.centroid.y
+            w = round(min(x1_ - x0_, y1_ - y0_), 3)
+            ex0, ey0, ex1, ey1 = e_g.bounds
+            if (x1_ - x0_) > (y1_ - y0_):                # (along the pin's long axis, 0.05 mm into the paddle)
+                if not (ey0 + w / 2 <= cy <= ey1 - w / 2):
+                    continue                             # (a pin past the paddle's end: no straight way in)
+                q = (round(ex1 - 0.05 if cx > ox else ex0 + 0.05, 4), round(cy, 4))
+            else:
+                if not (ex0 + w / 2 <= cx <= ex1 - w / 2):
+                    continue
+                q = (round(cx, 4), round(ey1 - 0.05 if cy > oy else ey0 + 0.05, 4))
+            pts = [(round(cx, 4), round(cy, 4)), q]
+            band = LineString(pts).buffer(w / 2 + board.clear - 1e-3)
+            if any(band.intersects(o) for o in others):
+                continue                                 # (too close to a neighbour's pad: left to the router)
+            if any(t.get("tie") and t["net"] == net and t["pts"] == pts for t in board.tracks):
+                continue
+            board.track(net, L, pts, w)
+            board.tracks[-1]["tie"] = True
+            board.tracks[-1]["neck"] = True
+            n += 1
+    if n:
+        board.__dict__.pop("_cu_memo", None)
+    return n
+
+
 def _route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
     """route the whole board with ``router``: "freerouting" (FreeRouting through KiCad, as KiCad users route:
     ``freerouting.route_kicad``; needs KiCad, Java and the FreeRouting jar, and says which is missing) or "harness"
     (``autoroute``, this file's grid router, chosen explicitly). Sets ``board.router_used``"""
     mark_user_copper(board)                              # (first routing call: what is there, the script drew)
+    tie_to_exposed_pad(board)                            # (a chip's pins on its exposed pad's net: tied straight in)
     if router == "harness":
         board.router_used = "harness"
         probs = autoroute(board, **kw)
