@@ -2807,6 +2807,8 @@ def test_fine_pitch_escape_stubs_stay_out_of_keepouts():
     freerouting.escape_fine_pitch(b)
     assert b.tracks                                       # (the right row's stubs are drawn)
     assert not [t for t in b.tracks if LineString(t["pts"]).buffer(t["w"] / 2).intersects(Polygon(zone))]
+
+
 def test_a_pin_on_the_exposed_pads_net_is_tied_straight_in():
     """the RP2040's TESTEN (pin 19, GND) beside its GND paddle: a pin-wide track from the pin into the paddle, drawn
     once, clear of its neighbours (the router never has to find it a way out between 0.4 mm-pitch pins)"""
