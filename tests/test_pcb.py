@@ -2807,3 +2807,24 @@ def test_fine_pitch_escape_stubs_stay_out_of_keepouts():
     freerouting.escape_fine_pitch(b)
     assert b.tracks                                       # (the right row's stubs are drawn)
     assert not [t for t in b.tracks if LineString(t["pts"]).buffer(t["w"] / 2).intersects(Polygon(zone))]
+def test_a_pin_on_the_exposed_pads_net_is_tied_straight_in():
+    """the RP2040's TESTEN (pin 19, GND) beside its GND paddle: a pin-wide track from the pin into the paddle, drawn
+    once, clear of its neighbours (the router never has to find it a way out between 0.4 mm-pitch pins)"""
+    import pcb
+    import pcb_cli
+    from shapely.geometry import LineString, Point
+    b, _ = pcb_cli.load(str(Path(__file__).resolve().parent.parent / "bench" / "rp2040_board.py"))
+    b.comps["U1"].update(at=(20.0, 15.0), rot=0)
+    b.comps["U1"].pop("unplaced", None)
+    assert pcb.tie_to_exposed_pad(b) >= 1
+    assert pcb.tie_to_exposed_pad(b) == 0                 # (once)
+    ties = [t for t in b.tracks if t.get("tie")]
+    assert ties and all(t["net"] == "GND" for t in ties)
+    pads = {(r, n): g for r, n, L, g, d in b.pad_shapes() if r == "U1"}
+    assert any(pads[("U1", "19")].contains(Point(t["pts"][0])) for t in ties)
+    pn = b.pad_net()
+    for t in ties:
+        line = LineString(t["pts"]).buffer(t["w"] / 2)
+        for (r, n), g in pads.items():
+            if pn.get((r, n)) != "GND":
+                assert line.distance(g) >= b.clear - 1e-6

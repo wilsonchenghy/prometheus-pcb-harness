@@ -327,10 +327,10 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
 
 
 def _drawn_from(board, net, L, g) -> bool:
-    """a track of the net that the script drew itself has an end on this pad"""
+    """a track of the net that the script drew itself (or a tie to an exposed pad) has an end on this pad"""
     from shapely.geometry import Point
     pad = g.buffer(1e-3)
-    return any(t.get("user") and t["net"] == net and t["layer"] == L and t["pts"] and
+    return any((t.get("user") or t.get("tie")) and t["net"] == net and t["layer"] == L and t["pts"] and
                (pad.contains(Point(t["pts"][0])) or pad.contains(Point(t["pts"][-1]))) for t in board.tracks)
 
 
