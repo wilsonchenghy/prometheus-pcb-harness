@@ -25,7 +25,9 @@ What it does (`pcb.py`, its docstring has the details):
 - **Copper**: tracks, pours, vias, stitching, 2 or 4 layers (inner planes), an autorouter (`autoroute(board)` for the
   whole board in one call; `route`, `route_jobs` per net) with
   routes cached by board hash (`cached_route`, optionally stored in git).
-- **Checks**: every net connected, no shorts, track and pour widths for the current (IPC-2221, external and internal),
+- **Checks**: every net connected, no shorts, track and pour widths for the current (IPC-2221, external and internal;
+  each track for the pins it serves, so a branch to a pin given `net(..., loads=)` or to a small decoupling
+  capacitor may be narrow: `Board.branch_amps`),
   clearance, voltage drop, drill spacing, courtyards, dead copper.
 - **Fab rules**: `Board(..., rules="jlcpcb-2")` makes the router and the check keep a house's clearance, drill gap
   and edge gap; `b.pair("D+", "D-", max_skew=0.15)` keeps a differential pair matched in length.

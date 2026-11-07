@@ -58,7 +58,7 @@ _kicad_on_path()
 KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
-ROUTER_VERSION = 7          # in route_jobs' checkpoint key: bump when the router changes what it would produce
+ROUTER_VERSION = 8          # in route_jobs' checkpoint key: bump when the router changes what it would produce
 HOLE_CLEAR = 0.25           # copper to a bare (non-plated) hole's wall, mm: KiCad's default hole clearance
 HOLE_GAP = 0.25             # mm between drill walls (a common fab minimum)
 EDGE = 0.25                 # mm from copper (tracks, vias) to the board edge
@@ -448,6 +448,8 @@ class Board:
     hole_gap = HOLE_GAP                                  # drill wall to drill wall, mm
     hole_clear = HOLE_CLEAR                              # copper to a bare hole's wall, mm
     edge = EDGE                                          # copper to the board edge, mm
+    CAP_BRANCH_AMPS = 0.5    # A: a small ceramic capacitor's branch off a net carrying more (its decoupling tie),
+    #                          unless ``net(..., loads=)`` says otherwise; None: every pin takes the net's current
 
     def __init__(self, name: str, outline: Sequence[Tuple[float, float]], thickness: float = 1.6, copper_oz: float = 1.0,
                  clearance: float = 0.2, max_rise_c: float = 20.0, max_drop: float = 0.02, corner_r: float = 3.0,
@@ -579,10 +581,15 @@ class Board:
         return affinity.translate(affinity.rotate(g, c["rot"], origin=(0, 0)), *c["at"])
 
     def net(self, name: str, pins: Sequence[Tuple[str, str]], amps: float = 0.1, volts: float = 5.0,
-            width: Optional[float] = None, cite=None):
+            width: Optional[float] = None, cite=None, loads=None):
         """a net: its pins (ref, pad number), the current it carries (sets how wide its copper must be) and its
         voltage (what its drop is measured against); ``width``: its track width when routed (default: as wide as
-        its current needs, at least 0.2 mm). ``cite``: as ``place``'s, its ref the first pin's part unless given"""
+        its current needs, at least 0.2 mm). ``cite``: as ``place``'s, its ref the first pin's part unless given.
+        ``loads``: {(ref, pin): amps} the most a pin draws when that is less than the net's ``amps`` (a sense pin,
+        a decoupling capacitor, a chip's supply off a motor rail): its branch is routed and checked for that, the
+        trunk between the other pins for the whole ``amps`` (``branch_amps``). ``None`` for a pin takes it back to
+        the full current. A small ceramic capacitor's pin (ref C.., two pads, footprint C_0603_... or smaller) is a branch of
+        ``Board.CAP_BRANCH_AMPS`` (0.5 A) by default; ``Board.CAP_BRANCH_AMPS = None`` turns that off"""
         for c_ in ([cite] if isinstance(cite, dict) else cite or []):
             self.cite(**{"ref": pins[0][0], "what": f"net {name}", "value": name, **c_})
         out = []
@@ -597,6 +604,19 @@ class Board:
         self.nets[name] = {"pins": list(dict.fromkeys(out)), "amps": amps, "volts": volts}
         if width is not None:
             self.nets[name]["width"] = width
+        if loads:
+            got = []
+            for (r, p), a in dict(loads).items():
+                p, c = str(p), self.comps.get(r)
+                nums = None
+                if c is not None and p not in c["pads"] and c.get("symbol"):   # (a pin by name, as in ``pins``)
+                    import parts
+                    nums = parts.resolve(c, p)
+                for n_ in (nums or [p]):
+                    if (r, n_) not in self.nets[name]["pins"]:
+                        raise ValueError(f"net {name}: loads names {r}.{p}, which is not one of its pins")
+                    got.append([r, n_, None if a is None else float(a)])
+            self.nets[name]["loads"] = got            # (a list, not a dict on tuples: the route cache key is JSON)
 
     def cite(self, ref: str, what: str, value, page: int, quote: str, url: Optional[str] = None):
         """the datasheet's word for a choice made on the board (a pin, a capacitor's value, a pull-up): ``page``
@@ -628,6 +648,275 @@ class Board:
         """the width ``name`` is routed at: its own, else what its current needs on the outer layers (min 0.2 mm)"""
         d = self.nets[name]
         return d.get("width") or max(0.2, round(self.width_for(d["amps"], "F") + 0.005, 2))
+
+    def pin_loads(self, net: str) -> Dict[Tuple[str, str], float]:
+        """{pin: amps} for the pins of ``net`` that draw less than its current (``net(..., loads=)``, and a small
+        ceramic capacitor's ``CAP_BRANCH_AMPS`` by default): each is fed by a branch sized for that, not for the
+        whole net. Every other pin may carry the net's full current"""
+        d = self.nets.get(net) or {}
+        A = d.get("amps") or 0.0
+        given = {(r, n_): a for r, n_, a in d.get("loads", [])}
+        out: Dict[Tuple[str, str], float] = {}
+        cb = self.CAP_BRANCH_AMPS
+        if cb is not None and cb < A:
+            for pin in d.get("pins", []):
+                pin = tuple(pin)
+                c = self.comps.get(pin[0])
+                if pin not in given and c is not None and re.match(r"C\d", pin[0].upper()) and \
+                        len([k for k in c["pads"] if k]) == 2 and \
+                        re.match(r"C_(01005|0201|0402|0603)_", c["fp"].split(":")[-1]):
+                    out[pin] = cb                        # (a 0603 or smaller ceramic chip: a decoupling capacitor;
+                    #                                      a bulk or a regulator's input capacitor, 0805 and up or an
+                    #                                      electrolytic, may carry ripple of amps: not assumed small)
+        on = {tuple(p) for p in d.get("pins", [])}
+        for pin, a in given.items():
+            if a is not None and a < A and pin in on:
+                out[pin] = a
+        return out
+
+    def pin_width(self, net: str, pin: Tuple[str, str]) -> float:
+        """the width a branch to ``pin`` is routed at: what its load (``pin_loads``) needs, at least 0.2 mm and at
+        most the net's width; the net's width for a pin of the full current"""
+        a = self.pin_loads(net).get(tuple(pin))
+        w = self.net_width(net)
+        return w if a is None else min(w, max(0.2, round(self.width_for(a, "F") + 0.005, 2)))
+
+    def branch_amps(self, net: str, pads=None, pn=None, cu=None) -> Dict[int, float]:
+        """the most current each track of ``net`` can carry, by the pins it serves: {index in ``tracks``: amps} for a
+        net with ``pin_loads`` ({} otherwise: every track then takes the net's current). The net's copper is read as
+        a graph: a node per pad, via, pour piece and track joint, an edge per stretch of track between two joints. A
+        stretch whose removal parts the net (a bridge) carries no more than the smaller side can draw: the net's
+        ``amps`` if that side holds a pin of the full current, else the sum of its pins' loads. A stretch in a loop
+        takes the full current, a stretch wholly inside a pad or a via none, and every track of a net whose graph
+        does not join all that its copper joins takes the full current (a joint the graph missed: read safely).
+        A track drawn with its own ``amps`` keeps that (not in the result)"""
+        loads = self.pin_loads(net)
+        d = self.nets.get(net)
+        if not loads or not d:
+            return {}
+        from shapely.geometry import LineString, Point
+        from shapely.ops import nearest_points
+        from shapely.strtree import STRtree
+        A = d["amps"]
+        tol = 0.005
+        pads = self.pad_shapes() if pads is None else pads
+        pn = self.pad_net() if pn is None else pn
+        par: List[int] = []
+
+        def new():
+            par.append(len(par))
+            return len(par) - 1
+
+        def find(i):
+            while par[i] != i:
+                par[i] = par[par[i]]
+                i = par[i]
+            return i
+
+        def union(a, b):
+            a, b = find(a), find(b)
+            if a != b:
+                par[b] = a
+        segs = []                                        # (track index, layer, centre line) per straight stretch
+        for i, t in enumerate(self.tracks):
+            if t["net"] == net:
+                for a, b in zip(t["pts"], t["pts"][1:]):
+                    if math.dist(a, b) > 1e-6:
+                        segs.append((i, t["layer"], LineString([a, b])))
+        if not any(self.tracks[i]["amps"] is None for i, _, _ in segs):
+            return {}                                    # (no track to judge: a net of pours and pads alone)
+        ends = [(new(), new()) for _ in segs]
+        att: List[list] = [[(0.0, e0), (1.0, e1)] for e0, e1 in ends]    # (where along each stretch things join)
+        covered = [False] * len(segs)
+
+        def attach(k, q, node):                          # join ``node`` to stretch k at the point q on it
+            g = segs[k][2]
+            u = g.project(Point(q), normalized=True)
+            if u * g.length <= tol:
+                union(ends[k][0], node)
+            elif (1 - u) * g.length <= tol:
+                union(ends[k][1], node)
+            else:
+                n_ = new()
+                att[k].append((u, n_))
+                union(n_, node)
+        by_layer: Dict[str, List[int]] = {}
+        for k, (_, L, _) in enumerate(segs):
+            by_layer.setdefault(L, []).append(k)
+        trees = {L: STRtree([segs[k][2] for k in ks]) for L, ks in by_layer.items()}
+        for L, ks in by_layer.items():                   # track to track: where their centre lines meet
+            ia, ib = trees[L].query([segs[k][2] for k in ks], predicate="dwithin", distance=tol)
+            for a_, b_ in zip(ia, ib):
+                if a_ >= b_:
+                    continue
+                ka, kb = ks[int(a_)], ks[int(b_)]
+                ga, gb = segs[ka][2], segs[kb][2]
+                if ga.intersects(gb):
+                    x = ga.intersection(gb)
+                    qs = [c for g_ in (getattr(x, "geoms", None) or [x]) if not g_.is_empty for c in
+                          (list(g_.coords) if g_.geom_type == "Point" else [g_.coords[0], g_.coords[-1]])]
+                    links = [(q, q) for q in qs]
+                else:
+                    pa, pb = nearest_points(ga, gb)
+                    links = [((pa.x, pa.y), (pb.x, pb.y))]
+                for qa, qb in links:
+                    n_ = new()
+                    attach(ka, qa, n_)
+                    attach(kb, qb, n_)
+        wmax = max([self.tracks[i]["w"] for i, _, _ in segs] or [0.0])
+        for L, ks in by_layer.items():                   # a track's end inside another track's copper (KiCad's
+            for k in ks:                                 # rule: where a router ends a branch on the trunk)
+                for end, q in ((0, segs[k][2].coords[0]), (1, segs[k][2].coords[-1])):
+                    pt = Point(q)
+                    for j in trees[L].query(pt, predicate="dwithin", distance=wmax / 2 + tol):
+                        kj = ks[int(j)]
+                        if segs[kj][0] != segs[k][0] and \
+                                segs[kj][2].distance(pt) <= self.tracks[segs[kj][0]]["w"] / 2 + tol:
+                            attach(kj, q, ends[k][end])
+
+        def hook(node, g, L, by_copper=False, cover=True):   # the stretches on layer L reaching shape g join node
+            if L not in trees:                               # (by their centre line; ``by_copper``: by their copper)
+                return
+            for j in trees[L].query(g, predicate="dwithin", distance=(wmax / 2 if by_copper else 0.0) + tol):
+                k = by_layer[L][int(j)]
+                line = segs[k][2]
+                r_ = (self.tracks[segs[k][0]]["w"] / 2 if by_copper else 0.0) + tol
+                if line.distance(g) > r_:
+                    continue
+                ina = Point(line.coords[0]).distance(g) <= r_
+                inb = Point(line.coords[-1]).distance(g) <= r_
+                if ina:
+                    union(ends[k][0], node)
+                if inb:
+                    union(ends[k][1], node)
+                if ina and inb and cover:
+                    covered[k] = True                    # (inside the pad or the via: they carry it)
+                if not ina and not inb:
+                    attach(k, nearest_points(line, g.centroid if cover else g)[0].coords[0], node)
+        pin_node: Dict[Tuple[str, str], int] = {}
+        own = [(r, n_, L, g) for r, n_, L, g, _ in pads if pn.get((r, n_)) == net]
+        for r, n_, L, g in own:
+            if (r, n_) not in pin_node:
+                pin_node[(r, n_)] = new()
+            hook(pin_node[(r, n_)], g, L)
+        for L in self.layers:                            # pads of the net that overlap (a USB-C's A4 / B9): one
+            lst = [(r, n_, g) for r, n_, L_, g in own if L_ == L]
+            if len(lst) > 1:
+                ia, ib = STRtree([g for _, _, g in lst]).query([g for _, _, g in lst], predicate="intersects")
+                for a_, b_ in zip(ia, ib):
+                    union(pin_node[lst[int(a_)][:2]], pin_node[lst[int(b_)][:2]])
+        via_node = []
+        for v in self.vias:
+            if v["net"] != net:
+                continue
+            vn, disk = new(), Point(v["at"]).buffer(v["dia"] / 2, 12)
+            via_node.append((vn, disk))
+            for L in self.layers:
+                hook(vn, disk, L)
+            for r, n_, L, g in own:                      # (a via in a pad)
+                if g.intersects(disk):
+                    union(vn, pin_node[(r, n_)])
+        poured = [L for L in self.layers if any(pz["net"] == net and pz["layer"] == L for pz in self.pours)]
+        if poured:
+            cu = self.copper() if cu is None else cu
+            fixed = self.copper(pours=False)
+            own_by = {L: [(r, n_) for r, n_, L_, _ in own if L_ == L] for L in poured}
+            own_tree = {L: STRtree([g for _, _, L_, g in own if L_ == L]) for L in poured if own_by[L]}
+            via_tree = STRtree([g for _, g in via_node]) if via_node else None
+            for L in poured:                             # (the flood alone, the net's own pads and tracks taken
+                fl = self.pour_fill(net, L, cu)          #  out: a track where the zone is carved away is no pour)
+                if fixed.get((net, L)) is not None:
+                    fl = fl.difference(fixed[(net, L)])
+                for piece in (getattr(fl, "geoms", None) or ([fl] if not fl.is_empty else [])):
+                    if piece.area < 0.01:
+                        continue
+                    zn = new()
+                    hook(zn, piece, L, by_copper=True, cover=False)
+                    for j in (own_tree[L].query(piece, predicate="dwithin", distance=tol) if L in own_tree else []):
+                        union(zn, pin_node[own_by[L][int(j)]])
+                    for j in (via_tree.query(piece, predicate="dwithin", distance=tol) if via_node else []):
+                        union(zn, via_node[int(j)][0])
+        edges = []                                       # (node, node, stretch): the track between two joints
+        for k, lst in enumerate(att):
+            lst = sorted(lst)
+            for (_, n0), (_, n1) in zip(lst, lst[1:]):
+                edges.append((find(n0), find(n1), k))
+        weight: Dict[int, list] = {}                     # node: [pins of the full current, sum of the loads]
+        pins = [tuple(p) for p in d["pins"] if tuple(p) in pin_node]
+        for p in pins:
+            w_ = weight.setdefault(find(pin_node[p]), [0, 0.0])
+            if p in loads:
+                w_[1] += loads[p]
+            else:
+                w_[0] += 1
+        full = {i: A for i, t in enumerate(self.tracks) if t["net"] == net and t["amps"] is None}
+        comp = {}                                        # (the graph's pieces, to compare with the copper's)
+
+        def cf(x):
+            comp.setdefault(x, x)
+            while comp[x] != x:
+                x = comp[x]
+            return x
+        for a, b, _ in edges:
+            ra, rb = cf(a), cf(b)
+            if ra != rb:
+                comp[rb] = ra
+        if len({cf(find(pin_node[p])) for p in pins}) > len(self.islands(net, cu, pads, pn)):
+            return full
+        adj: Dict[int, list] = {}
+        for e, (a, b, _) in enumerate(edges):
+            adj.setdefault(a, []).append((b, e))
+            adj.setdefault(b, []).append((a, e))
+        cur = [A] * len(edges)                           # (a stretch in a loop: the full current)
+        cap = lambda f, l_: A if f else min(A, l_)
+        tin: Dict[int, int] = {}
+        low: Dict[int, int] = {}
+        clock = 0
+        for root in adj:                                 # bridges (Tarjan), iteratively, with each subtree's pins
+            if root in tin:
+                continue
+            tin[root] = low[root] = clock
+            clock += 1
+            up = {root: (None, -1)}                      # node: (its parent, the edge to it)
+            order, stack = [], [(root, iter(adj[root]))]
+            while stack:
+                x, it = stack[-1]
+                nxt = next(it, None)
+                if nxt is None:
+                    stack.pop()
+                    order.append(x)
+                    p_ = up[x][0]
+                    if p_ is not None:
+                        low[p_] = min(low[p_], low[x])
+                    continue
+                y, e = nxt
+                if e == up[x][1]:
+                    continue
+                if y in tin:
+                    low[x] = min(low[x], tin[y])
+                else:
+                    tin[y] = low[y] = clock
+                    clock += 1
+                    up[y] = (x, e)
+                    stack.append((y, iter(adj[y])))
+            sub = {x: list(weight.get(x, [0, 0.0])) for x in order}
+            for x in order:                              # (post-order: a child before its parent)
+                p_ = up[x][0]
+                if p_ is not None:
+                    sub[p_][0] += sub[x][0]
+                    sub[p_][1] += sub[x][1]
+            tot = sub[root]
+            for x in order:
+                p_, e = up[x]
+                if p_ is not None and low[x] > tin[p_]:
+                    cur[e] = min(cap(*sub[x]), cap(tot[0] - sub[x][0], tot[1] - sub[x][1]))
+        out: Dict[int, float] = {}
+        for e, (_, _, k) in enumerate(edges):
+            i = segs[k][0]
+            if i in full:                                # (a stretch whose ends one conductor already joins - a pad,
+                short_ = covered[k] or edges[e][0] == edges[e][1]   # a via, the copper of the track it ends
+                out[i] = max(out.get(i, 0.0), 0.0 if short_ else cur[e])   # on - carries nothing of its own)
+        return {i: round(out.get(i, A), 4) for i in full}
 
     def net_length(self, net: str) -> float:
         """the total length of ``net``'s tracks, mm (a branched net's branches all count)"""
@@ -1133,8 +1422,9 @@ class Board:
                 for a, b in zip(ks, ks[1:]):
                     links.setdefault(tuple(sorted((find(a), find(b)))), []).append(v)
             pins = {}                                    # (the current-carrying pins on each island group)
+            low_ = self.pin_loads(net)                   # (a pin given a small load draws no more than that)
             for r, n, L, g, dr in pads:
-                if pn.get((r, n)) == net and not r.upper().startswith("C"):
+                if pn.get((r, n)) == net and not r.upper().startswith("C") and (r, n) not in low_:
                     for k in at(g.centroid, None if dr else L):
                         pins.setdefault(find(k), set()).add((r, n))
             for (a, b), lst in links.items():
@@ -1755,13 +2045,17 @@ class Board:
             if abs(lp - ln) > skew:
                 probs.append(f"pair {p_} / {n_}: tracks {lp:.2f} and {ln:.2f} mm long, {abs(lp - ln):.2f} mm apart "
                              f"(keep within {skew} mm: lengthen the shorter, or route them side by side)")
-        # current: tracks and pour necks
-        for t in self.tracks:
+        # current: tracks (each by the pins it serves: a branch to a low-current pin, its share) and pour necks
+        branch: Dict[int, float] = {}
+        for n in {t["net"] for t in self.tracks if t["amps"] is None}:
+            if n in self.nets and self.pin_loads(n):
+                branch.update(self.branch_amps(n, pads, pn, cu))
+        for i_t, t in enumerate(self.tracks):
             d = self.nets.get(t["net"])
             if not d:
                 probs.append(f"track on unknown net {t['net']}")
                 continue
-            amps = t["amps"] if t["amps"] is not None else d["amps"]
+            amps = t["amps"] if t["amps"] is not None else branch.get(i_t, d["amps"])
             need = self.width_for(amps, t["layer"])
             if t["w"] + 1e-6 < need and not self._pin_neck(t, need, pads, pn):
                 probs.append(f"track {t['net']} ({t['layer']}.Cu, {t['w']} mm) is too narrow for {amps} A on "
@@ -2187,7 +2481,32 @@ def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_co
     """Connect the pads of ``net`` (see ``_route_once`` for how one attempt goes). When an attempt leaves a pad
     unreached or the net split, the net is torn back to where it was and tried again growing from a different
     root: from the net's pour (every pad joined to it), then from its biggest pad (not one boxed in by fine-pitch
-    neighbours); the attempt with the fewest problems is kept. Returns that attempt's problems."""
+    neighbours); the attempt with the fewest problems is kept. Returns that attempt's problems.
+    A net with low-current pins (``Board.pin_loads``) is routed in two steps: the trunk between its other pins at
+    ``width``, then each branch to a low-current pin at its own width (``Board.pin_width``), joined to the trunk."""
+    low = board.pin_loads(net) if (net in board.nets and only is None and amps is None and seed_pins is None) else {}
+    pins0 = [tuple(p) for p in board.nets[net]["pins"]] if low else []
+    if low and any(p not in low for p in pins0):
+        groups: Dict[float, list] = {}
+        for p in pins0:
+            if p in low:
+                groups.setdefault(min(width, board.pin_width(net, p)), []).append(p)
+        trunk = [p for p in pins0 if p not in low]
+        args = dict(grid=grid, via_cost=via_cost, layers=layers, keepout=keepout, via=via,
+                    track_keepout=track_keepout)
+        d = board.nets[net]
+        orig = d["pins"]
+        try:                                             # (the pins not yet routed left off the net meanwhile: not
+            d["pins"] = trunk                            #  taken for copper of the net that the trunk could join)
+            probs = route(board, net, width=width, **args)
+            done = list(trunk)
+            for w_, ps in sorted(groups.items(), key=lambda kv: -kv[0]):   # (the wider branches first)
+                done += ps
+                d["pins"] = [p for p in pins0 if p in done]
+                probs += route(board, net, width=w_, only=ps, **args)
+        finally:
+            d["pins"] = orig
+        return probs
     kw = dict(width=width, grid=grid, via_cost=via_cost, layers=layers, keepout=keepout, via=via, only=only, amps=amps,
               track_keepout=track_keepout, seed_pins=seed_pins)
     forced = [(a, getattr(board, a)) for a in ("root_big", "pour_root") if hasattr(board, a)]

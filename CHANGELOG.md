@@ -46,6 +46,28 @@ second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
 - The update notice was shown to a clone that is ahead of GitHub's main.
 - `prometheus symbol` drew with a macOS path on Linux and missed the board's `footprints/`.
 
+**A net's current no longer applies to every branch** (#97)
+- `net(name, pins, amps=3, loads={("C1", "1"): 0.05, ("U2", "VS+"): 0.001})`: the most each named pin draws
+  (by pad number or symbol pin name). Its branch is routed and checked for that load. The trunk between the other
+  pins still takes the net's full `amps`. `None` for a pin puts it back to the full current.
+- By default, a pin of a ceramic chip capacitor of size 0603 or smaller (ref `C..`, two pads, footprint `C_0603_...`)
+  on a net of more than 0.5 A is a 0.5 A branch (`Board.CAP_BRANCH_AMPS`). Set it to `None` to turn this off.
+  0805 and larger, or electrolytic, capacitors are not assumed: a regulator's input capacitor can carry amps of
+  ripple.
+- The current check works out each track's current from the pins it serves (`Board.branch_amps`):
+  - A stretch of track whose removal splits the net carries at most what the smaller side can draw: the full current
+    if that side has a full-current pin, else the sum of its pins' loads.
+  - A stretch in a loop counts as carrying the full current, and so does every track of a net whose joints the graph
+    cannot account for.
+  - The voltage drop uses the same branch currents. The via-current warning no longer counts a pin with a load as
+    an end of the power path.
+- Routing:
+  - The built-in router routes the trunk at the net's width first, then each low-current pin at its own width
+    (`Board.pin_width`, at least 0.2 mm).
+  - FreeRouting, which routes each net at one width, no longer gets the low-current pins. The harness routes them
+    afterwards, fan-out stub included.
+  - `ROUTER_VERSION` is now 8.
+
 **Checks**
 - A pad drilled by a mounting hole, and a mounting hole inside a courtyard, are now findings.
 - Courtyards are KiCad's own shapes, and any overlap counts, as in KiCad's DRC.

@@ -38,7 +38,11 @@ hands. Unless they ask you to just build it, work with them:
 1. **Write `board.py`** with a `build()` that returns a `pcb.Board`: the outline, the parts (`place(ref,
    "Lib:Footprint", at, rot, value, mpn, lcsc=...)`; `at=None` lets the placer choose), the nets with their
    current (`net(name, pins, amps=...)`), the pours. Or start from a KiCad netlist (`.net`), or from a finished
-   KiCad layout for a revision (below).
+   KiCad layout for a revision (below). `amps` is the trunk's current. A pin that draws less, such as a sense pin or a
+   chip's supply off a motor rail, takes `loads={("U2", "VS+"): 0.01}`, and its branch is routed and checked for
+   that load only. A 0603-or-smaller ceramic capacitor's pin is a 0.5 A branch by default
+   (`Board.CAP_BRANCH_AMPS`). Give a regulator's input capacitor its real ripple current, or `None` for the
+   full net current.
 2. **Schematic first.** On a new board, run `prometheus board.py out/ --stage schematic` (seconds): it writes the
    schematic and shows it in the viewer, then stops. Show it to the engineer and wait for their go or their
    changes before any layout: a wrong part or net costs nothing to fix here.
@@ -51,7 +55,7 @@ hands. Unless they ask you to just build it, work with them:
    |---|---|
    | `unreached`, `split` | move the named parts (or fix their position in `placement` from the result), or route that net earlier |
    | `short`, `clearance` | move or re-route one of the two nets |
-   | `current`, `voltage drop` | set `width=` / `amps=` on the net, or widen the pour |
+   | `current`, `voltage drop` | set `width=` / `amps=` on the net, or widen the pour; a branch to a pin that draws little: `loads=` |
    | `drill`, `edge` | move vias or holes; larger drills with `min_drill=` |
    | `placement` | fix a position or a pin name (`check_placement()` is instant: run it first) |
 

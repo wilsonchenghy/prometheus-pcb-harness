@@ -42,6 +42,20 @@ b.pour("GND", "B", OUT)                                         # a ground plane
 Pins are `(ref, pad number)` as the footprint numbers them. `amps` sets how wide copper must be for the net (IPC-2221
 at `max_rise_c`, default 20 C); `volts` sets what its voltage drop is measured against.
 
+`amps` is the current between the pins that carry it (the trunk). A pin that draws less can say so:
+
+```python
+b.net("VM", [("J1", "1"), ("U2", "VM"), ("U3", "VS+"), ("C5", "1")], amps=3.0,
+      loads={("U3", "VS+"): 0.001})               # a current-sense chip's supply pin off the motor rail
+```
+
+The branch to such a pin is routed at the width its load needs (at least 0.2 mm) and checked for that load. The
+check reads each net's copper as a graph. A stretch of track that, if cut, leaves only low-current pins on one side
+carries at most those pins' loads. A stretch with a full-current pin on both sides, or in a loop, carries the full
+`amps`. A ceramic chip capacitor of size 0603 or smaller is a 0.5 A branch by default (`Board.CAP_BRANCH_AMPS`;
+`None` turns that off). A larger capacitor, such as a regulator's input capacitor with amps of ripple, is not
+assumed small. Give it `loads=` with its ripple current, or `None` for the full current.
+
 Before routing, `b.check_placement()` says in a moment whether every courtyard is on the board and clear of the
 others, and whether every pin a net names exists - routing a misplaced board only wastes minutes.
 
