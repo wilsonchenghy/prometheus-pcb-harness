@@ -1,4 +1,4 @@
-{"size_mm": [60, 26], "layers": 2, "house": "jlcpcb-2",
+{"size_mm": [60, 28], "layers": 2, "house": "jlcpcb-2",
  "nets": {"VBUS": {"amps": 0.5}, "3V3": {"amps": 0.3}},
  "pairs": [["D+", "D-", 0.5]],
  "near": [["C1", "U1.36", 3.0], ["C2", "U1.48", 3.0], ["C3", "U1.24", 3.0], ["C4", "U1.1", 3.0],

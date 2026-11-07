@@ -4,7 +4,7 @@ BOOT0 3-pin jumper (3V3 / BOOT0 / GND, 10k pull-down so it boots from flash with
 GND, reset button + 100 nF on NRST, 4-pin SWD header (3V3 SWDIO SWCLK GND), 100 nF on every VDD pin and on VBAT,
 VDDA fed through a ferrite bead with 10 nF + 1 uF, 4.7 uF bulk, power LED and the PC13 LED, two 1x20 headers
 along the long edges.
-Difficulty: 4/5. 2 layers, 60 x 26 mm, JLCPCB.
+Difficulty: 4/5. 2 layers, 60 x 28 mm, JLCPCB.
 
 Engineering choices / assumptions (no engineer in the loop):
 - Pin numbers come from KiCad's MCU_ST_STM32F1:STM32F103C8Tx symbol (wired by name). The MCU is turned 180 deg so
@@ -29,9 +29,9 @@ from pcb import Board
 
 R06, C06, C08 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric", "Capacitor_SMD:C_0805_2012Metric"
 HDR20 = "Connector_PinHeader_2.54mm:PinHeader_1x20_P2.54mm_Vertical"
-W, H = 60.0, 26.0
+W, H = 60.0, 28.0
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
-UX, UY = 30.0, 13.0                                  # the MCU, turned 180 deg
+UX, UY = 30.0, 14.0                                  # the MCU, turned 180 deg
 # fixed spots: decoupling by its supply pins (rot 180: VDD 36 left-bottom, VDD 48 bottom-right, VDD 24 top-left,
 # VBAT 1 right-bottom, VDDA 9 right-top) and the oscillators by their pins
 FIXED = {"C1": ((UX - 6.6, UY - 3.4), 90),          # VDD 36 (left, y -2.75) / VSS 35
@@ -54,11 +54,11 @@ def build():
     b.place("J2", HDR20, (4.5, 2.2), 90, "GND 3V3 PA8-PA10 PA15 PB3-PB9 PC13 NRST BOOT0 PA13 PA14 3V3 GND",
             "XFCN PZ254V-11-20P")
     b.place("J3", HDR20, (4.5, H - 2.2), 90, "5V GND 3V3 PB15-PB10 PB2-PB0 PA7-PA0", "XFCN PZ254V-11-20P")
-    b.place("J4", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (13.0, 19.6), 90, "SWD",
+    b.place("J4", "Connector_PinHeader_2.54mm:PinHeader_1x04_P2.54mm_Vertical", (13.0, 20.6), 90, "SWD",
             "XFCN PZ254V-11-04P")
-    b.place("JP1", "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical", (50.5, 17.0), 0, "BOOT0",
+    b.place("JP1", "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical", (50.5, 18.0), 0, "BOOT0",
             "XFCN PZ254V-11-03P")
-    b.place("SW1", "Button_Switch_SMD:SW_SPST_PTS810", (45.5, 19.8), 0, "RESET", "C&K PTS810SJM250SMTRLFS")
+    b.place("SW1", "Button_Switch_SMD:SW_SPST_PTS810", (45.5, 20.8), 0, "RESET", "C&K PTS810SJM250SMTRLFS")
     b.place("U2", None, None, 0, "AP2112K-3.3", "Diodes AP2112K-3.3TRG1", symbol="Regulator_Linear:AP2112K-3.3",
             lcsc="C51118")
     b.place("Y1", "Crystal:Crystal_SMD_3225-4Pin_3.2x2.5mm", *FIXED["Y1"], "8MHz", "Yangxing X322508MSB4SI",
