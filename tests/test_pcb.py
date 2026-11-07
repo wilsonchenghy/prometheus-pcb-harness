@@ -1073,7 +1073,7 @@ def test_cli_stages(tmp_path):
 
 def test_critic_fails_a_board_far_larger_than_its_parts():
     """no size_mm in the requirements: a board its parts barely cover is an error (the agent shrinks it), with the size
-    that would do; with size_mm given the enclosure decides and the check is the maximum only"""
+    that would do; with size_mm given (the most the enclosure allows) it is a warning, as is bare board at an edge"""
     import critic
     from shapely.geometry import Polygon
     sys.path.insert(0, str(Path(__file__).parent.parent / "bench"))
@@ -1082,7 +1082,9 @@ def test_critic_fails_a_board_far_larger_than_its_parts():
     b.outline = Polygon([(0, 0), (60, 0), (60, 40), (0, 40)])
     size = [n for n in critic.review(b) if n["kind"] == "size"]
     assert size and size[0]["severity"] == "error" and "would do" in size[0]["text"]
-    assert not [n for n in critic.review(b, {"size_mm": [60, 40]}) if n["kind"] == "size"]
+    size = [n for n in critic.review(b, {"size_mm": [60, 40]}) if n["kind"] == "size"]
+    assert size and all(n["severity"] == "warning" for n in size)
+    assert any("on the right" in n["text"] and "would hold them" in n["text"] for n in size)
 
 
 def test_tune_pairs_lengthens_the_shorter_net():
