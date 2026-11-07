@@ -1,6 +1,6 @@
 {
  "board": "lm317_adjustable",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/04_lm317_adjustable/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/04_lm317_adjustable/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -10,7 +10,7 @@
    "silk_overlap": 1
   }
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -23,12 +23,12 @@
  "parts": 15,
  "nets": 6,
  "layers": 2,
- "seconds": 9.0,
+ "seconds": 2.8,
  "timings": {
-  "place+route": 6.05,
-  "critic": 0.16,
-  "check": 0.06,
-  "export": 1.92
+  "routes/": 0.0,
+  "critic": 0.15,
+  "check": 0.09,
+  "export": 1.99
  },
  "placement": {
   "J1": [
@@ -172,6 +172,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/04_lm317_adjustable/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/04_lm317_adjustable/out/kicad8.zip"
  }
 }

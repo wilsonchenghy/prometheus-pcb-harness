@@ -1,6 +1,6 @@
 {
  "board": "ne555_pwm_dimmer",
- "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/02_ne555_pwm_dimmer/board.py",
+ "script": "/home/user/prometheus-pcb-harness/boards/02_ne555_pwm_dimmer/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad)",
+ "router": "freerouting (through KiCad) (routes/)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 16,
  "nets": 11,
  "layers": 2,
- "seconds": 8.4,
+ "seconds": 2.3,
  "timings": {
-  "place+route": 6.22,
-  "critic": 0.045,
-  "check": 0.03,
-  "export": 1.47
+  "routes/": 0.0,
+  "critic": 0.057,
+  "check": 0.06,
+  "export": 1.6
  },
  "placement": {
   "J1": [
@@ -165,6 +165,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/02_ne555_pwm_dimmer/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/02_ne555_pwm_dimmer/out/kicad8.zip"
  }
 }
