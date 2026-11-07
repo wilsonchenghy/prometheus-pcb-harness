@@ -12,7 +12,7 @@ second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
   neck, and the track goes on full width from the first clear cell. The FE1.1s hub board is clean with it.
 - The critic's board-size review ran only when the requirements gave no `size_mm`, so a board well inside its
   maximum but mostly empty passed unremarked. It now also warns, with `size_mm` given, when the parts cover under
-  25 % of the board, and on any board when an edge has more than about 4 mm of bare board past the parts (with
+  20 % of the board, and on any board when an edge has more than about 4 mm of bare board past the parts (with
   the size that would hold them). The error for a board far larger than its parts, without `size_mm`, is as before.
 - Exported boards that KiCad 9 could not open: KiCad's library now puts KiCad 10 `(point ...)` anchors into some
   footprints (LED_THT, TO-220, DIP). These are now left out, and model paths are written with

@@ -136,7 +136,7 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
             notes.append(_note("error", "size", f"the parts cover {used:.0%} of the {w:.0f} x {h:.0f} mm board; "
                                f"about {w * k:.0f} x {h * k:.0f} mm would do", hint="shrink the outline, or give size_mm "
                                "in the requirements when the enclosure sets it"))
-        elif used < 0.25:                              # (size_mm is the most the enclosure allows, not a size to fill)
+        elif used < 0.20:                              # (size_mm is the most the enclosure allows, not a size to fill)
             notes.append(_note("warning", "size", f"the parts cover {used:.0%} of the {w:.0f} x {h:.0f} mm board; "
                                f"about {w * k:.0f} x {h * k:.0f} mm would do", hint="shrink the outline: size_mm is "
                                "the most the board may be, not a size to fill"))
