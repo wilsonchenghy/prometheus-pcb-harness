@@ -21,23 +21,23 @@
  "parts": 35,
  "nets": 47,
  "layers": 2,
- "seconds": 621.7,
+ "seconds": 369.6,
  "timings": {
-  "place+route": 615.12,
-  "critic": 0.626,
-  "check": 0.55,
-  "export": 4.18
+  "place+route": 363.23,
+  "critic": 0.315,
+  "check": 0.53,
+  "export": 4.32
  },
  "placement": {
   "U1": [
    30.0,
-   13.0,
+   14.0,
    180,
    "F"
   ],
   "J1": [
    3.2,
-   13.0,
+   14.0,
    270,
    "F"
   ],
@@ -49,194 +49,194 @@
   ],
   "J3": [
    4.5,
-   23.8,
+   25.8,
    90,
    "F"
   ],
   "J4": [
    13.0,
-   19.6,
+   20.6,
    90,
    "F"
   ],
   "JP1": [
    50.5,
-   17.0,
+   18.0,
    0,
    "F"
   ],
   "SW1": [
    45.5,
-   19.8,
+   20.8,
    0,
    "F"
   ],
   "U2": [
    12.133,
-   13.0,
+   14.0,
    0,
    "F"
   ],
   "Y1": [
    40.5,
-   12.5,
+   13.5,
    0,
    "F"
   ],
   "Y2": [
    40.0,
-   7.0,
+   8.0,
    0,
    "F"
   ],
   "FB1": [
-   38.35,
-   19.9,
+   41.2,
+   19.35,
    270,
    "F"
   ],
   "C1": [
    23.4,
-   9.6,
+   10.6,
    90,
    "F"
   ],
   "C2": [
    33.6,
-   6.4,
+   7.4,
    0,
    "F"
   ],
   "C3": [
    26.4,
-   19.6,
+   20.6,
    0,
    "F"
   ],
   "C4": [
    36.7,
-   9.6,
+   10.6,
    90,
    "F"
   ],
   "C5": [
    36.7,
-   15.6,
+   16.6,
    90,
    "F"
   ],
   "C6": [
    38.6,
-   16.4,
+   17.4,
    90,
    "F"
   ],
   "C7": [
-   19.067,
-   9.967,
+   19.0,
+   11.5,
    180,
    "F"
   ],
   "C8": [
-   40.05,
-   9.4,
+   39.55,
+   10.5,
    0,
    "F"
   ],
   "C9": [
    42.25,
-   15.6,
+   16.6,
    0,
    "F"
   ],
   "C10": [
-   43.25,
-   7.8,
-   90,
+   41.75,
+   5.5,
+   0,
    "F"
   ],
   "C11": [
    36.5,
-   5.95,
+   6.95,
    270,
    "F"
   ],
   "C12": [
-   34.8,
-   19.5,
-   0,
+   34.05,
+   21.25,
+   90,
    "F"
   ],
   "C13": [
    11.8,
-   16.2,
+   17.2,
    0,
    "F"
   ],
   "C14": [
-   17.8,
-   14.05,
+   17.65,
+   15.45,
    0,
    "F"
   ],
   "R1": [
-   10.2,
-   9.9,
-   0,
+   6.75,
+   21.3,
+   90,
    "F"
   ],
   "R2": [
-   6.05,
-   6.25,
-   180,
+   10.0,
+   10.75,
+   0,
    "F"
   ],
   "R3": [
-   58.0,
-   23.5,
-   0,
+   23.4,
+   14.1,
+   270,
    "F"
   ],
   "R4": [
    58.0,
-   8.5,
+   2.0,
    0,
    "F"
   ],
   "R5": [
-   29.9,
-   19.5,
+   58.0,
+   26.5,
    0,
    "F"
   ],
   "R6": [
-   45.5,
-   9.533,
-   90,
+   58.0,
+   22.5,
+   0,
    "F"
   ],
   "R7": [
-   19.067,
-   6.5,
+   16.333,
+   7.467,
    0,
    "F"
   ],
   "R8": [
-   46.8,
-   6.067,
-   270,
+   55.067,
+   11.2,
+   180,
    "F"
   ],
   "D1": [
-   22.533,
-   6.5,
+   16.333,
+   5.6,
    0,
    "F"
   ],
   "D2": [
-   49.6,
-   6.85,
-   0,
+   55.85,
+   8.45,
+   270,
    "F"
   ]
  },
@@ -244,9 +244,9 @@
   {
    "stage": "routing",
    "kind": "unreached",
-   "text": "route GND: could not reach U1.47 (blocked; move parts or widen a channel)",
+   "text": "route GND: could not reach U1.8 (blocked; move parts or widen a channel)",
    "pins": [
-    "U1.47"
+    "U1.8"
    ],
    "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
    "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
@@ -254,25 +254,37 @@
   {
    "stage": "routing",
    "kind": "unreached",
-   "text": "route GND: could not reach U1.47 (blocked; move parts or widen a channel)",
+   "text": "route GND: could not reach Y1.4 (blocked; move parts or widen a channel)",
    "pins": [
-    "U1.47"
+    "Y1.4"
    ],
    "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
    "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
   },
   {
    "stage": "routing",
-   "kind": "other",
-   "text": "pair D+ / D-: tracks 67.51 and 44.90 mm long, 22.61 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
-   "pins": [],
-   "hint": "read the text",
-   "why": ""
+   "kind": "unreached",
+   "text": "route GND: could not reach U1.8 (blocked; move parts or widen a channel)",
+   "pins": [
+    "U1.8"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
+  },
+  {
+   "stage": "routing",
+   "kind": "unreached",
+   "text": "route GND: could not reach Y1.4 (blocked; move parts or widen a channel)",
+   "pins": [
+    "Y1.4"
+   ],
+   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
+   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
   },
   {
    "stage": "routing",
    "kind": "split",
-   "text": "net GND is split in 2: U1.47 | U1.8, U1.23, U1.35, J1.A1, J1.A12, J1.B1",
+   "text": "net GND is split in 3: U1.8 | Y1.4 | U1.23, U1.35, U1.47, J1.A1, J1.A12, J1.B1",
    "pins": [
     "J1.A1",
     "J1.A12",
@@ -280,15 +292,28 @@
     "U1.23",
     "U1.35",
     "U1.47",
-    "U1.8"
+    "U1.8",
+    "Y1.4"
    ],
    "hint": "the pins listed in different groups are not joined: route the net again or move parts",
    "why": "A net in pieces is an open circuit between them."
+  },
+  {
+   "stage": "routing",
+   "kind": "drill",
+   "text": "via GND and J1 pad SH drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
+   "pins": [],
+   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
+   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
+   "at": [
+    7.5,
+    10.0
+   ]
   },
   {
    "stage": "design",
    "kind": "split",
-   "text": "net GND is split in 2: U1.47 | U1.8, U1.23, U1.35, J1.A1, J1.A12, J1.B1",
+   "text": "net GND is split in 3: U1.8 | Y1.4 | U1.23, U1.35, U1.47, J1.A1, J1.A12, J1.B1",
    "pins": [
     "J1.A1",
     "J1.A12",
@@ -296,15 +321,28 @@
     "U1.23",
     "U1.35",
     "U1.47",
-    "U1.8"
+    "U1.8",
+    "Y1.4"
    ],
    "hint": "the pins listed in different groups are not joined: route the net again or move parts",
    "why": "A net in pieces is an open circuit between them."
   },
   {
    "stage": "design",
+   "kind": "drill",
+   "text": "via GND and J1 pad SH drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
+   "pins": [],
+   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
+   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
+   "at": [
+    7.5,
+    10.0
+   ]
+  },
+  {
+   "stage": "kicad",
    "kind": "other",
-   "text": "pair D+ / D-: tracks 67.51 and 44.90 mm long, 22.61 mm apart (keep within 0.5 mm: lengthen the shorter, or route them side by side)",
+   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
    "pins": [],
    "hint": "read the text",
    "why": ""
@@ -312,7 +350,7 @@
   {
    "stage": "kicad",
    "kind": "other",
-   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
+   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on B.Cu, priority 1)",
    "pins": [],
    "hint": "read the text",
    "why": ""
@@ -322,32 +360,12 @@
   {
    "severity": "warning",
    "kind": "via neck",
-   "text": "via GND at (7.00, 9.75) is 0.00 mm from J1.A12 (keep 0.2 mm of track between them)",
+   "text": "via GND at (42.75, 19.50) is 0.00 mm from SW1.2 (keep 0.2 mm of track between them)",
    "refs": [
-    "J1"
+    "SW1"
    ],
    "hint": "move the via off the pad, or route a short neck to it",
    "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via GND at (7.00, 9.75) is 0.00 mm from J1.B1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "J1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "label",
-   "text": "no room on the silkscreen for C8: left on the assembly layer",
-   "refs": [
-    "C8"
-   ],
-   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
-   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
   },
   {
    "severity": "info",
