@@ -127,13 +127,32 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
         if sorted((w, h))[0] > a + 1e-6 or sorted((w, h))[1] > b + 1e-6:
             notes.append(_note("error", "size", f"the board is {w:.1f} x {h:.1f} mm; the requirement is at most "
                                f"{spec['size_mm'][0]} x {spec['size_mm'][1]} mm", hint="shrink the outline"))
-    elif placed and board.comps:                      # no size given: no more board than the parts need
-        used = sum(g.area for g in map(board.courtyard, board.comps) if g is not None) / board.outline.area
-        if used < 0.15:                                # (the bench boards run 26-57 %)
-            k = (used / 0.35) ** 0.5
+    if placed and board.comps:                          # no more board than the parts need
+        cys = {r: board.courtyard(r) for r in board.comps}
+        cys = {r: g for r, g in cys.items() if g is not None}
+        used = sum(g.area for g in cys.values()) / board.outline.area
+        k = (used / 0.35) ** 0.5
+        if "size_mm" not in spec and used < 0.15:      # (the bench boards run 26-57 %)
             notes.append(_note("error", "size", f"the parts cover {used:.0%} of the {w:.0f} x {h:.0f} mm board; "
                                f"about {w * k:.0f} x {h * k:.0f} mm would do", hint="shrink the outline, or give size_mm "
                                "in the requirements when the enclosure sets it"))
+        elif used < 0.25:                              # (size_mm is the most the enclosure allows, not a size to fill)
+            notes.append(_note("warning", "size", f"the parts cover {used:.0%} of the {w:.0f} x {h:.0f} mm board; "
+                               f"about {w * k:.0f} x {h * k:.0f} mm would do", hint="shrink the outline: size_mm is "
+                               "the most the board may be, not a size to fill"))
+        # bare board past the parts at an edge (mounting holes go with the outline, so they are left out)
+        own = [g for r, g in cys.items() if not str(board.comps[r].get("fp", "")).startswith("MountingHole")]
+        if own:
+            bx0 = min(g.bounds[0] for g in own); by0 = min(g.bounds[1] for g in own)
+            bx1 = max(g.bounds[2] for g in own); by1 = max(g.bounds[3] for g in own)
+            gaps = {"left": (bx0 - x0, w), "right": (x1 - bx1, w), "top": (by0 - y0, h), "bottom": (y1 - by1, h)}
+            spare = {s_: g_ for s_, (g_, d_) in gaps.items() if g_ > max(4.0, 0.12 * d_)}
+            if spare:
+                dw = sum(g_ - 1.5 for s_, g_ in spare.items() if s_ in ("left", "right"))
+                dh = sum(g_ - 1.5 for s_, g_ in spare.items() if s_ in ("top", "bottom"))
+                notes.append(_note("warning", "size", "bare board past the parts: " + ", ".join(
+                    f"{g_:.1f} mm on the {s_}" for s_, g_ in spare.items()) + f"; about {w - dw:.0f} x {h - dh:.0f} mm "
+                    "would hold them", hint="shrink the outline (and move the mounting holes with it)"))
     if "layers" in spec and len(board.layers) != int(spec["layers"]):
         notes.append(_note("error", "layers", f"{len(board.layers)} copper layers; the requirement is {spec['layers']}",
                            hint="Board(..., layers=N)"))

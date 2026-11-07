@@ -6,6 +6,14 @@ Found by building 26 boards (on branch claude/pcb-collection) and judging every 
 second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
 
 **Fixed**
+- Built-in router: when no grid cell past a fine-pitch pin's escape stub was clear at the net's full width, the
+  router started from the nearest one anyway and the full-width track slipped under the clearance (a 2 A ground
+  tie out of an SSOP pin, 0.19 mm from its neighbour; #96). That first step now stays at the stub's width, as a
+  neck, and the track goes on full width from the first clear cell. The FE1.1s hub board is clean with it.
+- The critic's board-size review ran only when the requirements gave no `size_mm`, so a board well inside its
+  maximum but mostly empty passed unremarked. It now also warns, with `size_mm` given, when the parts cover under
+  25 % of the board, and on any board when an edge has more than about 4 mm of bare board past the parts (with
+  the size that would hold them). The error for a board far larger than its parts, without `size_mm`, is as before.
 - Exported boards that KiCad 9 could not open: KiCad's library now puts KiCad 10 `(point ...)` anchors into some
   footprints (LED_THT, TO-220, DIP). These are now left out, and model paths are written with
   `${KICAD9_3DMODEL_DIR}`.
