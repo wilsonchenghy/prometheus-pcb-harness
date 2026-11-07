@@ -3659,7 +3659,7 @@ def _drill_gap(at, drill: float, w: dict) -> float:
     return math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - drill / 2 - w["drill"] / 2
 
 
-def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -> List[str]:
+def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.3) -> List[str]:
     """vias closer than ``gap`` (default: the board's ``hole_gap``; a house's rule, e.g. 0.5 mm for JLCPCB, tightens
     it) to another via of another net or to a part's own drill (a pin's hole, an exposed pad's thermal via, a bare
     hole), as a router that does not know the drill gap leaves them: the via (the one with fewer tracks on it, of

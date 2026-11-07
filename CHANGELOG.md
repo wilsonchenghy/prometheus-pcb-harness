@@ -8,7 +8,8 @@ second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
 **Fixed**
 - `nudge_vias` let two drills of one net sit 0.254 mm apart while the design check holds every pair of drills to the
   house's hole gap (0.5 mm at JLCPCB): a GND via 0.33 mm from a GND USB-C shell's slot was left for the check to
-  flag. One net's drills are now parted to the hole gap too.
+  flag. One net's drills are now parted to the hole gap too, and a via may move up to 0.3 mm (was 0.15) to get
+  there, wherever every clearance still holds.
 - A chip's pin on the same net as its exposed pad (an RP2040's TESTEN beside its ground paddle) had to find its way
   out between 0.4 mm-pitch neighbours to reach the pour, and was sometimes left unreached (#99). Before routing,
   such a pin is now tied straight into the paddle by a track as wide as the pin (`pcb.tie_to_exposed_pad`, marked
