@@ -1,0 +1,209 @@
+{
+ "board": "led_chaser_4017",
+ "script": "/home/user/prometheus-pcb-harness/boards/07_led_chaser_4017/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 23,
+ "nets": 19,
+ "layers": 2,
+ "seconds": 2.6,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.093,
+  "check": 0.08,
+  "export": 1.8
+ },
+ "placement": {
+  "J1": [
+   4.5,
+   4.0,
+   0,
+   "F"
+  ],
+  "U1": [
+   12.5,
+   21.0,
+   90,
+   "F"
+  ],
+  "U2": [
+   19.2,
+   21.0,
+   0,
+   "F"
+  ],
+  "RV1": [
+   28.0,
+   11.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   18.9,
+   12.05,
+   90,
+   "F"
+  ],
+  "R2": [
+   20.0,
+   8.0,
+   0,
+   "F"
+  ],
+  "R3": [
+   26.5,
+   21.0,
+   180,
+   "F"
+  ],
+  "C1": [
+   30.5,
+   17.5,
+   90,
+   "F"
+  ],
+  "C2": [
+   1.5,
+   22.5,
+   270,
+   "F"
+  ],
+  "C3": [
+   13.5,
+   14.5,
+   270,
+   "F"
+  ],
+  "C4": [
+   18.45,
+   27.6,
+   180,
+   "F"
+  ],
+  "C5": [
+   11.7,
+   26.2,
+   0,
+   "F"
+  ],
+  "D11": [
+   17.5,
+   4.5,
+   180,
+   "F"
+  ],
+  "D1": [
+   16.0,
+   32.0,
+   90,
+   "F"
+  ],
+  "D2": [
+   22.47,
+   29.9,
+   54,
+   "F"
+  ],
+  "D3": [
+   26.46,
+   24.4,
+   18,
+   "F"
+  ],
+  "D4": [
+   26.46,
+   17.6,
+   342,
+   "F"
+  ],
+  "D5": [
+   22.47,
+   12.1,
+   306,
+   "F"
+  ],
+  "D6": [
+   16.0,
+   10.0,
+   270,
+   "F"
+  ],
+  "D7": [
+   9.53,
+   12.1,
+   234,
+   "F"
+  ],
+  "D8": [
+   5.54,
+   17.6,
+   198,
+   "F"
+  ],
+  "D9": [
+   5.54,
+   24.4,
+   162,
+   "F"
+  ],
+  "D10": [
+   9.53,
+   29.9,
+   126,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "RV1": "C51284",
+  "R1": "C21190",
+  "R2": "C21190",
+  "R3": "C23179",
+  "C1": "C28323",
+  "C2": "C57112",
+  "C3": "C14663",
+  "C4": "C14663",
+  "C5": "C15850",
+  "D11": "C2480",
+  "D1": "C84256",
+  "D2": "C84256",
+  "D3": "C84256",
+  "D4": "C84256",
+  "D5": "C84256",
+  "D6": "C84256",
+  "D7": "C84256",
+  "D8": "C84256",
+  "D9": "C84256",
+  "D10": "C84256"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/07_led_chaser_4017/out/kicad8.zip"
+ }
+}

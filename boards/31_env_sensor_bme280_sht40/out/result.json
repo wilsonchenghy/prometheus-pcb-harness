@@ -1,0 +1,221 @@
+{
+ "board": "env_sensor_bme280_sht40",
+ "script": "/home/user/prometheus-pcb-harness/boards/31_env_sensor_bme280_sht40/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 13,
+ "nets": 5,
+ "layers": 2,
+ "seconds": 2.5,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.195,
+  "check": 0.11,
+  "export": 1.6
+ },
+ "placement": {
+  "J1": [
+   10.0,
+   3.2,
+   0,
+   "F"
+  ],
+  "J2": [
+   10.0,
+   14.3,
+   180,
+   "F"
+  ],
+  "J3": [
+   2.5,
+   15.1,
+   0,
+   "F"
+  ],
+  "U3": [
+   9.6,
+   8.75,
+   90,
+   "F"
+  ],
+  "U1": [
+   19.5,
+   6.5,
+   0,
+   "F"
+  ],
+  "U2": [
+   20.0,
+   12.0,
+   0,
+   "F"
+  ],
+  "C1": [
+   6.2,
+   7.5,
+   180,
+   "F"
+  ],
+  "C2": [
+   6.2,
+   10.0,
+   180,
+   "F"
+  ],
+  "C3": [
+   17.9,
+   3.1,
+   90,
+   "F"
+  ],
+  "C4": [
+   21.1,
+   3.1,
+   90,
+   "F"
+  ],
+  "C5": [
+   21.0,
+   9.3,
+   0,
+   "F"
+  ],
+  "R1": [
+   22.5,
+   15.5,
+   0,
+   "F"
+  ],
+  "R2": [
+   17.5,
+   15.5,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via 3V3 at (9.50, 4.50) is 0.00 mm from J1.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via SCL at (20.50, 8.00) is 0.00 mm from U1.4 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via GND at (9.50, 7.75) is 0.00 mm from U3.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "U3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  }
+ ],
+ "lcsc_auto": {
+  "U2": "C2909890",
+  "C1": "C15849",
+  "C2": "C15849",
+  "C3": "C14663",
+  "C4": "C14663",
+  "C5": "C14663",
+  "R1": "C25804",
+  "R2": "C25804"
+ },
+ "lcsc_suggested": {},
+ "evidence": [
+  {
+   "ref": "C3",
+   "what": "BME280 VDD / VDDIO decoupling",
+   "value": "100n",
+   "url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+   "page": 39,
+   "quote": "The recommended value for C1, C2 is 100 nF",
+   "found": null
+  },
+  {
+   "ref": "C4",
+   "what": "BME280 VDD / VDDIO decoupling",
+   "value": "100n",
+   "url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+   "page": 39,
+   "quote": "The recommended value for C1, C2 is 100 nF",
+   "found": null
+  },
+  {
+   "ref": "C1",
+   "what": "LDO input / output capacitor",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "page": 2,
+   "quote": "1.0\u00b5F ceramic capacitor is selected as input/output",
+   "found": null
+  },
+  {
+   "ref": "C2",
+   "what": "LDO input / output capacitor",
+   "value": "1u",
+   "url": "https://www.diodes.com/assets/Datasheets/AP2112.pdf",
+   "page": 2,
+   "quote": "1.0\u00b5F ceramic capacitor is selected as input/output",
+   "found": null
+  },
+  {
+   "ref": "U1",
+   "what": "SDO to GND: address 0x76",
+   "value": "GND",
+   "url": "https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme280-ds002.pdf",
+   "page": 32,
+   "quote": "Connecting SDO to GND results in slave address",
+   "found": null
+  }
+ ],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/31_env_sensor_bme280_sht40/out/kicad8.zip"
+ }
+}

@@ -1,0 +1,208 @@
+{
+ "board": "ir_obstacle_lm393",
+ "script": "/home/user/prometheus-pcb-harness/boards/33_ir_obstacle_lm393/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "harness (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 13,
+ "nets": 8,
+ "layers": 2,
+ "seconds": 2.2,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.264,
+  "check": 0.04,
+  "export": 1.36
+ },
+ "placement": {
+  "D1": [
+   3.6,
+   13.0,
+   270,
+   "F"
+  ],
+  "Q1": [
+   3.6,
+   5.2,
+   270,
+   "F"
+  ],
+  "J1": [
+   29.4,
+   10.54,
+   0,
+   "F"
+  ],
+  "U1": [
+   17.0,
+   8.0,
+   0,
+   "F"
+  ],
+  "RV1": [
+   10.0,
+   8.0,
+   0,
+   "F"
+  ],
+  "R1": [
+   9.3,
+   13.1,
+   180,
+   "F"
+  ],
+  "R2": [
+   13.8,
+   2.9,
+   180,
+   "F"
+  ],
+  "R3": [
+   25.8,
+   10.35,
+   90,
+   "F"
+  ],
+  "R4": [
+   20.95,
+   13.95,
+   0,
+   "F"
+  ],
+  "R5": [
+   17.45,
+   2.0,
+   270,
+   "F"
+  ],
+  "C1": [
+   21.6,
+   10.0,
+   90,
+   "F"
+  ],
+  "D2": [
+   24.95,
+   13.95,
+   180,
+   "F"
+  ],
+  "D3": [
+   19.95,
+   2.05,
+   270,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via OUT at (25.50, 10.50) is 0.00 mm from R3.2 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VCC at (26.25, 9.75) is 0.00 mm from R3.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R3"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VCC at (10.25, 13.00) is 0.00 mm from R1.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R1"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "via neck",
+   "text": "via VCC at (20.00, 14.00) is 0.00 mm from R4.1 (keep 0.2 mm of track between them)",
+   "refs": [
+    "R4"
+   ],
+   "hint": "move the via off the pad, or route a short neck to it",
+   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
+  },
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for D1: left on the assembly layer",
+   "refs": [
+    "D1"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 13 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "Q1",
+    "D2"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "D1": "C264290",
+  "J1": "C2937625",
+  "RV1": "C36376",
+  "R1": "C22808",
+  "R2": "C25804",
+  "R3": "C25804",
+  "R4": "C21190",
+  "R5": "C21190",
+  "C1": "C14663",
+  "D3": "C2286"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/33_ir_obstacle_lm393/out/kicad8.zip"
+ }
+}

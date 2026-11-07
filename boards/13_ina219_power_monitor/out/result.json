@@ -1,0 +1,160 @@
+{
+ "board": "ina219_power_monitor",
+ "script": "/home/user/prometheus-pcb-harness/boards/13_ina219_power_monitor/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 12,
+ "nets": 10,
+ "layers": 2,
+ "seconds": 2.2,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.255,
+  "check": 0.04,
+  "export": 1.3
+ },
+ "placement": {
+  "J1": [
+   30.8,
+   3.9,
+   90,
+   "F"
+  ],
+  "J2": [
+   2.5,
+   10.2,
+   0,
+   "F"
+  ],
+  "U1": [
+   12.5,
+   6.4,
+   0,
+   "F"
+  ],
+  "R1": [
+   22.5,
+   6.4,
+   270,
+   "F"
+  ],
+  "C1": [
+   15.0,
+   2.1,
+   270,
+   "F"
+  ],
+  "C2": [
+   15.75,
+   11.0,
+   0,
+   "F"
+  ],
+  "R2": [
+   7.0,
+   6.5,
+   270,
+   "F"
+  ],
+  "R3": [
+   7.0,
+   2.5,
+   270,
+   "F"
+  ],
+  "R4": [
+   11.0,
+   1.5,
+   0,
+   "F"
+  ],
+  "R5": [
+   7.0,
+   10.5,
+   90,
+   "F"
+  ],
+  "R6": [
+   18.3,
+   8.4,
+   180,
+   "F"
+  ],
+  "R7": [
+   18.3,
+   5.0,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for J1: left on the assembly layer",
+   "refs": [
+    "J1"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
+  {
+   "severity": "info",
+   "kind": "holes",
+   "text": "no mounting holes",
+   "refs": [],
+   "hint": "b.hole((x, y), d=3.2)",
+   "why": "Mounting holes hold the board without stressing solder joints; they are easiest to plan before parts crowd the corners."
+  },
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "2 of 12 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "R4",
+    "R5"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "R1": "C840616",
+  "C1": "C14663",
+  "C2": "C14663",
+  "R2": "C25804",
+  "R3": "C25804",
+  "R6": "C22859",
+  "R7": "C22859"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/13_ina219_power_monitor/out/kicad8.zip"
+ }
+}

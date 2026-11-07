@@ -1,0 +1,170 @@
+{
+ "board": "ne555_pwm_dimmer",
+ "script": "/home/user/prometheus-pcb-harness/boards/02_ne555_pwm_dimmer/board.py",
+ "stage": "all",
+ "clean": true,
+ "kicad_drc": {
+  "run": true,
+  "version": "9.0.9",
+  "warnings": {}
+ },
+ "router": "freerouting (through KiCad) (routes/)",
+ "skipped": [],
+ "environment": {
+  "kicad": true,
+  "kicad_python": true,
+  "java": true,
+  "freerouting": true,
+  "build123d": true,
+  "schemdraw": true
+ },
+ "parts": 16,
+ "nets": 11,
+ "layers": 2,
+ "seconds": 2.4,
+ "timings": {
+  "routes/": 0.0,
+  "critic": 0.058,
+  "check": 0.05,
+  "export": 1.62
+ },
+ "placement": {
+  "J1": [
+   4.0,
+   8.5,
+   270,
+   "F"
+  ],
+  "J2": [
+   30.0,
+   13.0,
+   90,
+   "F"
+  ],
+  "U1": [
+   16.0,
+   8.5,
+   0,
+   "F"
+  ],
+  "RV1": [
+   16.0,
+   16.0,
+   0,
+   "F"
+  ],
+  "Q1": [
+   29.033,
+   23.833,
+   0,
+   "F"
+  ],
+  "R1": [
+   25.0,
+   7.5,
+   180,
+   "F"
+  ],
+  "R2": [
+   23.0,
+   4.0,
+   0,
+   "F"
+  ],
+  "R3": [
+   24.5,
+   23.5,
+   180,
+   "F"
+  ],
+  "R4": [
+   4.0,
+   13.5,
+   180,
+   "F"
+  ],
+  "C1": [
+   13.5,
+   4.0,
+   0,
+   "F"
+  ],
+  "C2": [
+   17.5,
+   4.0,
+   180,
+   "F"
+  ],
+  "C3": [
+   19.5,
+   12.0,
+   0,
+   "F"
+  ],
+  "C4": [
+   21.2,
+   8.95,
+   270,
+   "F"
+  ],
+  "D1": [
+   8.8,
+   17.2,
+   270,
+   "F"
+  ],
+  "D2": [
+   8.8,
+   22.9,
+   90,
+   "F"
+  ],
+  "D3": [
+   4.0,
+   16.0,
+   180,
+   "F"
+  ]
+ },
+ "findings": [],
+ "critic": [
+  {
+   "severity": "info",
+   "kind": "assembly",
+   "text": "1 of 16 parts have no LCSC number (JLCPCB assembly)",
+   "refs": [
+    "D3"
+   ],
+   "hint": "",
+   "why": "JLCPCB assembles only the parts it stocks, named by their LCSC number."
+  }
+ ],
+ "lcsc_auto": {
+  "J1": "C7509570",
+  "J2": "C7509570",
+  "RV1": "C116282",
+  "R1": "C21190",
+  "R2": "C22775",
+  "R3": "C25803",
+  "R4": "C23162",
+  "C1": "C57112",
+  "C2": "C57112",
+  "C3": "C14663",
+  "C4": "C15850",
+  "D1": "C83528",
+  "D2": "C83528"
+ },
+ "lcsc_suggested": {},
+ "evidence": [],
+ "files": {
+  "gerbers": "out/gerbers.zip",
+  "cpl": "out/cpl.csv",
+  "bom_jlc": "out/bom_jlc.csv",
+  "digikey": "out/cart/digikey.csv",
+  "mouser": "out/cart/mouser.csv",
+  "lcsc": "out/cart/lcsc.csv",
+  "html": "out/cart/buy.html",
+  "report": "out/report.html",
+  "kicad8": "/home/user/prometheus-pcb-harness/boards/02_ne555_pwm_dimmer/out/kicad8.zip"
+ }
+}
