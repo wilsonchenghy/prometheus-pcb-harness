@@ -63,4 +63,13 @@ See [CONVENTIONS.md](CONVENTIONS.md) for how the boards are made and the harness
 `out/render_3d.jpg` is KiCad 9's raytraced render of the exported board with each part's library 3D model:
 `pcb.kicad_models(board, model_dir)` fetches the models, then `kicad-cli pcb render --perspective` (as
 `pcb.render_kicad` does) with `KICAD9_3DMODEL_DIR` set to that folder. A part whose footprint names a model KiCad's
-library does not have is drawn as bare pads (issue #98 lists them).
+library does not have is drawn as bare pads: the RFM95W, the SHT40, the PAM8403 board's dual pot and the
+ESP32-C3 module.
+
+## Sized to their parts
+
+The outlines were first drawn generously, and the placer spreads parts over whatever outline it is given, so
+several boards were mostly bare board. Fourteen were shrunk to their parts (02, 04, 06-10, 12-14, 16, 25, 26, 31):
+parts' courtyards now cover 45-63 % of each board (36 % for the LED ring of 07, whose corners a ring leaves
+empty), against 13-44 % before, each still clean. `size_mm` in `req.json` is the most the board may be; the critic
+now warns when the parts cover under 20 % of it, or when an edge has more than about 4 mm of bare board.

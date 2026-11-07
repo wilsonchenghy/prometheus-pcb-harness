@@ -95,7 +95,7 @@ def build():
     # (the data and CC pins between them leave straight down)
     for pin, dx in (("A9", -2.2), ("A4", 2.2)):
         x, y = b.pad("J1", pin)
-        b.track("VBUS", "F", [(x, y), (x, y - 1.2), (x + dx, y - 3.0)], 0.52)
+        b.track("VBUS", "F", [(x, y), (x, y - 2.0), (x + dx, y - 3.0)], 0.52)   # (straight up 2 mm first: room for the GND pins beside it to leave)
         b.via("VBUS", (x + dx, y - 3.0), 0.4, 0.8)        # (the router takes it on from here, either layer:
         b.via("VBUS", (x + dx * 1.45, y - 3.0), 0.4, 0.8)  #  two 0.4 mm vias, ~2.7 A, for the 2 A; the second
         b.track("VBUS", "F", [(x + dx, y - 3.0), (x + dx * 1.45, y - 3.0)], 0.8)   #  outward, clear of C7,
