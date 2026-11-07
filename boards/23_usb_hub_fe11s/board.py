@@ -102,7 +102,8 @@ def build():
         b.track("VBUS", "B", [(x + dx, y - 3.0), (x + dx * 1.45, y - 3.0)], 0.8)   #  joined on both layers)
     b.track("VDD5", "F", [b.pad("U1", "20"), b.pad("C3", "1")], 0.2)   # (the chip's 5 V pin straight up into its
     #                                                                     decoupling cap: 0.9 mm, by hand)
-    tabs = [g.centroid for r, n, L, g, d in b.pad_shapes() if r == "J1" and n == "SH" and L == "F"]
+    tabs = [g.centroid for r, n, L, g, d in b.pad_shapes()    # (the shield's tabs: pad S1 in KiCad 9's library,
+            if r == "J1" and n in ("SH", "S1") and L == "F"]  #  SH in 10's)
     for pin in ("A1", "A12"):
         x, y = b.pad("J1", pin)
         t = min(tabs, key=lambda q: (q.x - x) ** 2 + (q.y - y) ** 2)

@@ -53,7 +53,8 @@ def build():
     b.track("VBUS", "F", [(bar, ya), (bar, yb)], 1.5)
     b.track("VBUS", "F", [(bar, yf), (xf, yf)], 1.5)
     # the GND pins straight into the shell's nearer front tab (plated, GND, through to the bottom pour)
-    tabs = [g.centroid for r, n, L, g, d in b.pad_shapes() if r == "J1" and n == "SH" and L == "F"]
+    tabs = [g.centroid for r, n, L, g, d in b.pad_shapes()    # (the shield's tabs: pad S1 in KiCad 9's library,
+            if r == "J1" and n in ("SH", "S1") and L == "F"]  #  SH in 10's)
     for pin in ("A1", "A12"):
         x, y = b.pad("J1", pin)
         t = min(tabs, key=lambda q: (q.x - x) ** 2 + (q.y - y) ** 2)
