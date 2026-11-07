@@ -2,7 +2,7 @@
  "board": "stm32f103_bluepill",
  "script": "/home/user/prometheus-pcb-harness/boards/19_stm32f103_bluepill/board.py",
  "stage": "all",
- "clean": false,
+ "clean": true,
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
@@ -21,12 +21,12 @@
  "parts": 35,
  "nets": 47,
  "layers": 2,
- "seconds": 369.6,
+ "seconds": 423.6,
  "timings": {
-  "place+route": 363.23,
-  "critic": 0.315,
-  "check": 0.53,
-  "export": 4.32
+  "place+route": 416.53,
+  "critic": 0.487,
+  "check": 0.33,
+  "export": 3.86
  },
  "placement": {
   "U1": [
@@ -240,133 +240,8 @@
    "F"
   ]
  },
- "findings": [
-  {
-   "stage": "routing",
-   "kind": "unreached",
-   "text": "route GND: could not reach U1.8 (blocked; move parts or widen a channel)",
-   "pins": [
-    "U1.8"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
-   "kind": "unreached",
-   "text": "route GND: could not reach Y1.4 (blocked; move parts or widen a channel)",
-   "pins": [
-    "Y1.4"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
-   "kind": "unreached",
-   "text": "route GND: could not reach U1.8 (blocked; move parts or widen a channel)",
-   "pins": [
-    "U1.8"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
-   "kind": "unreached",
-   "text": "route GND: could not reach Y1.4 (blocked; move parts or widen a channel)",
-   "pins": [
-    "Y1.4"
-   ],
-   "hint": "move the parts named apart or nearer, widen a channel, or route that net earlier (it fails first on the next pass)",
-   "why": "A net whose pads are not all joined by copper is an open circuit: the part on the missing pad never gets its signal."
-  },
-  {
-   "stage": "routing",
-   "kind": "split",
-   "text": "net GND is split in 3: U1.8 | Y1.4 | U1.23, U1.35, U1.47, J1.A1, J1.A12, J1.B1",
-   "pins": [
-    "J1.A1",
-    "J1.A12",
-    "J1.B1",
-    "U1.23",
-    "U1.35",
-    "U1.47",
-    "U1.8",
-    "Y1.4"
-   ],
-   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
-   "why": "A net in pieces is an open circuit between them."
-  },
-  {
-   "stage": "routing",
-   "kind": "drill",
-   "text": "via GND and J1 pad SH drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
-   "pins": [],
-   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
-   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
-   "at": [
-    7.5,
-    10.0
-   ]
-  },
-  {
-   "stage": "design",
-   "kind": "split",
-   "text": "net GND is split in 3: U1.8 | Y1.4 | U1.23, U1.35, U1.47, J1.A1, J1.A12, J1.B1",
-   "pins": [
-    "J1.A1",
-    "J1.A12",
-    "J1.B1",
-    "U1.23",
-    "U1.35",
-    "U1.47",
-    "U1.8",
-    "Y1.4"
-   ],
-   "hint": "the pins listed in different groups are not joined: route the net again or move parts",
-   "why": "A net in pieces is an open circuit between them."
-  },
-  {
-   "stage": "design",
-   "kind": "drill",
-   "text": "via GND and J1 pad SH drills 0.33 mm apart at (7.5, 10.0) (keep 0.5 mm)",
-   "pins": [],
-   "hint": "move the vias or holes apart, or use a larger drill (min_drill=)",
-   "why": "Holes below the fab's smallest drill cannot be made, and holes too close break into each other.",
-   "at": [
-    7.5,
-    10.0
-   ]
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on F.Cu, priority 2)",
-   "pins": [],
-   "hint": "read the text",
-   "why": ""
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "unconnected_items: Missing connection between items (Zone [GND] on F.Cu, priority 2; Zone [GND] on B.Cu, priority 1)",
-   "pins": [],
-   "hint": "read the text",
-   "why": ""
-  }
- ],
+ "findings": [],
  "critic": [
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via GND at (42.75, 19.50) is 0.00 mm from SW1.2 (keep 0.2 mm of track between them)",
-   "refs": [
-    "SW1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
   {
    "severity": "info",
    "kind": "holes",
