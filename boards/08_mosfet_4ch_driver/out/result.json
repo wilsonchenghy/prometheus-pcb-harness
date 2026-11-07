@@ -1,6 +1,6 @@
 {
  "board": "mosfet_4ch_driver",
- "script": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/08_mosfet_4ch_driver/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -21,12 +21,12 @@
  "parts": 31,
  "nets": 18,
  "layers": 2,
- "seconds": 3.8,
+ "seconds": 4.0,
  "timings": {
   "routes/": 0.0,
-  "critic": 0.405,
+  "critic": 0.458,
   "check": 0.1,
-  "export": 2.69
+  "export": 2.53
  },
  "placement": {
   "J1": [
@@ -61,7 +61,7 @@
   ],
   "J6": [
    39.85,
-   37.4,
+   27.4,
    90,
    "F"
   ],
@@ -84,27 +84,27 @@
    "F"
   ],
   "R1": [
-   24.4,
-   26.1,
+   26.0,
+   22.5,
    180,
    "F"
   ],
   "R5": [
-   17.333,
+   19.0,
    22.0,
-   180,
+   0,
    "F"
   ],
   "R9": [
-   31.5,
-   26.2,
-   180,
+   27.4,
+   25.3,
+   0,
    "F"
   ],
   "D5": [
-   28.0,
-   25.5,
-   90,
+   30.65,
+   26.0,
+   270,
    "F"
   ],
   "Q2": [
@@ -120,27 +120,27 @@
    "F"
   ],
   "R2": [
-   30.3,
-   33.0,
-   270,
-   "F"
-  ],
-  "R6": [
-   29.35,
-   22.05,
+   34.0,
+   27.0,
    180,
    "F"
   ],
+  "R6": [
+   30.5,
+   22.0,
+   0,
+   "F"
+  ],
   "R10": [
-   27.6,
-   33.2,
-   270,
+   23.5,
+   28.0,
+   180,
    "F"
   ],
   "D6": [
-   26.85,
-   29.8,
-   0,
+   20.0,
+   27.5,
+   90,
    "F"
   ],
   "Q3": [
@@ -156,27 +156,27 @@
    "F"
   ],
   "R3": [
-   42.65,
-   25.25,
+   47.0,
+   22.5,
    270,
    "F"
   ],
   "R7": [
-   41.6,
-   21.95,
-   180,
+   43.0,
+   22.0,
+   0,
    "F"
   ],
   "R11": [
-   42.6,
-   29.45,
-   270,
+   48.5,
+   18.5,
+   0,
    "F"
   ],
   "D7": [
-   39.95,
-   27.9,
-   90,
+   49.5,
+   22.0,
+   270,
    "F"
   ],
   "Q4": [
@@ -192,27 +192,27 @@
    "F"
   ],
   "R4": [
-   51.5,
-   24.85,
+   56.5,
+   26.5,
    270,
    "F"
   ],
   "R8": [
-   50.5,
-   19.45,
+   53.5,
+   22.5,
    180,
    "F"
   ],
   "R12": [
-   52.3,
-   28.4,
-   0,
+   59.0,
+   26.5,
+   270,
    "F"
   ],
   "D8": [
-   52.9,
-   31.7,
-   270,
+   59.0,
+   22.0,
+   90,
    "F"
   ]
  },
@@ -264,6 +264,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/08_mosfet_4ch_driver/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/08_mosfet_4ch_driver/out/kicad8.zip"
  }
 }
