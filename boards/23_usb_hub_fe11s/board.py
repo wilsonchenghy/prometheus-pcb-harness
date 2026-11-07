@@ -90,7 +90,7 @@ def build():
     b.pour("GND", "B", OUT)
     # round the SSOP on top too, so its ground pins drop into copper: it carries the chip's own return (well under
     # 0.1 A); the ports' 2 A comes back through the bottom pour
-    b.pour("GND", "F", [(31, 22), (47, 22), (47, 35.5), (31, 35.5)], amps=0.3)   # (short of the USB-C's feeds)
+    b.pour("GND", "F", [(31, 22), (47, 22), (47, 37.0), (31, 37.0)], amps=0.3)   # (short of the USB-C's feeds)
     # VBUS and GND off the receptacle's 0.5 mm-pitch pins by hand at 0.52 mm (2 A), each VBUS pin pair outward
     # (the data and CC pins between them leave straight down)
     for pin, dx in (("A9", -2.2), ("A4", 2.2)):
