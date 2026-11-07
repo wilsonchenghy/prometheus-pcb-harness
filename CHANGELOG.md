@@ -6,6 +6,9 @@ Found by building 26 boards (on branch claude/pcb-collection) and judging every 
 second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
 
 **Fixed**
+- FreeRouting's prep drew its straight stub out of a fine-pitch pin into a keep-out (an ESP32-C3 module's GND pins
+  into its own antenna keep-out, once KiCad 9's footprint made them read as fine-pitch pins). A stub that would
+  cross a keep-out is left to FreeRouting.
 - Footprints, symbols and 3D models were read from KiCad's library at `master`, which tracks KiCad 10 and keeps
   adding tokens KiCad 9 refuses (#98). They now come from the library release of the installed `kicad-cli`'s
   major (KiCad 9: the `9.0.9.1` tag; GitLab has no `9.0` branch), KiCad 9's when KiCad is not installed, and

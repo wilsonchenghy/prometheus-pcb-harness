@@ -2791,3 +2791,19 @@ def test_usb_c_vbus_feed_necks_only_at_the_pins(monkeypatch):
     assert necks and all(t.get("neck") and sum(math.dist(p, q) for p, q in zip(t["pts"], t["pts"][1:])) <= 2.5
                          for t in necks), necks
     assert sum(1 for t in vb if t["w"] >= b.net_width("VBUS") - 1e-6) >= 1
+
+
+def test_fine_pitch_escape_stubs_stay_out_of_keepouts():
+    """FreeRouting's prep draws a straight stub out of each fine-pitch pin: never into a keep-out (an antenna's)"""
+    import freerouting
+    import pcb
+    from shapely.geometry import LineString, Polygon
+    b = pcb.Board("esc_ko", [(0, 0), (20, 0), (20, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("U1", "Package_SO:TSSOP-8_3x3mm_P0.65mm", (10, 10), 0, "x")
+    for k in range(1, 9):
+        b.net(f"N{k}", [("U1", str(k))])
+    zone = [(0, 0), (9.0, 0), (9.0, 20), (0, 20)]            # (over the left pin row's way out)
+    b.keepout(zone, "FB", "antenna")
+    freerouting.escape_fine_pitch(b)
+    assert b.tracks                                       # (the right row's stubs are drawn)
+    assert not [t for t in b.tracks if LineString(t["pts"]).buffer(t["w"] / 2).intersects(Polygon(zone))]
