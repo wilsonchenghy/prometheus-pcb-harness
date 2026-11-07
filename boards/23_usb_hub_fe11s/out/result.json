@@ -6,9 +6,7 @@
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
-  "warnings": {
-   "track_dangling": 1
-  }
+  "warnings": {}
  },
  "router": "freerouting (through KiCad)",
  "skipped": [],
@@ -23,12 +21,12 @@
  "parts": 29,
  "nets": 25,
  "layers": 2,
- "seconds": 104.5,
+ "seconds": 173.8,
  "timings": {
-  "place+route": 99.15,
-  "critic": 0.196,
-  "check": 0.15,
-  "export": 4.26
+  "place+route": 167.8,
+  "critic": 0.169,
+  "check": 0.24,
+  "export": 4.49
  },
  "placement": {
   "J1": [
@@ -209,37 +207,27 @@
  "findings": [
   {
    "stage": "routing",
-   "kind": "clearance",
-   "text": "F.Cu: GND and VDD5 0.19 mm apart (clearance 0.2) at (40.1, 33.8)",
+   "kind": "current",
+   "text": "pour GND on F.Cu near (26.8, 12.0) has a neck narrower than 0.5 mm between its pads (2.0 A, 1.0 oz): widen it or add the other layer in parallel",
    "pins": [],
-   "hint": "copper of two nets too close: move or re-route, or check the clearance",
-   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "hint": "widen the track or pour, or set the net's width= / amps=",
+   "why": "A trace too narrow for its current heats up (IPC-2221 relates width, copper weight and temperature rise); too hot, it degrades or lifts.",
    "at": [
-    40.1,
-    33.8
+    26.8,
+    12.0
    ]
   },
   {
    "stage": "design",
-   "kind": "clearance",
-   "text": "F.Cu: GND and VDD5 0.19 mm apart (clearance 0.2) at (40.1, 33.8)",
+   "kind": "current",
+   "text": "pour GND on F.Cu near (26.8, 12.0) has a neck narrower than 0.5 mm between its pads (2.0 A, 1.0 oz): widen it or add the other layer in parallel",
    "pins": [],
-   "hint": "copper of two nets too close: move or re-route, or check the clearance",
-   "why": "Copper of two nets too close can short in manufacturing or arc at high voltage; the fab's minimum gap is the floor.",
+   "hint": "widen the track or pour, or set the net's width= / amps=",
+   "why": "A trace too narrow for its current heats up (IPC-2221 relates width, copper weight and temperature rise); too hot, it degrades or lifts.",
    "at": [
-    40.1,
-    33.8
+    26.8,
+    12.0
    ]
-  },
-  {
-   "stage": "kicad",
-   "kind": "other",
-   "text": "clearance: Clearance violation (netclass 'W0.52mm' clearance 0.2000 mm; actual 0.1875 mm) (Track [GND] on F.Cu, length 0.2500 mm; Track [VDD5] on F.Cu, length 1.6500 mm)",
-   "pins": [
-    "W0.52mm"
-   ],
-   "hint": "read the text",
-   "why": ""
   }
  ],
  "critic": [
