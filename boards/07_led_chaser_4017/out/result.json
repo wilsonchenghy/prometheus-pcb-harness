@@ -1,6 +1,6 @@
 {
  "board": "led_chaser_4017",
- "script": "/home/user/prometheus-pcb-harness/boards/07_led_chaser_4017/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/07_led_chaser_4017/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "harness (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,12 +21,12 @@
  "parts": 23,
  "nets": 19,
  "layers": 2,
- "seconds": 3.6,
+ "seconds": 33.5,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.099,
-  "check": 0.1,
-  "export": 2.91
+  "place+route": 30.09,
+  "critic": 0.106,
+  "check": 0.05,
+  "export": 2.12
  },
  "placement": {
   "J1": [
@@ -36,221 +36,140 @@
    "F"
   ],
   "U1": [
-   22.0,
-   29.0,
+   12.5,
+   21.0,
    90,
    "F"
   ],
   "U2": [
-   33.0,
-   28.0,
+   19.2,
+   21.0,
    0,
    "F"
   ],
   "RV1": [
-   22.0,
-   19.5,
+   28.0,
+   11.0,
    0,
    "F"
   ],
   "R1": [
-   17.55,
-   27.5,
-   270,
+   18.9,
+   12.05,
+   90,
    "F"
   ],
   "R2": [
-   17.55,
-   23.05,
-   270,
-   "F"
-  ],
-  "R3": [
-   34.7,
-   42.65,
+   20.0,
+   8.0,
    0,
    "F"
   ],
+  "R3": [
+   26.5,
+   21.0,
+   180,
+   "F"
+  ],
   "C1": [
-   21.1,
-   35.4,
+   30.5,
+   17.5,
    90,
    "F"
   ],
   "C2": [
-   24.75,
-   34.7,
-   0,
+   1.5,
+   22.5,
+   270,
    "F"
   ],
   "C3": [
-   26.7,
-   27.1,
-   90,
+   13.5,
+   14.5,
+   270,
    "F"
   ],
   "C4": [
-   34.7,
-   34.95,
+   18.45,
+   27.6,
    180,
    "F"
   ],
   "C5": [
-   17.2,
-   33.05,
-   90,
+   11.7,
+   26.2,
+   0,
    "F"
   ],
   "D11": [
-   4.95,
-   14.25,
-   270,
+   17.5,
+   4.5,
+   180,
    "F"
   ],
   "D1": [
-   28.0,
-   47.0,
+   16.0,
+   32.0,
    90,
    "F"
   ],
   "D2": [
-   39.17,
-   43.37,
+   22.47,
+   29.9,
    54,
    "F"
   ],
   "D3": [
-   46.07,
-   33.87,
+   26.46,
+   24.4,
    18,
    "F"
   ],
   "D4": [
-   46.07,
-   22.13,
+   26.46,
+   17.6,
    342,
    "F"
   ],
   "D5": [
-   39.17,
-   12.63,
+   22.47,
+   12.1,
    306,
    "F"
   ],
   "D6": [
-   28.0,
-   9.0,
+   16.0,
+   10.0,
    270,
    "F"
   ],
   "D7": [
-   16.83,
-   12.63,
+   9.53,
+   12.1,
    234,
    "F"
   ],
   "D8": [
-   9.93,
-   22.13,
+   5.54,
+   17.6,
    198,
    "F"
   ],
   "D9": [
-   9.93,
-   33.87,
+   5.54,
+   24.4,
    162,
    "F"
   ],
   "D10": [
-   16.83,
-   43.37,
+   9.53,
+   29.9,
    126,
    "F"
   ]
  },
  "findings": [],
- "critic": [
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via GND at (34.65, 35.67) is 0.16 mm from C4.2 (keep 0.2 mm of track between them)",
-   "refs": [
-    "C4"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via GND at (34.60, 43.37) is 0.19 mm from R3.1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "R3"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via Q7 at (29.75, 25.75) is 0.00 mm from U2.6 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via Q5 at (30.00, 32.25) is 0.00 mm from U2.1 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via Q9 at (34.50, 26.50) is 0.00 mm from U2.11 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via Q8 at (34.75, 23.25) is 0.00 mm from U2.9 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VCC at (20.00, 31.50) is 0.00 mm from U1.8 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via VCC at (24.00, 26.50) is 0.00 mm from U1.4 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  }
- ],
+ "critic": [],
  "lcsc_auto": {
   "J1": "C7509570",
   "RV1": "C51284",
@@ -285,6 +204,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/07_led_chaser_4017/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/07_led_chaser_4017/out/kicad8.zip"
  }
 }
