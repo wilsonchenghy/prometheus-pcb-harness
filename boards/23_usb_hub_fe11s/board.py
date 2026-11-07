@@ -88,6 +88,7 @@ def build():
     b.nc("U1", "PWRJ", "DRV", "LED1/EESCL", "LED2", "TESTJ/EESDA")
     b.nc("J1", "SBU1", "SBU2")
     b.pour("GND", "B", OUT)
+    b.pour("GND", "F", OUT)                              # (the top too: the SSOP's ground pins drop into copper)
     # VBUS and GND off the receptacle's 0.5 mm-pitch pins by hand at 0.52 mm (2 A), each VBUS pin pair outward
     # (the data and CC pins between them leave straight down)
     for pin, dx in (("A9", -2.2), ("A4", 2.2)):
