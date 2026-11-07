@@ -2672,6 +2672,10 @@ def route_board(board: Board, router: str = "freerouting", **kw) -> List[str]:
         tune_pairs(board)
         probs = [p_ for p_ in probs if not p_.startswith("pair ")] + \
             [p_ for p_ in board.check() if p_.startswith("pair ")]
+    if any(" drills " in p_ for p_ in board.check()):  # (a via the passes since the nudge left against a drill:
+        nudge_vias(board)                                #  parted once more, as the check holds it)
+        neck_vias(board)
+        probs = [p_ for p_ in probs if " drills " not in p_] + [p_ for p_ in board.check() if " drills " in p_]
     return probs
 
 
@@ -3659,7 +3663,7 @@ def _drill_gap(at, drill: float, w: dict) -> float:
     return math.hypot(at[0] - w["at"][0], at[1] - w["at"][1]) - drill / 2 - w["drill"] / 2
 
 
-def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -> List[str]:
+def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.3) -> List[str]:
     """vias closer than ``gap`` (default: the board's ``hole_gap``; a house's rule, e.g. 0.5 mm for JLCPCB, tightens
     it) to another via of another net or to a part's own drill (a pin's hole, an exposed pad's thermal via, a bare
     hole), as a router that does not know the drill gap leaves them: the via (the one with fewer tracks on it, of
@@ -3669,7 +3673,8 @@ def nudge_vias(board: Board, gap: Optional[float] = None, reach: float = 0.15) -
     from shapely.geometry import LineString, Point
     from shapely.ops import unary_union
     gap = board.hole_gap if gap is None else gap
-    same = 0.254                                         # (one net's drills: the houses' same-net gap)
+    same = gap                                           # (one net's drills too: the check holds every pair of drills
+    #                                                      to the hole gap - the web between them, whatever their nets)
     left: List[str] = []
 
     def ends(v):
@@ -3787,7 +3792,7 @@ def neck_vias(board: Board, neck: Optional[float] = None, width: float = 0.2, re
                    for L, sg, w in segs):
                 return False
             return all(_drill_gap(at, v["drill"], w)
-                       >= (board.hole_gap if w["net"] != v["net"] else 0.254) - 1e-6
+                       >= board.hole_gap - 1e-6
                        for w in board.vias + holes if w is not v)
         a0 = math.atan2(v["at"][1] - pad_at[1], v["at"][0] - pad_at[0])   # straight off the pad first, then turning
         tries = [(round(v["at"][0] + r * math.cos(a0 + da), 4), round(v["at"][1] + r * math.sin(a0 + da), 4))
