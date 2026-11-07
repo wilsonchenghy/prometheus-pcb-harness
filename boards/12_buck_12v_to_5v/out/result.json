@@ -1,6 +1,6 @@
 {
  "board": "buck_12v_to_5v",
- "script": "/home/user/prometheus-pcb-harness/boards/12_buck_12v_to_5v/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/12_buck_12v_to_5v/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad) (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,58 +21,58 @@
  "parts": 19,
  "nets": 9,
  "layers": 2,
- "seconds": 2.8,
+ "seconds": 23.2,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.588,
-  "check": 0.06,
-  "export": 1.65
+  "place+route": 19.76,
+  "critic": 0.703,
+  "check": 0.04,
+  "export": 1.83
  },
  "placement": {
   "J1": [
    5.3,
-   14.0,
+   15.0,
    270,
    "F"
   ],
   "J2": [
-   44.7,
-   18.0,
+   40.2,
+   13.5,
    90,
    "F"
   ],
   "U1": [
-   22.0,
+   21.0,
    14.0,
    0,
    "F"
   ],
   "C2": [
-   17.2,
+   16.2,
    15.25,
    90,
    "F"
   ],
   "C1": [
-   14.4,
+   13.4,
    15.25,
    90,
    "F"
   ],
   "C3": [
-   26.6,
+   25.6,
    15.25,
    90,
    "F"
   ],
   "C4": [
-   26.6,
+   25.6,
    12.2,
    270,
    "F"
   ],
   "L1": [
-   31.5,
+   30.5,
    18.0,
    0,
    "F"
@@ -84,63 +84,63 @@
    "F"
   ],
   "C6": [
-   31.5,
+   30.5,
    12.0,
    180,
    "F"
   ],
   "C7": [
-   31.5,
+   30.5,
    8.6,
    180,
    "F"
   ],
   "C8": [
-   31.5,
+   30.5,
    5.199999999999999,
    180,
    "F"
   ],
   "C9": [
-   36.8,
-   12.0,
+   35.8,
+   8.6,
    0,
    "F"
   ],
   "R1": [
-   25.5,
-   8.5,
-   180,
+   23.75,
+   7.8,
+   90,
    "F"
   ],
   "R2": [
-   22.0,
+   21.0,
    8.5,
    270,
    "F"
   ],
   "R3": [
-   25.2,
-   19.1,
+   23.0,
+   4.0,
    180,
    "F"
   ],
   "R4": [
-   43.9,
-   12.95,
-   180,
-   "F"
-  ],
-  "D1": [
-   42.3,
-   9.9,
+   36.5,
+   5.0,
    0,
    "F"
   ],
-  "TP1": [
-   20.8,
-   19.35,
+  "D1": [
+   41.0,
+   8.0,
    180,
+   "F"
+  ],
+  "TP1": [
+   18.5,
+   19.5,
+   270,
    "F"
   ]
  },
@@ -149,11 +149,10 @@
   {
    "severity": "warning",
    "kind": "label",
-   "text": "no room on the silkscreen for C3, C6, U1: left on the assembly layer",
+   "text": "no room on the silkscreen for J2, L1: left on the assembly layer",
    "refs": [
-    "C3",
-    "C6",
-    "U1"
+    "J2",
+    "L1"
    ],
    "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
    "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
@@ -227,6 +226,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/12_buck_12v_to_5v/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/12_buck_12v_to_5v/out/kicad8.zip"
  }
 }

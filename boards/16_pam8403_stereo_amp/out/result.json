@@ -1,6 +1,6 @@
 {
  "board": "pam8403_stereo_amp",
- "script": "/home/user/prometheus-pcb-harness/boards/16_pam8403_stereo_amp/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/16_pam8403_stereo_amp/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -8,7 +8,7 @@
   "version": "9.0.9",
   "warnings": {}
  },
- "router": "freerouting (through KiCad) (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,137 +21,147 @@
  "parts": 20,
  "nets": 18,
  "layers": 2,
- "seconds": 3.2,
+ "seconds": 9.6,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.127,
-  "check": 0.07,
-  "export": 2.53
+  "place+route": 6.5,
+  "critic": 0.319,
+  "check": 0.05,
+  "export": 1.99
  },
  "placement": {
   "J1": [
-   46.8,
+   36.8,
    8.0,
    90,
    "F"
   ],
   "J2": [
    3.1,
-   20.0,
+   12.0,
    270,
    "F"
   ],
   "RV1": [
    12.0,
-   35.0,
+   23.5,
    270,
    "F"
   ],
   "U1": [
-   25.0,
-   17.0,
+   22.0,
+   14.0,
    270,
    "F"
   ],
   "J3": [
-   43.0,
-   37.2,
+   27.0,
+   25.7,
    0,
    "F"
   ],
   "J4": [
-   34.0,
-   37.2,
+   18.0,
+   25.7,
    0,
    "F"
   ],
   "SW1": [
-   24.0,
+   21.0,
    2.6,
    180,
    "F"
   ],
   "C1": [
-   16.2,
-   22.55,
-   270,
+   14.0,
+   16.5,
+   0,
    "F"
   ],
   "C2": [
-   15.55,
-   17.05,
+   14.0,
+   12.5,
    0,
    "F"
   ],
   "C3": [
-   23.1,
-   22.3,
+   20.1,
+   19.3,
    90,
    "F"
   ],
   "C4": [
-   20.5,
-   22.3,
+   17.5,
+   19.3,
    90,
    "F"
   ],
   "C5": [
-   25.6,
-   22.5,
+   22.6,
+   19.5,
    90,
    "F"
   ],
   "C6": [
-   38.35,
-   15.45,
+   34.5,
+   18.5,
    0,
    "F"
   ],
   "C8": [
-   25.6,
-   11.5,
+   22.6,
+   8.5,
    90,
    "F"
   ],
   "R1": [
-   37.6,
-   6.95,
-   180,
+   37.75,
+   15.5,
+   0,
    "F"
   ],
   "R2": [
-   37.25,
-   9.75,
-   180,
+   33.5,
+   15.5,
+   0,
    "F"
   ],
   "R3": [
-   36.95,
-   19.15,
-   90,
-   "F"
-  ],
-  "R4": [
-   24.75,
-   7.85,
+   19.0,
+   8.5,
    180,
    "F"
   ],
+  "R4": [
+   27.5,
+   4.5,
+   270,
+   "F"
+  ],
   "R5": [
-   28.6,
-   10.75,
-   90,
+   26.5,
+   8.0,
+   180,
    "F"
   ],
   "D1": [
-   39.5,
-   19.2,
-   90,
+   15.0,
+   8.5,
+   0,
    "F"
   ]
  },
  "findings": [],
  "critic": [
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for RV1: left on the assembly layer",
+   "refs": [
+    "RV1"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
   {
    "severity": "info",
    "kind": "assembly",
@@ -222,6 +232,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/16_pam8403_stereo_amp/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/16_pam8403_stereo_amp/out/kicad8.zip"
  }
 }

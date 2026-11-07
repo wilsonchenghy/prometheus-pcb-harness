@@ -5,7 +5,7 @@ ferrite bead (FB1, FB2) to the chip, 10 nF across T+ / T- right at the pins (the
 MAX31855KASA+ (SOIC-8) on 3.3 V from an AP2112K-3.3 LDO fed with 5 V; 100 nF VCC decoupling; 10 k pull-up keeps /CS
 deselected. 1x06 2.54 mm header J2: 1 SO, 2 /CS, 3 SCK, 4 3V3 (out, up to ~500 mA spare), 5 GND, 6 VIN (5 V).
 SPI logic is 3.3 V: a 5 V host needs level shifting on SCK and /CS (the inputs are not 5 V tolerant).
-Difficulty: 3/5. 2 layers, 1 oz, 30 x 20 mm, JLCPCB, GND poured on both sides (the GND pin is the chip's thermal
+Difficulty: 3/5. 2 layers, 1 oz, 25.5 x 17 mm, JLCPCB, GND poured on both sides (the GND pin is the chip's thermal
 path to the board: the cold-junction sensor reads the board's temperature by the terminal, so U1 sits next to J1).
 
 Thermocouple colours: ANSI K: yellow = T+ (chromel), red = T- (alumel). Wire yellow to J1 pin 2, red to J1 pin 1.
@@ -23,24 +23,26 @@ Assumptions (datasheets not fetched in this run, values from memory):
 from pcb import Board
 
 R06, C06, L06 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric", "Inductor_SMD:L_0603_1608Metric"
-W, H = 30.0, 20.0
+W, H = 25.5, 17.0
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
-UX, UY = 17.5, 10.0
+UX, UY = 17.5, 9.0
 FIXED = {"FB2": ((10.4, UY + 0.9), 0),          # T- ferrite
          "FB1": ((10.4, UY - 0.9), 0),          # T+ ferrite
          "C2": ((13.0, UY), 90),                # 10 nF across T+ (pad 1, below) / T- (pad 2), by pins 2 / 3
-         "C1": ((14.5, UY - 3.5), 0)}           # VCC 100 nF by pin 4
+         "C1": ((14.5, UY - 3.5), 0),           # VCC 100 nF by pin 4
+         "C3": ((15.7, 2.4), 90),               # LDO input 1 uF by U2 pin 1 (VIN)
+         "C4": ((19.6, 5.2), 0)}                # LDO output 1 uF by U2 pin 5 (VOUT), between U2 and U1
 
 
 def build():
     b = Board("max31855_thermocouple", OUT, thickness=1.6, copper_oz=1.0, rules="jlcpcb-2", corner_r=1.0)
     b.place("J1", "TerminalBlock_Phoenix:TerminalBlock_Phoenix_PT-1,5-2-3.5-H_1x02_P3.50mm_Horizontal",
             (5.2, UY + 1.75), 270, "1 T- / 2 T+", "Phoenix 1984617")
-    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical", (W - 2.5, 16.35), 0, "SPI",
+    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x06_P2.54mm_Vertical", (W - 2.5, H - 1.9), 0, "SPI",
             "XFCN PZ254V-11-06P", lcsc="C492405")
     b.place("U1", None, (UX, UY), 0, "MAX31855K", "Analog Devices MAX31855KASA+T",
             symbol="Sensor_Temperature:MAX31855KASA", lcsc="C52028")
-    b.place("U2", None, (23.0, 4.0), 0, "AP2112K-3.3", "Diodes AP2112K-3.3TRG1", symbol="Regulator_Linear:AP2112K-3.3",
+    b.place("U2", None, (19.0, 2.4), 0, "AP2112K-3.3", "Diodes AP2112K-3.3TRG1", symbol="Regulator_Linear:AP2112K-3.3",
             lcsc="C51118")
     for ref, fp, val, mpn, note in (
             ("FB1", L06, "220R@100MHz", "Murata BLM18PG221SN1D", "T+ ferrite"),

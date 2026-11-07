@@ -1,4 +1,4 @@
-{"size_mm": [36, 20], "layers": 2, "house": "jlcpcb-2",
+{"size_mm": [36, 13], "layers": 2, "house": "jlcpcb-2",
  "nets": {"VIN+": {"amps": 3.2}, "VIN-": {"amps": 3.2}},
  "near": [["C1", "U1", 3.0], ["C2", "U1", 4.0], ["R6", "U1", 4.0], ["R7", "U1", 4.0]],
  "edge": ["J1", "J2"]}

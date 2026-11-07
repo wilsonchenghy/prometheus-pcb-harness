@@ -1,3 +1,3 @@
-{"size_mm": [56, 46], "layers": 2, "house": "jlcpcb-2",
+{"size_mm": [48, 41.5], "layers": 2, "house": "jlcpcb-2",
  "nets": {"NO1": {"amps": 5}, "COM1": {"amps": 5}, "NC1": {"amps": 5}, "NO2": {"amps": 5}, "COM2": {"amps": 5}, "NC2": {"amps": 5}},
  "edge": ["J1", "J2", "J3", "J4"], "holes": {"count": 3, "d": 3.2}}

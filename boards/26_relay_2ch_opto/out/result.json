@@ -1,6 +1,6 @@
 {
  "board": "relay_2ch_opto",
- "script": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/26_relay_2ch_opto/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -21,149 +21,160 @@
  "parts": 22,
  "nets": 22,
  "layers": 2,
- "seconds": 10.7,
+ "seconds": 14.8,
  "timings": {
-  "place+route": 7.24,
-  "critic": 0.015,
-  "check": 0.07,
-  "export": 2.61
+  "place+route": 10.67,
+  "critic": 0.618,
+  "check": 0.04,
+  "export": 2.19
  },
  "placement": {
   "J1": [
    2.6,
-   13.0,
+   23.4,
    0,
    "F"
   ],
   "J2": [
    2.6,
-   32.0,
+   32.5,
    0,
    "F"
   ],
   "K1": [
-   21.0,
-   33.0,
+   19.0,
+   25.2,
    0,
    "F"
   ],
   "J3": [
-   52.0,
-   30.0,
+   44.0,
+   22.2,
    90,
    "F"
   ],
   "U1": [
-   11.0,
-   33.0,
+   10.0,
+   25.2,
    0,
    "F"
   ],
   "Q1": [
-   13.2,
-   25.9,
-   0,
+   17.5,
+   36.5,
+   270,
    "F"
   ],
   "D1": [
-   14.6,
-   20.75,
-   90,
-   "F"
-  ],
-  "D3": [
-   7.3,
-   21.45,
-   270,
-   "F"
-  ],
-  "R11": [
-   5.7,
-   38.2,
+   14.0,
+   20.0,
    0,
    "F"
   ],
-  "R12": [
-   17.0,
-   27.65,
+  "D3": [
+   7.2,
+   33.9,
+   0,
+   "F"
+  ],
+  "R11": [
+   6.5,
+   30.5,
    270,
    "F"
   ],
+  "R12": [
+   13.5,
+   36.5,
+   90,
+   "F"
+  ],
   "R13": [
-   8.65,
-   27.05,
+   17.0,
+   40.5,
    180,
    "F"
   ],
   "R14": [
-   3.8,
-   20.75,
-   0,
+   10.5,
+   35.5,
+   90,
    "F"
   ],
   "K2": [
-   21.0,
-   12.0,
+   19.0,
+   8.5,
    0,
    "F"
   ],
   "J4": [
-   52.0,
-   9.0,
+   44.0,
+   5.5,
    90,
    "F"
   ],
   "U2": [
-   11.0,
-   12.0,
+   10.0,
+   8.5,
    0,
    "F"
   ],
   "Q2": [
-   11.3,
-   3.2,
+   9.0,
+   14.0,
    0,
    "F"
   ],
   "D2": [
-   17.45,
-   1.9,
+   14.0,
+   3.5,
    0,
    "F"
   ],
   "D4": [
-   11.85,
-   38.6,
-   90,
-   "F"
-  ],
-  "R21": [
-   6.2,
-   16.55,
+   10.0,
+   30.5,
    0,
    "F"
   ],
-  "R22": [
-   15.0,
-   6.6,
+  "R21": [
+   3.0,
+   10.5,
    270,
    "F"
   ],
-  "R23": [
-   9.55,
-   6.7,
+  "R22": [
+   9.0,
+   3.5,
    180,
    "F"
   ],
-  "R24": [
-   9.0,
-   38.8,
+  "R23": [
+   8.0,
+   18.5,
    90,
+   "F"
+  ],
+  "R24": [
+   13.5,
+   31.5,
+   270,
    "F"
   ]
  },
  "findings": [],
  "critic": [
+  {
+   "severity": "warning",
+   "kind": "label",
+   "text": "no room on the silkscreen for J3, K2: left on the assembly layer",
+   "refs": [
+    "J3",
+    "K2"
+   ],
+   "hint": "move the part (or its neighbours) to leave a label's height clear beside it; autoplace keeps that room for the parts it places",
+   "why": "An assembler and anyone debugging the board find a part by the reference printed beside it; one left off the silkscreen has to be looked up in the drawings."
+  },
   {
    "severity": "info",
    "kind": "assembly",
@@ -207,6 +218,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/26_relay_2ch_opto/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a2ef5724143df3688/boards/26_relay_2ch_opto/out/kicad8.zip"
  }
 }
