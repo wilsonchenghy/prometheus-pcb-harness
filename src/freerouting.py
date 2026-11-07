@@ -326,6 +326,14 @@ def route_kicad(board, passes: int = 100, finish: bool = True, keep: Optional[st
     return _repair(board, fr_t, fr_v, pcb.autoroute(board, **kw), kw)
 
 
+def _drawn_from(board, net, L, g) -> bool:
+    """a track of the net that the script drew itself has an end on this pad"""
+    from shapely.geometry import Point
+    pad = g.buffer(1e-3)
+    return any(t.get("user") and t["net"] == net and t["layer"] == L and t["pts"] and
+               (pad.contains(Point(t["pts"][0])) or pad.contains(Point(t["pts"][-1]))) for t in board.tracks)
+
+
 def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: float = 1.05) -> int:
     """the first stretch out of each pin of a fine-pitch part (pins closer than 0.8 mm), drawn before FreeRouting:
     a straight track off the pin's outer end, alternately short and long, so every turn happens clear of the
@@ -367,7 +375,9 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
                 low_[net] = board.pin_loads(net)
             if (ref, num) in low_[net] and net not in poured:   # (a low-current branch: the harness's own router
                 continue                                  #  draws it, way out and all, at its width)
-            x0_, y0_, x1_, y1_ = g.bounds
+            if _drawn_from(board, net, L, g):
+                continue                                  # (copper the script drew already leaves this pin: a stub
+            x0_, y0_, x1_, y1_ = g.bounds                 #  beside it would only crowd its neighbours)
             cx, cy = g.centroid.x, g.centroid.y
             dx, dy = cx - ox, cy - oy
             if max(x1_ - x0_, y1_ - y0_) < 1.5 * min(x1_ - x0_, y1_ - y0_):
