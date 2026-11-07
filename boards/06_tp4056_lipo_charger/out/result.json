@@ -1,6 +1,6 @@
 {
  "board": "tp4056_lipo_charger",
- "script": "/home/user/prometheus-pcb-harness/boards/06_tp4056_lipo_charger/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/06_tp4056_lipo_charger/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
@@ -23,17 +23,17 @@
  "parts": 18,
  "nets": 16,
  "layers": 2,
- "seconds": 46.5,
+ "seconds": 14.4,
  "timings": {
-  "place+route": 43.99,
-  "critic": 0.07,
-  "check": 0.06,
-  "export": 1.68
+  "route": 11.37,
+  "critic": 0.093,
+  "check": 0.07,
+  "export": 1.84
  },
  "placement": {
   "J1": [
    3.2,
-   11.0,
+   9.0,
    270,
    "F"
   ],
@@ -92,15 +92,15 @@
    "F"
   ],
   "R2": [
-   14.5,
-   17.2,
-   180,
+   23.3,
+   15.6,
+   0,
    "F"
   ],
   "R3": [
-   19.5,
-   17.2,
-   180,
+   30.3,
+   15.6,
+   0,
    "F"
   ],
   "R4": [
@@ -117,7 +117,7 @@
   ],
   "R6": [
    5.0,
-   17.6,
+   15.8,
    0,
    "F"
   ],
@@ -128,14 +128,14 @@
    "F"
   ],
   "D1": [
-   14.5,
-   19.5,
+   19.8,
+   15.6,
    0,
    "F"
   ],
   "D2": [
-   19.5,
-   19.5,
+   26.8,
+   15.6,
    0,
    "F"
   ]
@@ -148,16 +148,6 @@
    "text": "via OD at (22.90, 10.75) is 0.10 mm from U2.1 (keep 0.2 mm of track between them)",
    "refs": [
     "U2"
-   ],
-   "hint": "move the via off the pad, or route a short neck to it",
-   "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
-  },
-  {
-   "severity": "warning",
-   "kind": "via neck",
-   "text": "via CHRG at (14.75, 12.00) is 0.00 mm from U1.7 (keep 0.2 mm of track between them)",
-   "refs": [
-    "U1"
    ],
    "hint": "move the via off the pad, or route a short neck to it",
    "why": "A via right against a pad of its own net drinks the pad's solder in reflow: the joint starves and a small part can tombstone. A short neck of track between them keeps the solder on the pad."
@@ -209,6 +199,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/06_tp4056_lipo_charger/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/06_tp4056_lipo_charger/out/kicad8.zip"
  }
 }

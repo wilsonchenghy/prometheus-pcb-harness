@@ -1,14 +1,16 @@
 {
  "board": "lm317_adjustable",
- "script": "/home/user/prometheus-pcb-harness/boards/04_lm317_adjustable/board.py",
+ "script": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/04_lm317_adjustable/board.py",
  "stage": "all",
  "clean": true,
  "kicad_drc": {
   "run": true,
   "version": "9.0.9",
-  "warnings": {}
+  "warnings": {
+   "silk_overlap": 1
+  }
  },
- "router": "harness (routes/)",
+ "router": "freerouting (through KiCad)",
  "skipped": [],
  "environment": {
   "kicad": true,
@@ -21,101 +23,101 @@
  "parts": 15,
  "nets": 6,
  "layers": 2,
- "seconds": 3.0,
+ "seconds": 9.0,
  "timings": {
-  "routes/": 0.0,
-  "critic": 0.146,
-  "check": 0.08,
-  "export": 2.14
+  "place+route": 6.05,
+  "critic": 0.16,
+  "check": 0.06,
+  "export": 1.92
  },
  "placement": {
   "J1": [
    15.0,
-   20.0,
+   17.0,
    0,
    "F"
   ],
   "J2": [
-   50.7,
-   17.5,
+   38.7,
+   13.0,
    90,
    "F"
   ],
   "U1": [
-   30.0,
-   22.0,
+   23.0,
+   17.0,
    0,
    "F"
   ],
   "D1": [
-   21.35,
-   28.65,
-   180,
+   19.0,
+   5.0,
+   0,
    "F"
   ],
   "D2": [
-   42.0,
-   24.2,
-   270,
+   27.5,
+   5.0,
+   0,
    "F"
   ],
   "D3": [
-   32.85,
-   9.85,
+   21.5,
+   32.0,
    180,
    "F"
   ],
   "RV1": [
-   25.6,
-   4.4,
+   14.0,
+   26.5,
    0,
    "F"
   ],
   "R1": [
-   32.6,
-   13.95,
-   180,
+   25.5,
+   22.667,
+   90,
    "F"
   ],
   "R2": [
-   25.0,
-   34.25,
-   180,
-   "F"
-  ],
-  "C1": [
-   41.9,
-   29.05,
-   90,
-   "F"
-  ],
-  "C2": [
-   34.7,
-   27.5,
-   90,
-   "F"
-  ],
-  "C3": [
-   24.5,
-   22.0,
-   180,
-   "F"
-  ],
-  "C4": [
-   41.9,
-   11.3,
-   270,
-   "F"
-  ],
-  "C5": [
-   32.667,
-   18.0,
+   28.9,
+   31.167,
    0,
    "F"
   ],
+  "C1": [
+   9.0,
+   5.0,
+   0,
+   "F"
+  ],
+  "C2": [
+   26.5,
+   12.5,
+   0,
+   "F"
+  ],
+  "C3": [
+   20.967,
+   11.9,
+   0,
+   "F"
+  ],
+  "C4": [
+   34.0,
+   25.5,
+   0,
+   "F"
+  ],
+  "C5": [
+   21.5,
+   22.5,
+   90,
+   "F"
+  ],
   "D4": [
-   11.25,
-   34.8,
+   40.233,
+   25.5,
    0,
    "F"
   ]
@@ -170,6 +172,6 @@
   "lcsc": "out/cart/lcsc.csv",
   "html": "out/cart/buy.html",
   "report": "out/report.html",
-  "kicad8": "/home/user/prometheus-pcb-harness/boards/04_lm317_adjustable/out/kicad8.zip"
+  "kicad8": "/home/user/prometheus-pcb-harness/.claude/worktrees/agent-a78bad184b387eade/boards/04_lm317_adjustable/out/kicad8.zip"
  }
 }
