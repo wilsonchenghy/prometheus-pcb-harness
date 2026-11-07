@@ -55,10 +55,76 @@ def _kicad_on_path():
 
 _kicad_on_path()
 
-KICAD_FP_RAW = "https://gitlab.com/kicad/libraries/kicad-footprints/-/raw/master/"
+KICAD_LIB_URL = "https://gitlab.com/kicad/libraries/"   # (kicad-footprints, kicad-symbols, kicad-packages3D)
+KICAD_LIB_TAGS = {9: "9.0.9.1", 10: "10.0.8"}           # (each KiCad major's newest library release; GitLab keeps
+KICAD_LIB_DEFAULT = 9                                    #  them as tags, there is no 9.0 branch. master tracks the
+                                                         #  next KiCad, whose new tokens the installed one refuses)
+
+
+PAD_RENAMED = {"SH": "S1", "S1": "SH"}                  # (pad numbers KiCad's library changed between releases: a
+                                                         #  USB-C shield is S1 in KiCad 9's, SH in KiCad 10's; a
+                                                         #  script written against either finds its pad in both)
+
+
+def kicad_lib_ref() -> str:
+    """the KiCad library release footprints, symbols and 3D models are read from: the one of the installed
+    ``kicad-cli``'s major (KiCad 9 -> "9.0.9.1"), KiCad 9's when there is no KiCad (the format the export writes),
+    master for a KiCad newer than any listed; ``$PROMETHEUS_KICAD_LIB`` names another tag or branch"""
+    import os
+    env = os.environ.get("PROMETHEUS_KICAD_LIB", "").strip()
+    if env:
+        return env
+    return _kicad_lib_ref_installed()
+
+
+@__import__("functools").lru_cache(maxsize=None)        # (kicad-cli takes 0.2 s to answer: asked once a run)
+def _kicad_lib_ref_installed() -> str:
+    m = re.match(r"(\d+)\.", kicad_version() or "")
+    major = int(m.group(1)) if m else KICAD_LIB_DEFAULT
+    if major in KICAD_LIB_TAGS:
+        return KICAD_LIB_TAGS[major]
+    return "master" if major > max(KICAD_LIB_TAGS) else KICAD_LIB_TAGS[KICAD_LIB_DEFAULT]
+
+
+def kicad_lib_get(repo: str, path: str, timeout: float = 60) -> Tuple[bytes, str]:
+    """a file of KiCad's library ``repo`` ("kicad-footprints", ...) at ``kicad_lib_ref()``, else at master when that
+    release lacks it (a part added since): (its bytes, the ref it came from). A 404 at both raises urllib's
+    HTTPError; GitLab's 429 to a burst is waited out"""
+    import time
+    import urllib.error
+    import urllib.parse
+    import urllib.request
+    ref = kicad_lib_ref()
+    for r in dict.fromkeys([ref, "master"]):
+        url = f"{KICAD_LIB_URL}{repo}/-/raw/{urllib.parse.quote(r)}/{urllib.parse.quote(path)}"
+        for attempt in range(6):
+            try:
+                with urllib.request.urlopen(url, timeout=timeout) as f:
+                    return f.read(), r
+            except urllib.error.HTTPError as e:
+                if e.code == 404 and r != "master":
+                    break                                # (not in this release: master's)
+                if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
+                    raise
+                time.sleep(float(e.headers.get("Retry-After") or 0) or 1.5 * 2 ** attempt)
+    raise AssertionError("unreachable")
+
+
+def kicad_lib_cache(kind: str, name: str) -> Path:
+    """where a file of KiCad's library is cached: ``<parts cache>/<kind>/<ref>/<name>``, the release's own, else
+    master's when the release lacked it and master's was fetched (a cache of one release is never read as another)"""
+    from vendor_parts import CACHE
+    own = CACHE / kind / kicad_lib_ref() / name
+    if not own.exists():
+        fb = CACHE / kind / "master" / name
+        if fb.exists():
+            return fb
+    return own
+
+
 LOCAL_FP = Path(__file__).parent / "pcb_footprints"   # project footprints KiCad's library lacks: <Lib>.pretty/<Name>.kicad_mod
 CU_RHO = 1.72e-5            # ohm mm (copper, 20 C)
-ROUTER_VERSION = 8          # in route_jobs' checkpoint key: bump when the router changes what it would produce
+ROUTER_VERSION = 9          # in route_jobs' checkpoint key: bump when the router changes what it would produce
 HOLE_CLEAR = 0.25           # copper to a bare (non-plated) hole's wall, mm: KiCad's default hole clearance
 HOLE_GAP = 0.25             # mm between drill walls (a common fab minimum)
 EDGE = 0.25                 # mm from copper (tracks, vias) to the board edge
@@ -84,8 +150,7 @@ def _fp_file(name: str) -> Path:
         local = Path(d) / f"{lib}.pretty" / f"{fp}.kicad_mod"
         if local.exists():
             return local
-    from vendor_parts import CACHE
-    return CACHE / "kicad_fp" / f"{fp}.kicad_mod"
+    return kicad_lib_cache("kicad_fp", f"{fp}.kicad_mod")
 
 
 class FootprintNotFound(ValueError):
@@ -96,7 +161,7 @@ class FootprintNotFound(ValueError):
         lib = name.split(":")[0]
         hint = f"; did you mean: {', '.join(lib + ':' + s_ for s_ in self.suggestions)}" if self.suggestions else ""
         super().__init__(f"footprint {name} is not in KiCad's library{hint} (the library: "
-                         f"https://gitlab.com/kicad/libraries/kicad-footprints/-/tree/master/{lib}.pretty)")
+                         f"{KICAD_LIB_URL}kicad-footprints/-/tree/{kicad_lib_ref()}/{lib}.pretty)")
 
 
 def _close_footprints(lib: str, fp: str, n: int = 5) -> List[str]:
@@ -106,7 +171,8 @@ def _close_footprints(lib: str, fp: str, n: int = 5) -> List[str]:
     import urllib.parse
     import urllib.request
     from vendor_parts import CACHE
-    cache = CACHE / "kicad_fp_lists" / f"{lib}.json"
+    ref = kicad_lib_ref()
+    cache = CACHE / "kicad_fp_lists" / ref / f"{lib}.json"
     names = None
     if cache.exists():
         names = json.loads(cache.read_text())
@@ -114,7 +180,7 @@ def _close_footprints(lib: str, fp: str, n: int = 5) -> List[str]:
         try:
             names, page = [], 1
             while page < 30:
-                q = urllib.parse.urlencode({"path": f"{lib}.pretty", "per_page": 100, "page": page})
+                q = urllib.parse.urlencode({"path": f"{lib}.pretty", "ref": ref, "per_page": 100, "page": page})
                 url = f"https://gitlab.com/api/v4/projects/kicad%2Flibraries%2Fkicad-footprints/repository/tree?{q}"
                 with urllib.request.urlopen(url, timeout=30) as r:
                     got = json.loads(r.read())
@@ -137,27 +203,23 @@ def _close_footprints(lib: str, fp: str, n: int = 5) -> List[str]:
 
 
 def _download_fp(name: str) -> Path:
-    """fetch footprint "Lib:Name" from KiCad's library into the cache (the project library needs no fetch)"""
+    """fetch footprint "Lib:Name" from KiCad's library (``kicad_lib_ref()``'s release, else master) into the cache
+    (the project library needs no fetch)"""
     lib, fp = name.split(":")
     dst = _fp_file(name)
     if not dst.exists() or dst.stat().st_size < 200:
-        import time
         import urllib.error
-        import urllib.request
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        for attempt in range(6):                         # (GitLab answers 429 to a burst: wait and try again)
-            try:
-                with urllib.request.urlopen(f"{KICAD_FP_RAW}{lib}.pretty/{fp}.kicad_mod", timeout=60) as r:
-                    data = r.read()
-                break
-            except urllib.error.HTTPError as e:
-                if e.code == 404:                        # (a name the library does not have: say so, with the
-                    raise FootprintNotFound(name, _close_footprints(lib, fp)) from None   # nearest it does)
-                if e.code not in (429, 500, 502, 503, 504) or attempt == 5:
-                    raise
-                time.sleep(float(e.headers.get("Retry-After") or 0) or 1.5 * 2 ** attempt)
+        try:
+            data, ref = kicad_lib_get("kicad-footprints", f"{lib}.pretty/{fp}.kicad_mod")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:                            # (a name the library does not have: say so, with the
+                raise FootprintNotFound(name, _close_footprints(lib, fp)) from None   # nearest it does)
+            raise
         if not data.lstrip().startswith(b"(footprint") and not data.lstrip().startswith(b"(module"):
             raise FileNotFoundError(f"no KiCad footprint {name}")
+        from vendor_parts import CACHE
+        dst = CACHE / "kicad_fp" / ref / f"{fp}.kicad_mod"
+        dst.parent.mkdir(parents=True, exist_ok=True)
         dst.write_bytes(data)
     return dst
 
@@ -595,6 +657,8 @@ class Board:
         out = []
         for r, p in pins:                                # (a pin by name, through its part's symbol: "AIN2" -> 15)
             p, c = str(p), self.comps.get(r)
+            if c is not None and p not in c["pads"] and PAD_RENAMED.get(p) in c["pads"]:
+                p = PAD_RENAMED[p]                       # (a pad KiCad's libraries renamed between releases)
             if c is not None and p not in c["pads"] and c.get("symbol"):
                 import parts
                 nums = parts.resolve(c, p)
@@ -2452,9 +2516,36 @@ def _cxy(geom, X, Y):
     return out
 
 
-def _escape(board: Board, ref: str, num: str, reach: float = 0.5):
+def _crowded(board: Board, ref: str, num: str, g, width: float, slack: float = 0.25) -> bool:
+    """a track ``width`` wide on pad ``ref.num``'s axis would come closer than the clearance to a pad of another
+    net on the same part (a USB-C receptacle's 0.6 mm VBUS pin between GND and CC at 0.5 mm pitch: a 3 A feed
+    cannot run onto it at full width). ``slack``: how far off the pin's axis the router's grid may put the track"""
+    c = board.comps[ref]
+    pn = board.pad_net()
+    mine = pn.get((ref, str(num)))
+    w_pad = min(_mrr_sides(g))
+    gap = (width + slack - w_pad) / 2 + board.clear - 1e-6
+    if gap <= board.clear - 1e-6:
+        return False
+    for n2, ps in c["pads"].items():
+        if n2 == str(num) or (mine and pn.get((ref, n2)) == mine) or not n2:
+            continue
+        for p2 in ps:
+            if _pad_poly(p2, (c["at"][0], c["at"][1], c["rot"])).distance(g) < gap:
+                return True
+    return False
+
+
+def _mrr_sides(g) -> Tuple[float, float]:
+    mrr = g.minimum_rotated_rectangle.exterior.coords
+    return math.dist(mrr[0], mrr[1]), math.dist(mrr[1], mrr[2])
+
+
+def _escape(board: Board, ref: str, num: str, reach: float = 0.5, width: Optional[float] = None):
     """for a pad narrower than a routing channel (fine-pitch SMD), the point just beyond its outer end along its long
-    axis, away from the part's centre: route from there, with a straight stub out of the pad"""
+    axis, away from the part's centre: route from there, with a straight stub out of the pad. With ``width`` (the
+    track's), also a wider pad whose neighbours of other nets leave no room for that width beside it (a USB-C
+    receptacle's VBUS pin under a 3 A feed): a short neck as wide as the pad, out to where the full width fits"""
     c = board.comps[ref]
     pad = c["pads"][str(num)][0]
     g = _pad_poly(pad, (c["at"][0], c["at"][1], c["rot"]))
@@ -2462,10 +2553,30 @@ def _escape(board: Board, ref: str, num: str, reach: float = 0.5):
     if pad.get("prims"):                                     # a custom pad: its real extent, in the pad's frame
         bx = _pad_poly({**pad, "rot": 0.0, "at": (0.0, 0.0), "mirror": False}, (0.0, 0.0, 0.0)).bounds
         w, h = bx[2] - bx[0], bx[3] - bx[1]
-    if min(w, h) >= 0.6 or pad["drill"] or len(c["pads"]) <= 4:    # (a 2-pad passive leaves its pad anywhere)
+    if pad["drill"] or len(c["pads"]) <= 4:              # (a 2-pad passive leaves its pad anywhere)
         return None
+    if min(w, h) >= 0.6:
+        if not (width and min(w, h) < width + 0.25 and max(w, h) > min(w, h) * 1.3
+                and _crowded(board, ref, num, g, width)):
+            return None
+        reach = max(reach, width / 2 + board.clear)      # (the full width starts clear of the pads' ends)
     ang = math.radians(c["rot"] - pad["rot"] + (0.0 if w >= h else 90.0))
     ux, uy = math.cos(ang), math.sin(ang)
+    if min(w, h) >= 0.6:                                 # (and every other one in its row, counted from the row's
+        place = (c["at"][0], c["at"][1], c["rot"])       #  nearer end, longer by a full width and a clearance, so
+        cx0, cy0 = g.centroid.x, g.centroid.y            #  two such necks side by side, a VBUS pin's and a 3 A
+        row = set()                                      #  GND's, do not end level: each one's full width starts
+        for ps in c["pads"].values():                    #  past the other's end)
+            for p2 in ps:
+                if p2["drill"]:
+                    continue
+                q = _pad_poly(p2, place).centroid
+                if abs((q.x - cx0) * ux + (q.y - cy0) * uy) < 0.05:
+                    row.add(round((q.x - cx0) * -uy + (q.y - cy0) * ux, 2))
+        row = sorted(row)
+        i = row.index(min(row, key=abs))
+        if min(i, len(row) - 1 - i) % 2 == 1:
+            reach += width / 2 + board.clear
     cx, cy = g.centroid.x, g.centroid.y
     if (cx - c["at"][0]) * ux + (cy - c["at"][1]) * uy < 0:
         ux, uy = -ux, -uy
@@ -3843,7 +3954,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
             board.tracks[-1]["neck"] = True
 
     def stub_of(pin):
-        e = _escape(board, *pin) if "~" not in pin[1] else None
+        e = _escape(board, *pin, width=width) if "~" not in pin[1] else None
         if e is None:
             return None
         if pin not in fanned:
@@ -3859,7 +3970,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
             tree[fan_geo[first][0]].append(fan_geo[first][1])
         e = stub_of(first)
         if e is not None:
-            tree[L0].append(LineString([g0.centroid.coords[0], e]).buffer(width / 2))
+            tree[L0].append(LineString([g0.centroid.coords[0], e]).buffer(stub_w(first) / 2))   # (as wide as drawn)
         seeds[L0].append(g0)
     else:                                                # pins not being routed are taken as already on the net
         for p_ in pins:
@@ -3921,7 +4032,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         for L in Ls:                                     # this net's own pads are free where a track stays inside
             if not own_free[L].is_empty:                 # them (one centred at a pad's edge overhangs its neighbour)
                 blk[L] &= ~_cxy(own_free[L], XX, YY)
-        e = _escape(board, *pin) if "~" not in pin[1] else None
+        e = _escape(board, *pin, width=width) if "~" not in pin[1] else None
         sx, sy = e[1] if e else (g_pin.centroid.x, g_pin.centroid.y)
         ci, cj = int(round((sx - x0) / grid)), int(round((sy - y0) / grid))
         best = None                                      # the nearest clear cell to the way out, else force it;
@@ -5030,15 +5141,14 @@ def kicad_models(board: Board, model_dir: str) -> List[str]:
     them out under ``model_dir`` as KiCad's 3D library is laid out, for ``render_kicad``. Returns the paths it
     could not get"""
     import shutil
-    import urllib.request
     from pathlib import Path
-    from vendor_parts import CACHE, KICAD_RAW
+    from vendor_parts import CACHE
     missing = []
     for c in board.comps.values():
         path = c.get("model")
         if not path or not isinstance(path, str):
             continue
-        dst = CACHE / "kicad" / Path(path).name
+        dst = kicad_lib_cache("kicad", Path(path).name)
         if not dst.exists() or dst.stat().st_size < 4096:
             # (a footprint now and then names a model the library has since renamed: its own name, without the
             # thermal-via / mask variant, and the newer "P" for "Pitch", are tried next)
@@ -5050,8 +5160,7 @@ def kicad_models(board: Board, model_dir: str) -> List[str]:
             got = None
             for cand in cands:
                 try:
-                    with urllib.request.urlopen(KICAD_RAW + cand, timeout=120) as r:
-                        data = r.read()
+                    data, ref = kicad_lib_get("kicad-packages3D", cand, timeout=120)
                     if data.startswith(b"ISO-10303-21"):
                         got = data
                         break
@@ -5060,6 +5169,7 @@ def kicad_models(board: Board, model_dir: str) -> List[str]:
             if got is None:
                 missing.append(path)
                 continue
+            dst = CACHE / "kicad" / ref / Path(path).name
             dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(got)
         out = Path(model_dir) / path

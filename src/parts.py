@@ -18,7 +18,6 @@ import urllib.parse
 import urllib.request
 from typing import Dict, List, Optional, Sequence, Tuple
 
-KICAD_SYM_RAW = "https://gitlab.com/kicad/libraries/kicad-symbols/-/raw/master/"
 _SYM: Dict[str, dict] = {}
 
 # pin types that drive a net, that need driving, that need power
@@ -48,18 +47,77 @@ def _fetch(path: str) -> str:
         own = Path(d) / path
         if own.exists():
             return own.read_text()
+    import pcb
     from vendor_parts import CACHE
-    dst = CACHE / "kicad_sym" / path.replace("/", "__")
+    dst = pcb.kicad_lib_cache("kicad_sym", path.replace("/", "__"))
     if dst.exists() and dst.stat().st_size > 50:
         return dst.read_text()
-    try:
-        with urllib.request.urlopen(KICAD_SYM_RAW + urllib.parse.quote(path), timeout=60) as r:
-            data = r.read().decode()
-    except Exception as e:
-        raise SymbolNotFound(f"symbol file {path} is not in KiCad's library ({e})") from None
+    ref, data = pcb.kicad_lib_ref(), None
+    m = re.fullmatch(r"(.+)\.kicad_symdir/(.+)\.kicad_sym", path)
+    if m and not _symdir_ref(ref):                       # (KiCad 9's library: one file per library, the symbol
+        try:                                             #  cut out of it)
+            one = cut_symbol(whole_library(m.group(1), ref), m.group(2))
+        except Exception:
+            one = None                                   # (a library added since: master's, below)
+        if one:
+            data = "(kicad_symbol_lib\n\t" + one + "\n)\n"
+    if data is None:
+        try:
+            raw, ref = pcb.kicad_lib_get("kicad-symbols", path)
+            data = raw.decode()
+        except Exception as e:
+            raise SymbolNotFound(f"symbol file {path} is not in KiCad's library ({e})") from None
+    dst = CACHE / "kicad_sym" / ref / path.replace("/", "__")
     dst.parent.mkdir(parents=True, exist_ok=True)
     dst.write_text(data)
     return data
+
+
+def _symdir_ref(ref: str) -> bool:
+    """whether KiCad's symbol library at ``ref`` keeps a file per symbol (``Lib.kicad_symdir/``: KiCad 10 on, and
+    master) rather than one per library (KiCad 9 and before)"""
+    m = re.match(r"(\d+)\.", ref)
+    return not m or int(m.group(1)) >= 10
+
+
+def whole_library(lib: str, ref: str) -> str:
+    """KiCad's symbol library ``lib`` as one file (``Lib.kicad_sym``: KiCad 9's form) at release ``ref``, fetched
+    once into the parts cache"""
+    import pcb
+    from vendor_parts import CACHE
+    dst = CACHE / "kicad_sym" / ref / f"{lib}.kicad_sym"
+    if not (dst.exists() and dst.stat().st_size > 50):
+        url = f"{pcb.KICAD_LIB_URL}kicad-symbols/-/raw/{urllib.parse.quote(ref)}/{urllib.parse.quote(lib)}.kicad_sym"
+        with urllib.request.urlopen(url, timeout=120) as r:
+            data = r.read().decode()
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        dst.write_text(data)
+    return dst.read_text()
+
+
+def cut_symbol(text: str, sym: str) -> str:
+    """symbol ``sym``'s own text out of a whole library file (its parentheses matched to the end), "" when the
+    library does not have it"""
+    m = re.search(r'\n\t\(symbol "' + re.escape(sym) + r'"\n', text)
+    if not m:
+        return ""
+    i, depth, q = m.start() + 2, 0, False
+    for j in range(i, len(text)):
+        ch = text[j]
+        if ch == '"' and text[j - 1] != "\\":
+            q = not q
+        elif not q and ch == "(":
+            depth += 1
+        elif not q and ch == ")":
+            depth -= 1
+            if depth == 0:
+                return text[i:j + 1]
+    return ""
+
+
+def _ds(v) -> str:
+    """a symbol's datasheet field: KiCad 9's library writes "~" for none"""
+    return "" if (v or "").strip() == "~" else (v or "")
 
 
 def _hidden(top, key: str) -> bool:
@@ -92,7 +150,7 @@ def _drawing(sub) -> List[dict]:
 def symbol(name: str) -> dict:
     """KiCad symbol "Lib:Name" -> {"name", "lib", "footprint", "datasheet", "description", "pins": [{"num", "name",
     "key", "type", "at": (x, y), "rot", "length", "unit"}], "body": [(x0, y0, x1, y1), ...]}; a derived symbol
-    (``extends``) takes its parent's pins. Fetched once into the parts cache (KiCad 9's one file per symbol)"""
+    (``extends``) takes its parent's pins. Fetched once into the parts cache, from the installed KiCad's library release (pcb.kicad_lib_ref)"""
     if name in _SYM:
         return _SYM[name]
     import pcb
@@ -106,7 +164,7 @@ def symbol(name: str) -> dict:
     if ext:                                             # (an alias: the parent's pins and drawing, its own fields)
         base = symbol(f"{lib}:{ext}")
         out = dict(base, name=name, footprint=props.get("Footprint") or base["footprint"],
-                   datasheet=props.get("Datasheet") or base["datasheet"],
+                   datasheet=_ds(props.get("Datasheet")) or base["datasheet"],
                    description=props.get("Description") or base["description"])
         _SYM[name] = out
         return out
@@ -125,7 +183,7 @@ def symbol(name: str) -> dict:
             e = next(x for x in r if isinstance(x, list) and x[0] == "end")
             body.append((float(s[1]), float(s[2]), float(e[1]), float(e[2])))
         draw += _drawing(sub)
-    out = {"name": name, "lib": lib, "footprint": props.get("Footprint", ""), "datasheet": props.get("Datasheet", ""),
+    out = {"name": name, "lib": lib, "footprint": props.get("Footprint", ""), "datasheet": _ds(props.get("Datasheet", "")),
            "description": props.get("Description", ""), "value": props.get("Value", sym), "pins": pins, "body": body,
            "draw": draw, "hide_names": _hidden(top, "pin_names"), "hide_numbers": _hidden(top, "pin_numbers")}
     _SYM[name] = out
@@ -305,6 +363,8 @@ def describe(name: str, board=None) -> str:
                 if q["status"] != "agrees":
                     lines.append(f"    pin {q['num']} {q['name']}: {q['status']}"
                                  + (f" (the datasheet lists {', '.join(q['datasheet'])})" if q["datasheet"] else ""))
+                elif q.get("spelt"):
+                    lines.append(f"    pin {q['num']} {q['name']}: agrees, spelt \"{q['spelt']}\" there")
     except Exception as e:
         lines += [f"  datasheet: not read ({type(e).__name__}: {str(e)[:80]})"]
     return "\n".join(lines)
@@ -337,10 +397,13 @@ def datasheet_notes(board) -> List[dict]:
                                   f"(page {d['page']})"})
         if not bad:
             miss = [q for q in d["pins"] if q["status"] != "agrees"]     # (which ones: a name the table spells
-            notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],   # another way, to check by hand)
+            slip = [q for q in d["pins"] if q.get("spelt")]              #  another way, to check by hand; and the
+            notes.append({"severity": "info", "kind": "datasheet", "refs": [ref],   # ones it misspells, as it does)
                           "text": f"{ref}: {d['agree']} of {d['total']} pins agree with the datasheet's pin table"
                                   + (f" (page {d['page']}); not found there: " + ", ".join(
-                                      f"pin {q['num']} {q['name']}" for q in miss[:6]) if miss else "")})
+                                      f"pin {q['num']} {q['name']}" for q in miss[:6]) if miss else "")
+                                  + ("; the datasheet spells " + ", ".join(
+                                      f"pin {q['num']} {q['name']} \"{q['spelt']}\"" for q in slip[:6]) if slip else "")})
     for e in evidence(board):                           # (a citation must say what its page says)
         if e["found"] is False:
             notes.append({"severity": "warning", "kind": "evidence", "refs": [e["ref"]],
@@ -466,6 +529,34 @@ def _quote(variants, text, flags, num: Optional[str]) -> str:
     return next((q for q in found if num in re.findall(r"\d{1,3}", q)), found[0] if found else "")
 
 
+def _one_edit(a: str, b: str) -> bool:
+    """``a`` and ``b`` one typing slip apart: a letter changed, added, dropped, or two neighbours swapped"""
+    if a == b or abs(len(a) - len(b)) > 1:
+        return False
+    if len(a) == len(b):
+        d = [i for i in range(len(a)) if a[i] != b[i]]
+        return len(d) == 1 or (len(d) == 2 and d[1] == d[0] + 1 and a[d[0]] == b[d[1]] and a[d[1]] == b[d[0]])
+    if len(a) > len(b):
+        a, b = b, a
+    i = next((k for k in range(len(a)) if a[k] != b[k]), len(a))
+    return a[i:] == b[i + 1:]
+
+
+def _misspelt(pin: dict, pins: Sequence[dict], text: str) -> Optional[str]:
+    """the word the datasheet's table gives ``pin``'s number to when that word is ``pin``'s name with one typing
+    slip ("SHND" for SHDN), else None. Not a word any other pin is named (IN1 is not a slip of IN2), not a name
+    under three letters, and only when that word is given this pin's own number"""
+    key = pin["key"]
+    if len(key) < 3:
+        return None
+    others = {v.upper() for q in pins if q is not pin for v in _names(q["key"])}
+    for w in sorted(set(re.findall(r"[A-Za-z][A-Za-z0-9_]*", text))):
+        if len(w) >= 3 and w.upper() not in others and _one_edit(w.upper(), key.upper()) \
+                and pin["num"] in _numbers({w}, text, 0):
+            return w
+    return None
+
+
 def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
     """each of the symbol's pins looked up in its datasheet's pin table: the pin's name followed by its number(s)
     (one per package the table lists). Returns {"datasheet", "page", "pins": [{"num", "name", "status": "agrees" |
@@ -503,6 +594,11 @@ def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
             st = "agrees"                               # (the exposed pad: the table names it, not by number)
         else:
             st = "differs" if nums else "not found"
+        typo = None
+        if st == "not found":                            # (a name the table misspells, "SHND" for SHDN: agrees when
+            typo = _misspelt(p, s["pins"], text)         #  the misspelling carries this pin's number, quoted as is)
+            if typo:
+                st, nums, variants = "agrees", [p["num"]], {typo}
         agree += st == "agrees"
         at, quote = None, ""                             # (the page and words it was read from: its number there
         for i in tables:                                 #  first, else the first page naming it with any number)
@@ -513,6 +609,8 @@ def datasheet_check(name: str, pages: Optional[Sequence[str]] = None) -> dict:
                 if p["num"] in on:
                     break
         out.append({"num": p["num"], "name": p["key"], "status": st, "datasheet": nums, "page": at, "quote": quote})
+        if typo:
+            out[-1]["spelt"] = typo
     page = (tables[0] + 1) if tables else None
     return {"datasheet": s["datasheet"], "page": page, "pins": out, "agree": agree, "total": len(out)}
 

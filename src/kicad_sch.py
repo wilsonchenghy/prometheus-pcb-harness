@@ -132,35 +132,12 @@ KICAD9_LIB = "9.0.9.1"                                   # (KiCad 9's symbol lib
 def _symbol9(lib: str, sym: str) -> Optional[str]:
     """the symbol's text from KiCad 9's library (one file per library there), cut out once and cached; None when
     KiCad 9's library does not have it (a symbol added since)"""
-    import urllib.parse
-    import urllib.request
     from vendor_parts import CACHE
     one = CACHE / "kicad_sym9" / f"{lib}__{sym}.kicad_sym"
     if one.exists():
         return one.read_text() or None
-    whole = CACHE / "kicad_sym9" / f"{lib}.kicad_sym"
-    if not whole.exists():
-        url = f"https://gitlab.com/kicad/libraries/kicad-symbols/-/raw/{KICAD9_LIB}/{urllib.parse.quote(lib)}.kicad_sym"
-        with urllib.request.urlopen(url, timeout=120) as r:
-            data = r.read().decode()
-        whole.parent.mkdir(parents=True, exist_ok=True)
-        whole.write_text(data)
-    text = whole.read_text()
-    m = re.search(r'\n\t\(symbol "' + re.escape(sym) + r'"\n', text)
-    out = ""
-    if m:                                                # (its parentheses matched to the end of the symbol)
-        i, depth, q = m.start() + 2, 0, False
-        for j in range(i, len(text)):
-            ch = text[j]
-            if ch == '"' and text[j - 1] != "\\":
-                q = not q
-            elif not q and ch == "(":
-                depth += 1
-            elif not q and ch == ")":
-                depth -= 1
-                if depth == 0:
-                    out = text[i:j + 1]
-                    break
+    out = parts.cut_symbol(parts.whole_library(lib, KICAD9_LIB), sym)
+    one.parent.mkdir(parents=True, exist_ok=True)
     one.write_text(out)
     return out or None
 
