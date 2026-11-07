@@ -4,7 +4,7 @@ VM 2.7-10.8 V in on a 2-pin 5.08 mm screw terminal (J1), two motor outputs on 2-
 a 1x08 2.54 mm logic header (J4: VCC GND AIN1 AIN2 BIN1 BIN2 nSLEEP nFAULT), DRV8833PWP (HTSSOP-16 with exposed pad
 and thermal vias), VM bulk + decoupling, VCP charge-pump and VINT capacitors, nSLEEP pulled up to the logic VCC (so
 the driver is awake by default), and a red fault LED that lights when the open-drain nFAULT pulls low.
-Difficulty: 3/5. 2 layers, 2 oz, 40 x 30 mm, JLCPCB, GND poured on both sides, two M2.5 (2.7 mm) holes.
+Difficulty: 3/5. 2 layers, 2 oz, 39 x 29.5 mm, JLCPCB, GND poured on both sides, two M2.5 (2.7 mm) holes.
 
 Engineering choices / assumptions (not cited from a page read in this run: the datasheet could not be fetched):
 - Pin map from KiCad's Driver_Motor:DRV8833PWP symbol (the harness matched it to the datasheet's pin table, 17/17).
@@ -26,9 +26,9 @@ from pcb import Board
 
 R06, C06, C12 = "Resistor_SMD:R_0603_1608Metric", "Capacitor_SMD:C_0603_1608Metric", "Capacitor_SMD:C_1206_3216Metric"
 TB = "TerminalBlock_Phoenix:TerminalBlock_Phoenix_MKDS-1,5-2-5.08_1x02_P5.08mm_Horizontal"
-W, H = 40.0, 30.0
+W, H = 39.0, 29.5
 OUT = [(0, 0), (W, 0), (W, H), (0, H)]
-UX, UY = 23.0, 14.0                            # U1 turned 180: outputs face the motor terminals on the right
+UX, UY = 23.0, 10.5                            # U1 turned 180: outputs face the motor terminals on the right
 VMY = UY + 0.325                               # y of pin 12 (VM): the VM bus runs straight in along it on F
 FIXED = {"C1": ((13.3, VMY - 1.475), 270),     # VM bulk: + pad on the VM bus
          "C2": ((15.9, VMY - 0.775), 270),     # VM 100n: + pad on the bus, - pad below, 2.9 mm from pin 12
@@ -39,9 +39,9 @@ FIXED = {"C1": ((13.3, VMY - 1.475), 270),     # VM bulk: + pad on the VM bus
 def build():
     b = Board("drv8833_motor", OUT, thickness=1.6, copper_oz=2.0, rules="jlcpcb-2", corner_r=1.0)
     b.place("J1", TB, (5.2, VMY), 270, "VM in", "Phoenix 1729128")
-    b.place("J2", TB, (W - 5.2, 4.3), 90, "motor A", "Phoenix 1729128")
-    b.place("J3", TB, (W - 5.2, 16.2), 90, "motor B", "Phoenix 1729128")
-    b.place("J4", "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical", (4.5, 2.5), 90, "logic",
+    b.place("J2", TB, (W - 5.2, 3.9), 90, "motor A", "Phoenix 1729128")
+    b.place("J3", TB, (W - 5.2, 15.8), 90, "motor B", "Phoenix 1729128")
+    b.place("J4", "Connector_PinHeader_2.54mm:PinHeader_1x08_P2.54mm_Vertical", (7.5, H - 2.5), 90, "logic",
             "XFCN PZ254V-11-08P", lcsc="C2829863")
     b.hole((3.5, H - 3.5), 2.7)
     b.hole((W - 3.5, H - 3.5), 2.7)
