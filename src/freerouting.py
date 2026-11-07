@@ -332,8 +332,10 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
     neighbouring pins (FreeRouting's 45-degree turn right at a 0.4 mm pitch pin clips the next one). Returns how
     many it drew"""
     import numpy as np
+    from shapely.geometry import LineString, Polygon
     pn = board.pad_net()
     poured = {p["net"] for p in board.pours}
+    kz = {L: [Polygon(z) for z in board.keepout_zones(L)] for L in board.layers}
     low_: Dict[str, dict] = {}
     n = 0
     for ref, c in board.comps.items():
@@ -380,6 +382,8 @@ def escape_fine_pitch(board, width: float = 0.15, short: float = 0.45, long: flo
             else:
                 ey = y1_ if dy > 0 else y0_
                 pts = [(round(cx, 4), round(cy, 4)), (round(cx, 4), round(ey + (reach if dy > 0 else -reach), 4))]
+            if any(LineString(pts).buffer(width / 2).intersects(z) for z in kz.get(L, [])):
+                continue                                  # (into a keep-out, an antenna's: left to FreeRouting)
             if net in poured:                             # (into its pour, which carries the current: a pin
                 board.track(net, L, pts, width)           #  entry, as narrow as the pins allow)
                 board.tracks[-1]["neck"] = True

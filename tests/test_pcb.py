@@ -1894,12 +1894,19 @@ def test_a_run_without_kicad_still_gives_a_board_and_says_what_it_skipped(tmp_pa
     assert [s["what"] for s in r["skipped"]] == ["FreeRouting"] and "docs/setup.md" in r["skipped"][0]["how"]
 
 
-def test_schematic_symbol_pin_numbers_match_todays_library():
-    # KiCad 9's USB-C symbol numbers its shield S1, today's SH (the footprint's pads): the sheet must use today's
+def test_schematic_symbol_pin_numbers_match_the_footprints_pads():
+    # KiCad 9's USB-C symbol and footprint number the shield S1, KiCad 10's SH: the sheet's symbol must use the
+    # numbers of the footprint the board is on (both from the same library release, pcb.kicad_lib_ref)
     import kicad_sch
+    import parts
+    import pcb
     text = str(kicad_sch._lib_symbol("Connector:USB_C_Receptacle_USB2.0_16P"))
-    assert "'SH'" in text or '"SH"' in text, text[:300]
-    assert '"S1"' not in text and "'S1'" not in text
+    fp = pcb.footprint("Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal")
+    shield = "S1" if "S1" in fp["pads"] else "SH"
+    other = {"S1": "SH", "SH": "S1"}[shield]
+    assert f"'{shield}'" in text or f'"{shield}"' in text, text[:300]
+    assert f'"{other}"' not in text and f"'{other}'" not in text
+    assert shield in {p_["num"] for p_ in parts.symbol("Connector:USB_C_Receptacle_USB2.0_16P")["pins"]}
 
 
 def test_clean_corners_no_overshoot_no_right_angles():
@@ -2644,3 +2651,159 @@ def test_freerouting_leaves_the_low_current_branches_to_the_harness():
     dsn = '(pcb (network (net P\n (pins C1-1 R1-1 "R2-1" R3-1)\n) (net G (pins C1-2 R3-2)))(wiring))'
     got = freerouting._drop_pins(dsn, {"P": {"C1-1", "R2-1"}, "G": set()})
     assert "(net P\n (pins R1-1 R3-1)" in got and "(net G (pins C1-2 R3-2))" in got and got.endswith("(wiring))")
+
+
+def test_kicad_library_release_follows_the_installed_kicad(monkeypatch, tmp_path):
+    """footprints, symbols and 3D models come from the KiCad library release of the installed kicad-cli's major
+    (KiCad 9's without one), master only for a file that release lacks, each cached under its own release (#98)"""
+    import io
+    import urllib.error
+    import urllib.request
+    import pcb
+    import vendor_parts
+    monkeypatch.delenv("PROMETHEUS_KICAD_LIB", raising=False)
+    for ver, ref in (("9.0.9", "9.0.9.1"), ("10.0.1", "10.0.8"), (None, "9.0.9.1"), ("8.0.4", "9.0.9.1"),
+                     ("11.0.0", "master")):
+        monkeypatch.setattr(pcb, "kicad_version", lambda v=ver: v)
+        pcb._kicad_lib_ref_installed.cache_clear()
+        assert pcb.kicad_lib_ref() == ref, ver
+    pcb._kicad_lib_ref_installed.cache_clear()
+    monkeypatch.setenv("PROMETHEUS_KICAD_LIB", "9.0.9.1")
+    asked = []
+
+    def urlopen(url, timeout=None):                      # (the release lacks New.kicad_mod: master has it)
+        asked.append(url)
+        if "/raw/9.0.9.1/" in url and "New" in url:
+            raise urllib.error.HTTPError(url, 404, "not found", {}, None)
+        return io.BytesIO(b"(footprint x)")
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen)
+    assert pcb.kicad_lib_get("kicad-footprints", "Lib.pretty/Old.kicad_mod") == (b"(footprint x)", "9.0.9.1")
+    assert pcb.kicad_lib_get("kicad-footprints", "Lib.pretty/New.kicad_mod") == (b"(footprint x)", "master")
+    assert [u.split("/-/raw/")[1].split("/")[0] for u in asked] == ["9.0.9.1", "9.0.9.1", "master"]
+    monkeypatch.setattr(vendor_parts, "CACHE", tmp_path)   # (a cache filled from master is not read as 9.0's)
+    (tmp_path / "kicad_fp" / "master").mkdir(parents=True)
+    (tmp_path / "kicad_fp" / "master" / "A.kicad_mod").write_text("x")
+    (tmp_path / "kicad_fp" / "B.kicad_mod").write_text("x")          # (the unversioned cache of before)
+    assert pcb.kicad_lib_cache("kicad_fp", "A.kicad_mod") == tmp_path / "kicad_fp" / "master" / "A.kicad_mod"
+    assert pcb.kicad_lib_cache("kicad_fp", "B.kicad_mod") == tmp_path / "kicad_fp" / "9.0.9.1" / "B.kicad_mod"
+
+
+def test_a_kicad9_symbol_is_cut_out_of_its_library_file(monkeypatch, tmp_path):
+    """KiCad 9's symbol library has one file per library (Device.kicad_sym), KiCad 10's one per symbol: a symbol
+    at a 9.x release is cut out of the library's file, and a library that release lacks comes from master"""
+    import parts
+    import pcb
+    import vendor_parts
+    monkeypatch.setattr(vendor_parts, "CACHE", tmp_path)
+    monkeypatch.setenv("PROMETHEUS_KICAD_LIB", "9.0.9.1")
+    lib = ('(kicad_symbol_lib\n\t(version 20241209)\n\t(symbol "A"\n\t\t(property "Value" "A (x)")\n\t)\n'
+           '\t(symbol "B"\n\t\t(pin passive line (at 0 0 0) (length 1) (name "~") (number "1"))\n\t)\n)\n')
+
+    def whole(name, ref):
+        if name != "Mine":
+            raise OSError("no such library at this release")
+        return lib
+    monkeypatch.setattr(parts, "whole_library", whole)
+    got = parts._fetch("Mine.kicad_symdir/B.kicad_sym")
+    assert '(symbol "B"' in got and '(symbol "A"' not in got and got.startswith("(kicad_symbol_lib")
+    assert (tmp_path / "kicad_sym" / "9.0.9.1" / "Mine.kicad_symdir__B.kicad_sym").exists()
+    assert parts.cut_symbol(lib, "A").startswith('(symbol "A"') and parts.cut_symbol(lib, "C") == ""
+    monkeypatch.setattr(pcb, "kicad_lib_get", lambda repo, path: (b'(kicad_symbol_lib (symbol "N"))', "master"))
+    assert '"N"' in parts._fetch("Newer.kicad_symdir/N.kicad_sym")
+    assert (tmp_path / "kicad_sym" / "master" / "Newer.kicad_symdir__N.kicad_sym").exists()
+
+
+def test_a_pad_kicad_renamed_is_found_under_either_name():
+    """a USB-C shield is pad S1 in KiCad 9's library and SH in KiCad 10's: a script wired to either finds it"""
+    import pcb
+    b = pcb.Board("sh", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (10, 3), 0, "USB-C",
+            overhang=True)
+    have = "S1" if "S1" in b.comps["J1"]["pads"] else "SH"
+    b.net("GND", [("J1", "A1"), ("J1", "SH"), ("J1", "S1")])
+    assert b.nets["GND"]["pins"] == [("J1", "A1"), ("J1", have)]
+
+
+def test_stage_route_routes_the_placement_stage_place_saved(tmp_path):
+    """--stage route starts from the placement --stage place saved (the one the engineer saw) when the design is
+    the same, rather than placing again (#100)"""
+    import pcb
+    import pcb_cli
+
+    def board():
+        b = pcb.Board("st", [(0, 0), (20, 0), (20, 20), (0, 20)])
+        b.place("R1", "Resistor_SMD:R_0603_1608Metric", (5, 5), 0, "1k")
+        b.place("R2", "Resistor_SMD:R_0603_1608Metric", None, 0, "1k")
+        b.net("A", [("R1", "1"), ("R2", "1")])
+        return b
+    b = board()
+    key = pcb_cli.design_key(b)
+    b.comps["R2"].update(at=(14.0, 12.0), rot=90)
+    b.comps["R2"].pop("unplaced", None)
+    pcb_cli.save_state(b, str(tmp_path), key)
+    b2 = board()
+    assert pcb_cli.load_placement(b2, str(tmp_path), key)
+    assert b2.comps["R2"]["at"] == (14.0, 12.0) and b2.comps["R2"]["rot"] == 90 and not b2.comps["R2"].get("unplaced")
+    assert b2.tracks == []                                 # (the placement only: routed afresh)
+    b3 = board()
+    assert not pcb_cli.load_placement(b3, str(tmp_path), "another design")
+    assert b3.comps["R2"].get("unplaced")
+
+
+def test_datasheet_pin_name_with_one_typing_slip_agrees():
+    """a pin table that misspells a pin by one letter or a swap ("SHND" for SHDN) still confirms it when the
+    misspelling carries the pin's own number, its spelling quoted; another pin's name (BIN1 for AIN1) never does"""
+    import parts
+    page = ("Pin Functions\nPowerPADGND 13 —PPAD\nVINT 12 14\nVM 10 12\nVCP 9 11\nAIN1 14 16\nAIN2 13 15\n"
+            "BIN1 7 9\nBIN2 8 10\nnSLEEP 15 1\nnFUALT 16 8\nAISEN 2 3\nBISEN 5 6\nAOUT1 1 2\nAOUT2 3 4\n"
+            "BOUT1 6 7\nBOUT2 4 5\n")
+    r = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=[page])
+    f = next(p for p in r["pins"] if p["name"] == "nFAULT")
+    assert r["agree"] == r["total"] and f["status"] == "agrees" and f["spelt"] == "nFUALT", f
+    assert f["quote"].startswith("nFUALT 16"), f
+    wrong = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=[page.replace("nFUALT 16 8", "nFUALT 30 31")])
+    assert next(p for p in wrong["pins"] if p["name"] == "nFAULT")["status"] == "not found"
+    no_ain1 = parts.datasheet_check("Driver_Motor:DRV8833PWP", pages=[page.replace("AIN1 14 16\n", "")])
+    assert next(p for p in no_ain1["pins"] if p["name"] == "AIN1")["status"] == "not found"
+    assert parts._one_edit("SHND", "SHDN") and parts._one_edit("VIN", "VINN") and not parts._one_edit("SHDN", "SDNH")
+
+
+def test_usb_c_vbus_feed_necks_only_at_the_pins(monkeypatch):
+    """a 3 A VBUS feed off a USB-C receptacle (0.6 mm pins at 0.5 mm pitch, too tight for its 0.9 mm): a neck as
+    wide as each pin out past the row, the rest of the feed at full width, and the board checks clean (#100)"""
+    import pcb
+    monkeypatch.setenv("PCB_REROUTE", "1")
+    b = pcb.Board("usbc_vbus", [(0, 0), (24, 0), (24, 20), (0, 20)])
+    b.place("J1", "Connector_USB:USB_C_Receptacle_GCT_USB4105-xx-A_16P_TopMnt_Horizontal", (12, 3.2), 0, "USB-C",
+            overhang=True)
+    b.place("J2", "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical", (12, 15), 90, "OUT")
+    b.place("R1", "Resistor_SMD:R_0603_1608Metric", (6, 10), 0, "5k1")
+    b.place("R2", "Resistor_SMD:R_0603_1608Metric", (18, 10), 0, "5k1")
+    b.net("VBUS", [("J1", p) for p in ("A4", "A9", "B4", "B9")] + [("J2", "1")], amps=3.0)
+    b.net("GND", [("J1", p) for p in ("A1", "A12", "B1", "B12")] + [("J2", "2"), ("R1", "2"), ("R2", "2")], amps=3.0)
+    b.net("CC1", [("J1", "A5"), ("R1", "1")])
+    b.net("CC2", [("J1", "B5"), ("R2", "1")])
+    b.pour("GND", "B", [(0, 0), (24, 0), (24, 20), (0, 20)])
+    probs = pcb.route_board(b, "harness")
+    assert not probs and not b.check(), (probs, b.check())
+    vb = [t for t in b.tracks if t["net"] == "VBUS"]
+    necks = [t for t in vb if t["w"] < b.net_width("VBUS") - 1e-6]
+    assert necks and all(t.get("neck") and sum(math.dist(p, q) for p, q in zip(t["pts"], t["pts"][1:])) <= 2.5
+                         for t in necks), necks
+    assert sum(1 for t in vb if t["w"] >= b.net_width("VBUS") - 1e-6) >= 1
+
+
+def test_fine_pitch_escape_stubs_stay_out_of_keepouts():
+    """FreeRouting's prep draws a straight stub out of each fine-pitch pin: never into a keep-out (an antenna's)"""
+    import freerouting
+    import pcb
+    from shapely.geometry import LineString, Polygon
+    b = pcb.Board("esc_ko", [(0, 0), (20, 0), (20, 20), (0, 20)], rules="jlcpcb-2")
+    b.place("U1", "Package_SO:TSSOP-8_3x3mm_P0.65mm", (10, 10), 0, "x")
+    for k in range(1, 9):
+        b.net(f"N{k}", [("U1", str(k))])
+    zone = [(0, 0), (9.0, 0), (9.0, 20), (0, 20)]            # (over the left pin row's way out)
+    b.keepout(zone, "FB", "antenna")
+    freerouting.escape_fine_pitch(b)
+    assert b.tracks                                       # (the right row's stubs are drawn)
+    assert not [t for t in b.tracks if LineString(t["pts"]).buffer(t["w"] / 2).intersects(Polygon(zone))]

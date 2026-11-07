@@ -83,7 +83,6 @@ def vendor_step(path: str):
     return bd.import_step(str(fetch(path)))
 
 
-KICAD_RAW = "https://gitlab.com/kicad/libraries/kicad-packages3D/-/raw/master/"
 _SHAPES: dict = {}
 
 
@@ -93,14 +92,14 @@ def kicad(path: str):
     the board's top face, mm; place one with Pos(x, y, board_top) * Rot(0, 0, angle). Returns a fresh copy."""
     import build123d as bd
     if path not in _SHAPES:
-        dst = CACHE / "kicad" / Path(path).name
+        import pcb                                       # (the installed KiCad's library release, else master)
+        dst = pcb.kicad_lib_cache("kicad", Path(path).name)
         if not dst.exists() or dst.stat().st_size < 4096:
-            import urllib.request
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            with urllib.request.urlopen(KICAD_RAW + path, timeout=120) as r:
-                data = r.read()
+            data, ref = pcb.kicad_lib_get("kicad-packages3D", path, timeout=120)
             if not data.startswith(b"ISO-10303-21"):
                 raise FileNotFoundError(f"no KiCad 3D model at {path}")
+            dst = CACHE / "kicad" / ref / Path(path).name
+            dst.parent.mkdir(parents=True, exist_ok=True)
             dst.write_bytes(data)
         shp = bd.import_step(str(dst))
         sol = shp.solids()
