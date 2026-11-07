@@ -3623,6 +3623,7 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
                             best = (dd, a_, b_)
             if best:
                 break
+        forced = best is None and e is not None and blk[L_pin][ci, cj]
         if best:
             ci, cj = best[1], best[2]
         blk[L_pin][ci, cj] = False
@@ -3640,7 +3641,13 @@ def _route_once(board: Board, net: str, width: float = 0.3, grid: float = 0.25, 
         if Ls[path[0][2]] != L_pin and not own_tht.contains(Point(float(xs[ci]), float(ys[cj]))):
             board.via(net, (round(float(xs[ci]), 4), round(float(ys[cj]), 4)), *via)   # (the escape via)
         if e:
-            stub_track(pin, L_pin, ([e[1]] if pin in fanned else [e[0], e[1]]) + [(float(xs[ci]), float(ys[cj]))])
+            neck_ = [(float(xs[ci]), float(ys[cj]))]
+            if forced and len(path) > 1 and path[1][2] == path[0][2]:
+                # (no cell past the stub is clear at the full width: the forced one is left at the stub's width,
+                # and the track goes on full width only from the first clear cell, as a neck)
+                neck_.append((float(xs[path[1][0]]), float(ys[path[1][1]])))
+                path = path[1:]
+            stub_track(pin, L_pin, ([e[1]] if pin in fanned else [e[0], e[1]]) + neck_)
         else:
             board.track(net, L_pin, [(sx, sy), (float(xs[ci]), float(ys[cj]))], width, amps)
         seg = []
