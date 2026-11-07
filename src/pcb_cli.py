@@ -326,6 +326,28 @@ def load_state(b, out, key) -> bool:
     return True
 
 
+def load_placement(b, out, key) -> bool:
+    """only the parts' positions from the last run's board state (``--stage place``'s, which the engineer saw), when
+    it is of this same design and placed the parts this script leaves to the placer: ``--stage route`` routes
+    that placement instead of placing again"""
+    import pickle
+    p = os.path.join(out, STATE)
+    if not os.path.exists(p):
+        return False
+    try:
+        with open(p, "rb") as f:
+            st = pickle.load(f)
+    except Exception:
+        return False
+    free = [r for r, c in b.comps.items() if c.get("unplaced")]
+    if st.get("key") != key or not free or any("at" not in st["place"].get(r, {}) for r in free):
+        return False
+    for r in free:
+        b.comps[r].update(st["place"][r])
+        b.comps[r].pop("unplaced", None)
+    return True
+
+
 def _store(script):
     """the board script's routes/ folder, kept in git, when it has one: its routing is reused there (pcb.cached_route's
     store for a script that routes itself)"""
@@ -508,6 +530,8 @@ def main(argv=None) -> int:
     if from_store:
         print(f"from {os.path.relpath(store)}: {len(b.tracks)} tracks, {len(b.vias)} vias (PCB_REROUTE=1 routes again)")
         timings["routes/"] = 0.0
+    elif stage == "route" and load_placement(b, a.out, key):     # (the placement --stage place showed: routed as is)
+        print(f"placement from the last run in {a.out} (--stage place's): routed as placed")
     if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()):
         t = time.perf_counter()
         prog.stage("place+route" if route_ok else "place")
