@@ -1383,6 +1383,19 @@ def test_nudge_vias_parts_two_nets_drills():
     assert 0.5 <= gapnow < 0.53 and b.tracks[0]["pts"][0] == v["at"]
 
 
+def test_nudge_vias_holds_one_nets_drills_to_the_hole_gap_too():
+    """two GND vias (or a GND via by a GND shell's slot) 0.42 mm apart: the check holds every pair of drills to the
+    hole gap, whatever their nets, so the nudge parts them too (it once let one net's drills sit at 0.254 mm)"""
+    import pcb
+    b = pcb.Board("nudge1", [(0, 0), (20, 0), (20, 20), (0, 20)])
+    b.via("GND", (10.0, 10.0), 0.3, 0.6)
+    b.via("GND", (10.72, 10.0), 0.3, 0.6)
+    b.tracks.append({"net": "GND", "layer": "F", "pts": [(10.0, 10.0), (10.0, 6.0)], "w": 0.2, "amps": 0.1})
+    b.tracks.append({"net": "GND", "layer": "B", "pts": [(10.0, 10.0), (6.0, 10.0)], "w": 0.2, "amps": 0.1})
+    assert pcb.nudge_vias(b, gap=0.5) == []
+    a, v = b.vias
+    assert math.hypot(v["at"][0] - a["at"][0], v["at"][1] - a["at"][1]) - 0.3 >= 0.5 - 1e-6
+
 def test_neck_vias_moves_a_via_off_its_own_pad_and_joins_it_by_a_track():
     """a GND via whose ring touches its own 0603 pad (solder would wick down it) moves a neck away, a track from the
     pad to it; a via-in-pad (the ring all on the pad) stays"""
