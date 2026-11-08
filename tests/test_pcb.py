@@ -2942,3 +2942,23 @@ def test_the_viewer_serves_the_runs_board_without_waiting_on_a_rebuild(tmp_path)
     assert c._running()
     (out / "progress.json").write_text(json.dumps({"done": True, "pid": os.getpid()}))
     assert not c._running()
+
+
+def test_prometheus_say_puts_the_agents_word_in_the_live_log(tmp_path, monkeypatch):
+    """`prometheus say out/ "text" --at U1.3`: a "say" event appended to the folder's live log (the part, not the pin,
+    to point at); pcb.say does the same inside a run, and nothing without one"""
+    import pcb
+    import pcb_cli
+    out = tmp_path / "o"
+    out.mkdir()
+    assert pcb_cli.main(["say", str(out), "U1 by the USB-C: short D+/D-", "--at", "U1.3"]) == 0
+    assert pcb_cli.main(["say", str(out), "next: the decoupling", "--net", "3V3"]) == 0
+    evs = [json.loads(ln) for ln in (out / "live.jsonl").read_text().splitlines()]
+    assert [(e["kind"], e["ref"], e["net"]) for e in evs] == [("say", "U1", None), ("say", None, "3V3")]
+    assert evs[0]["text"] == "U1 by the USB-C: short D+/D-"
+    assert pcb_cli.main(["say", str(tmp_path / "none"), "x"]) == 2
+    monkeypatch.setattr(pcb, "LIVE", None)
+    pcb.say("nobody is watching")                       # (no run, no file: nothing, no error)
+    monkeypatch.setattr(pcb, "LIVE", str(out / "live.jsonl"))
+    pcb.say("in the run", ref="C1")
+    assert json.loads((out / "live.jsonl").read_text().splitlines()[-1])["ref"] == "C1"
