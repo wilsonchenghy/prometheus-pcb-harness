@@ -840,6 +840,32 @@ def read_events(out: Path, since: int = 0, most: int = 4000) -> dict:
     return {"events": evs, "next": nxt, "run": run, "size": size}
 
 
+def say(out: str, text: str, ref: Optional[str] = None, net: Optional[str] = None) -> None:
+    """``pcb.say`` from outside the run: the line appended to the folder's live log (a run going, or done; the page
+    shows it within a few seconds either way)"""
+    f = Path(out) / "live.jsonl"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    ev = {"t": round(time.time(), 3), "kind": "say", "try": None, "text": str(text)[:600], "ref": ref, "net": net}
+    with open(f, "a") as fh:
+        fh.write(json.dumps(ev, separators=(",", ":")) + "\n")
+
+
+def say_main(argv) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(prog="prometheus say", description="a line to the engineer watching the run's viewer: "
+                                 "in its run log, and at a part or net on the board")
+    ap.add_argument("out", help="the run's output folder")
+    ap.add_argument("text", help="what to say: a decision and why, a question, what comes next")
+    ap.add_argument("--at", help="a part (U1) or a pin (U1.3) to point at")
+    ap.add_argument("--net", help="a net to point at")
+    a = ap.parse_args(argv)
+    if not Path(a.out).is_dir():
+        print(f"{a.out}: no such folder (the run's output folder: prometheus board.py {a.out})", file=sys.stderr)
+        return 2
+    say(a.out, a.text, (a.at or "").split(".")[0] or None, a.net)
+    return 0
+
+
 def make_handler(out_dir: str):
     out = Path(out_dir).resolve()
     cache = _Cache(str(out))

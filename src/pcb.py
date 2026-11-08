@@ -3576,6 +3576,13 @@ def live(kind: str, **ev) -> None:
         pass
 
 
+def say(text: str, ref: Optional[str] = None, net: Optional[str] = None) -> None:
+    """a word from whoever drives the run (the agent, or the board script) to the engineer watching the viewer: a line
+    in the run log tagged "ai", and, with ``ref`` (a part) or ``net``, the AI's cursor or a callout at it on the board.
+    ``prometheus say out/ "text" --at U1`` does the same from the command line, during a run or after it"""
+    live("say", text=str(text)[:600], ref=ref, net=net)
+
+
 def live_due(key: str, every: float) -> bool:
     """at most one event of ``key`` every ``every`` seconds (the annealer's thousands of moves: a few frames)"""
     import time

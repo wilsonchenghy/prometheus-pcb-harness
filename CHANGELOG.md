@@ -19,6 +19,9 @@
     parts placed and nets routed, the length left to route with its curve, and the checks as they run.
   - "Replay the run" plays a finished run again at 1x, 4x or 16x.
 - `GET /api/events?since=` serves the events after a byte offset (whole lines only).
+- `prometheus say out/ "text" --at U1` (or `pcb.say(text, ref=...)` in a board script): the agent's word to the engineer
+  watching. It is a line in the run log tagged `ai`, and on the board the AI's cursor takes it to the part during a
+  run; after the run it is a callout pointing at the part.
 - Fixed on the way: a pan or zoom frame queued as the view was redrawn threw `Cannot read properties of null`.
 - The viewer served the run's board only after the board for live edits was built: the background watcher rebuilt it
   from the script under a lock each time the run saved its state, and the page's first draw waited on that lock

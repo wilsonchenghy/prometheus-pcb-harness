@@ -442,6 +442,9 @@ def _main(argv=None) -> int:
     if argv[:1] == ["import"]:                           # (a KiCad layout as a board script, for a revision)
         import kicad_import
         return kicad_import.main(argv[1:])
+    if argv[:1] == ["say"]:                              # (the agent's word to the engineer, on the viewer)
+        import pcb_view
+        return pcb_view.say_main(argv[1:])
     if argv[:1] == ["view"]:
         import pcb_view
         return pcb_view.main(argv[1:])

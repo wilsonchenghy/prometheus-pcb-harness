@@ -23,7 +23,11 @@ hands. Unless they ask you to just build it, work with them:
    stock, the built-in router instead of FreeRouting, an output skipped) is put to the engineer as a question, with
    your recommendation, before you do it. Only when nobody answers (an unattended run) take the default that keeps
    the core working, and say afterwards what you chose and why (the run's `skipped` list says the same).
-5. **Leave them the controls.** Prefer edits they can read in `board.py` (a position, a width, a requirement) over
+5. **Say it where they are looking.** While the engineer watches the viewer, `prometheus say out/ "U1 by the USB-C:
+   D+/D- stay under 10 mm" --at U1` puts your reason in the run log and, on the board, at the part (the AI's cursor
+   takes it there during a run, a callout after it). Say each decision as you make it, and each fix with its reason;
+   `pcb.say(text, ref=...)` does the same from `board.py`.
+6. **Leave them the controls.** Prefer edits they can read in `board.py` (a position, a width, a requirement) over
    clever code; open the result in KiCad (`out/kicad/<name>.kicad_pro`) when they want to adjust by hand, and rerun
    from their edits.
 
