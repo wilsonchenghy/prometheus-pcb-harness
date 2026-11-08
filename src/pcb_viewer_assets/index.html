@@ -1671,13 +1671,17 @@ function drawLive() {
     const s = !c ? `<em class="mute">not run</em>` : c.state === "running" ? `<em class="run">checking…</em>` : c.n ? `<em class="bad">${c.n} found</em>` : `<em class="ok">clean${c.warnings ? ` · ${c.warnings} warnings` : ""}</em>`;
     return `<div><span>${lab}</span>${s}</div>`; }).join("") + `</div>`;
   if (LV.done || LV.replay) h += `<div class="lreplay">${LV.replay ? `<button class="btn" id="lvstop">Stop replay</button>` : `<button class="btn primary" id="lvplay">Replay the run</button>`}<span class="mute">speed</span>${[1, 4, 16].map(s => `<button class="btn sp ${(LV.replay ? LV.replay.speed : LV.speed || 4) === s ? "on" : ""}" data-s="${s}">${s}×</button>`).join("")}</div>`;
-  box.innerHTML = h;
-  box.querySelectorAll(".lt").forEach(b => b.onclick = () => { if (b.dataset.k === "f") { LV.follow = true; LV.view = LV.kept != null || LV.done ? null : Math.max(...ks); }
-    else { LV.follow = false; LV.view = +b.dataset.k; } if (!LV.on && LV.done) lvViewTry(); else lvRedraw(true); drawLive(); });
-  if ($("#lvplay")) $("#lvplay").onclick = () => replayRun(LV.speed || 4);
-  if ($("#lvstop")) $("#lvstop").onclick = stopReplay;
-  box.querySelectorAll(".sp").forEach(b => b.onclick = () => { LV.speed = +b.dataset.s; if (LV.replay) LV.replay.speed = LV.speed; drawLive(); });
+  if (h !== LV.html) { LV.html = h; box.innerHTML = h; }  // (unchanged: left as it is, so a button under the pointer stays)
+  LV.ks = ks;
 }
+$("#livep").addEventListener("pointerdown", e => {      // (on press, from the panel: a redraw between press and release
+  const b = e.target.closest("button"); if (!b) return;  //  would swallow a click on the button it replaced)
+  if (b.classList.contains("lt")) { if (b.dataset.k === "f") { LV.follow = true; LV.view = LV.kept != null || LV.done ? null : Math.max(...LV.ks); }
+    else { LV.follow = false; LV.view = +b.dataset.k; } if (!LV.on && LV.done) lvViewTry(); else lvRedraw(true); drawLive(); }
+  else if (b.id === "lvplay") replayRun(LV.speed || 4);
+  else if (b.id === "lvstop") stopReplay();
+  else if (b.classList.contains("sp")) { LV.speed = +b.dataset.s; if (LV.replay) LV.replay.speed = LV.speed; drawLive(); }
+});
 async function lvViewTry() {                             // a finished run: one try's board (or back to the result)
   if (LV.view == null) { lvStop(); await loadAll(); return; }
   if (!LV.on) { const b = await getJ("/api/board"); if (b && !b.error) { lvStart(b); for (const c of LV.base.comps) c._wasUnplaced = lvMovedRefs().has(c.ref); } }
