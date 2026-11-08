@@ -400,6 +400,17 @@ def _repeatable(argv) -> None:
 
 
 def main(argv=None) -> int:
+    """the command line (``_main``); the streams the live log wrapped and the live log itself put back after"""
+    saved = sys.stdout, sys.stderr
+    try:
+        return _main(argv)
+    finally:
+        sys.stdout, sys.stderr = saved
+        if "pcb" in sys.modules:
+            sys.modules["pcb"].LIVE = None
+
+
+def _main(argv=None) -> int:
     if argv is None:                                     # (the command line, not a call from Python)
         _repeatable(sys.argv[1:])
     argv = sys.argv[1:] if argv is None else argv
@@ -479,7 +490,8 @@ def main(argv=None) -> int:
         spec["size_mm"] = [float(v) for v in a.size.lower().split("x")]
     os.makedirs(a.out, exist_ok=True)
     import pcb_view
-    prog = pcb_view.Progress(a.out, a.script)
+    viewing = not a.no_view and not os.environ.get("CI")
+    prog = pcb_view.Progress(a.out, a.script, viewing=viewing)
     pcb.PROGRESS = prog.event
     if not a.no_view and not os.environ.get("CI"):     # (the board in a browser, live, without holding the run)
         print(f"viewer: {pcb_view.launch(a.out)}", file=sys.stderr, flush=True)
@@ -502,9 +514,8 @@ def main(argv=None) -> int:
         if a.router == "harness":
             b.skip("FreeRouting", "KiCad or Java is not installed: routed with the built-in router",
                    "install them for FreeRouting (docs/setup.md); dense 0.4 mm pitch chips need it")
-    viewing = not a.no_view and not os.environ.get("CI")
     stage = a.stage
-    if viewing or stage == "schematic":                  # (the schematic and the parts at once: the engineer reviews
+    if viewing or stage == "schematic" or pcb.LIVE is not None:                  # (the schematic and the parts at once: the engineer reviews
         import kicad_sch                                 #  them while the layout is still being worked out)
         sch = kicad_sch.write(b, os.path.join(a.out, "kicad"))
         prog.snapshot(b, os.path.abspath(a.script))
@@ -523,6 +534,7 @@ def main(argv=None) -> int:
     if loaded:
         print(f"from the last run in {a.out}: {sum(1 for c in b.comps.values())} parts placed, "
               f"{len(b.tracks)} tracks, {len(b.vias)} vias ({b.router_used})")
+        pcb.live_state(b, "saved")
     route_ok = stage in ("route", "all")
     timings = {}
     store = _store(a.script) if route_ok else None
@@ -530,6 +542,7 @@ def main(argv=None) -> int:
     if from_store:
         print(f"from {os.path.relpath(store)}: {len(b.tracks)} tracks, {len(b.vias)} vias (PCB_REROUTE=1 routes again)")
         timings["routes/"] = 0.0
+        pcb.live_state(b, "routes/")
     elif stage == "route" and load_placement(b, a.out, key):     # (the placement --stage place showed: routed as is)
         print(f"placement from the last run in {a.out} (--stage place's): routed as placed")
     if stage in ("place", "route", "all") and any(c.get("unplaced") for c in b.comps.values()):
@@ -566,11 +579,13 @@ def main(argv=None) -> int:
             return 2
         timings["route"] = round(time.perf_counter() - t, 2)
         print(f"routed ({b.router_used}): {'clean' if not probs else f'{len(probs)} problems'} ({timings['route']} s)")
+        pcb.live_state(b, "routed", probs)
     probs = probs or []
     if b.tracks and ("route" in timings or "place+route" in timings):
         n_ = b.tidy()                                    # (dead vias the routing left: KiCad warns of them)
         if n_:
             print(f"tidied: {n_} via{'s' if n_ > 1 else ''} that joined nothing")
+        pcb.live_state(b, "kept", probs)
     if stage in ("place", "route", "all") and timings:
         save_state(b, a.out, key)
         if store and not from_store and not probs and not b.check():     # (only clean copper into git)
@@ -611,8 +626,11 @@ def main(argv=None) -> int:
     else:
         t = time.perf_counter()
         prog.stage("check")
+        pcb.live("checks", stage="design", state="running")
         chk = b.check()
+        pcb.live("checks", stage="design", state="done", n=len(chk), items=chk[:20])
         fchk = fab.fab_check(b, a.rules or spec.get("house"))
+        pcb.live("checks", stage="house", state="done", n=len(fchk), items=fchk[:20])
         timings["check"] = round(time.perf_counter() - t, 2)
     if stage in ("export", "all"):
         t = time.perf_counter()
@@ -645,6 +663,7 @@ def main(argv=None) -> int:
             major = int(ver.split(".")[0]) if ver and ver.split(".")[0].isdigit() else 0
             if major >= 9:
                 prog.stage("kicad drc")
+                pcb.live("checks", stage="kicad", state="running")
                 try:
                     d = pcb.kicad_drc(kpaths[0])
                     kchk = d["errors"] + d["unconnected"]
@@ -661,6 +680,8 @@ def main(argv=None) -> int:
                         schk = [str(e)]
                 else:
                     schk = ["the KiCad schematic was not written (see the line above)"]
+                pcb.live("checks", stage="kicad", state="done", n=len(kchk), items=kchk[:20])
+                pcb.live("checks", stage="schematic", state="done", n=len(schk), items=schk[:20])
             else:
                 why = f"KiCad {ver} is too old (9+ needed: the board is KiCad 9 format)" if ver else "KiCad (kicad-cli) is not installed"
                 how = pcb.KICAD_INSTALL.get(sys.platform, pcb.KICAD_INSTALL["linux"])
@@ -709,6 +730,10 @@ def main(argv=None) -> int:
               "files": {k: str(v) for k, v in files.items()}}
     with open(os.path.join(a.out, "result.json"), "w") as f:
         json.dump(result, f, indent=1)
+    pcb.live("checks", stage="critic", state="done", n=len(crit_err),
+             warnings=sum(1 for n in notes if n["severity"] == "warning"), items=[n["text"] for n in crit_err[:20]])
+    pcb.live_metrics(b, [f["text"] for f in result["findings"]], note="final")
+    pcb.live("findings", items=[{k: f.get(k) for k in ("stage", "kind", "text", "at", "pins")} for f in result["findings"][:60]])
     try:                                                 # (the page's board, so the viewer opens without rebuilding it)
         pcb_view.write_board(b, a.out, os.path.abspath(a.script))
     except Exception as e:

@@ -24,17 +24,80 @@ PAGE = HERE / "pcb_viewer_assets" / "index.html"
 
 # ---- progress: the run writes out/progress.json, the page reads it ----
 
+_TAGS = [(r"^place and route, try", "try"), (r"^placed and routed|^placed:|^placement", "place"),
+         (r"^rip-up|^route |^routing|^reusing the last routing|freerouting|^from .*routes/", "route"), (r"^LCSC", "parts"),
+         (r"^KiCad DRC|^kicad", "drc"), (r"^design check", "check"), (r"^house check", "house"),
+         (r"^schematic", "sch"), (r"^critic", "critic"), (r"^wrote|^\(\d", "export"), (r"^viewer:", "view"),
+         (r"^error", "error"), (r"^warning", "warn"), (r"^note", "note")]
+
+
+def log_tag(line: str, last: str = "run") -> str:
+    """the kind of a line the run printed, for the live log: route, place, drc, ... (an indented line: the one above's)"""
+    if line[:1] in " \t":
+        return last
+    low = line.strip().lower()
+    for pat, tag in _TAGS:
+        if re.search(pat, low):
+            return tag
+    return "run"
+
+
+class LiveTee:
+    """the run's own printed lines, also into the live log (out/live.jsonl): what the terminal shows, the page shows,
+    a tag on each line (``log_tag``); tries in their own processes print through it too"""
+
+    def __init__(self, stream):
+        self.stream, self.buf, self.last = stream, "", "run"
+
+    def write(self, s):
+        n = self.stream.write(s)
+        import pcb
+        if pcb.LIVE is not None:
+            self.buf += s
+            while "\n" in self.buf:
+                line, self.buf = self.buf.split("\n", 1)
+                if line.strip():
+                    self.last = log_tag(line, self.last)
+                    pcb.live("log", tag=self.last, text=line.rstrip()[:400])
+        return n
+
+    def flush(self):
+        self.stream.flush()
+
+    def __getattr__(self, k):
+        return getattr(self.stream, k)
+
+
+def live_on(viewing: bool) -> bool:
+    """the live log is kept when a viewer shows the run (PCB_LIVE=0: never), or when PCB_LIVE=1 asks for it"""
+    flag = os.environ.get("PCB_LIVE", "")
+    return flag == "1" or (viewing and flag != "0")
+
+
 class Progress:
     """the run's progress for the page: each stage as it starts and ends, each place-and-route try with its time,
     and an estimate of what is left (the tries still to run, at the time the tries so far took, a batch of
     ``workers`` at a time, plus the export)"""
 
-    def __init__(self, out_dir: str, script: str, parts: int = 0):
+    def __init__(self, out_dir: str, script: str, parts: int = 0, viewing: bool = False):
         self.path = Path(out_dir) / "progress.json"
         self.t0 = time.time()
         self.d = {"script": os.path.abspath(script), "started": self.t0, "stage": "loading", "done": False,
                   "tries": None, "tries_done": 0, "try_times": [], "workers": 1, "parts": parts, "stages": [],
-                  "snap": 0, "pid": os.getpid()}
+                  "snap": 0, "pid": os.getpid(), "live": None}
+        import pcb
+        pcb.LIVE = None
+        if live_on(viewing):                             # (the run's events as they happen: the page plays them)
+            live = Path(out_dir) / "live.jsonl"
+            live.parent.mkdir(parents=True, exist_ok=True)
+            live.write_text("")
+            pcb.LIVE = str(live)
+            self.d["live"] = self.t0
+            pcb.live("run", script=os.path.basename(script), started=self.t0)
+            if not isinstance(sys.stdout, LiveTee):
+                sys.stdout = LiveTee(sys.stdout)
+            if not isinstance(sys.stderr, LiveTee):
+                sys.stderr = LiveTee(sys.stderr)
         self._write()
 
     def stage(self, name: str):
@@ -43,6 +106,8 @@ class Progress:
             self.d["stages"][-1]["end"] = now - self.t0
         self.d["stages"].append({"name": name, "start": now - self.t0, "end": None})
         self.d["stage"] = name
+        import pcb
+        pcb.live("stage", name=name)
         self._write()
 
     def event(self, ev: dict):
@@ -50,7 +115,12 @@ class Progress:
         "seconds": s, "clean": bool, "line": text} per try"""
         if ev.get("kind") == "tries":
             self.d["tries"], self.d["workers"] = ev["tries"], ev.get("workers", 1)
+            import pcb
+            pcb.live("tries", tries=ev["tries"], workers=ev.get("workers", 1))
         elif ev.get("kind") == "router":                # (the router's own progress inside a try)
+            if ev.get("line") and ev.get("line") != self.d.get("router_line"):
+                import pcb
+                pcb.live("log", tag="route", text=ev["line"])
             self.d["router_line"] = ev.get("line", "")
         elif ev.get("kind") == "try":
             self.d["tries_done"] += 1
@@ -64,12 +134,17 @@ class Progress:
         """the board as it stands (out/board.json): the page shows it at once, before the run is done"""
         write_board(b, str(self.path.parent), script)
         self.d["snap"] += 1
+        import pcb
+        pcb.live("snap", n=self.d["snap"])
         self._write()
 
     def finish(self, clean: bool):
         self.stage("done")
         self.d["stages"][-1]["end"] = time.time() - self.t0
         self.d["done"], self.d["clean"] = True, clean
+        import pcb
+        pcb.live("done", clean=clean, seconds=round(time.time() - self.t0, 1))
+        pcb.LIVE = None
         self._write()
 
     def eta(self) -> Optional[float]:
@@ -718,6 +793,38 @@ def boards(current: Path) -> list:
     return sorted(got, key=lambda b: -b["time"])
 
 
+def read_events(out: Path, since: int = 0, most: int = 4000) -> dict:
+    """the live run's events in ``out/live.jsonl`` from byte ``since`` on (whole lines only: a line a try is still
+    writing waits for the next read); ``next`` is where the next read starts, ``run`` the run's start (a new run
+    starts the file again, so a page whose ``since`` is past its end starts over)"""
+    f = out / "live.jsonl"
+    if not f.exists():
+        return {"events": [], "next": 0, "run": None}
+    size = f.stat().st_size
+    if since > size:
+        since = 0
+    with open(f, "rb") as fh:
+        fh.seek(since)
+        data = fh.read(8 << 20)
+    cut = data.rfind(b"\n") + 1
+    evs = []
+    for ln in data[:cut].splitlines():
+        try:
+            evs.append(json.loads(ln))
+        except ValueError:
+            pass
+        if len(evs) >= most:
+            break
+    nxt = since + cut if len(evs) < most else since + sum(len(x) + 1 for x in data[:cut].splitlines()[:most])
+    run = None
+    try:
+        with open(f, "rb") as fh:
+            run = json.loads(fh.readline()).get("started")
+    except Exception:
+        pass
+    return {"events": evs, "next": nxt, "run": run, "size": size}
+
+
 def make_handler(out_dir: str):
     out = Path(out_dir).resolve()
     cache = _Cache(str(out))
@@ -777,6 +884,10 @@ def make_handler(out_dir: str):
                         except ProcessLookupError:
                             d.update(done=True, stopped=True, stage="stopped")
                     return self._json(d)
+                if path == "/api/events":               # (?since=byte offset: the live run's events after it)
+                    import urllib.parse as up
+                    q = up.parse_qs(self.path.split("?", 1)[-1])
+                    return self._json(read_events(out, int(q.get("since", ["0"])[0] or 0)))
                 if path == "/api/result":
                     p = out / "result.json"
                     return self._json(json.loads(p.read_text()) if p.exists() else {})

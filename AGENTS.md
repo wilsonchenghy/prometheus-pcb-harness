@@ -116,6 +116,16 @@ KiCad's part models, the schematic and the findings, and live progress with an e
 in the background, so the command still returns; later runs into the same folder reuse the page. Give the user the
 address it prints (`viewer: ...` on stderr). Pass `--no-view` in unattended runs (it is off when `CI` is set).
 
+The page follows the run as it happens. Each part moves onto the board as the placer puts it, and the AI's cursor goes
+where the run is working (the part being placed, the end of the net just routed, the check being run). The airwires of the
+nets not yet routed are drawn, and they go as the copper lands net by net (the built-in router; FreeRouting's copper
+comes when its pass ends). The stage shows on the board. The Live tab keeps the numbered steps, one chip per
+place-and-route try (click one to see that try's board), the counts (parts placed, nets routed, length left to
+route, tracks and vias, problems) and each check as it runs. The run log under the board is everything the run
+printed, as it prints it, tagged; a part or net named in a line is a link to it. After the run, "Replay the run"
+plays it again at 1x, 4x or 16x. It all comes from `out/live.jsonl` (one event a line, written while a viewer is
+open, or always with `PCB_LIVE=1`; `PCB_LIVE=0` turns it off): read it to see what a run did, in order.
+
 ## KiCad's DRC
 
 When KiCad 9+ is installed (`kicad-cli` on the PATH), every run also checks the exported board with KiCad's own

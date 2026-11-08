@@ -2585,7 +2585,16 @@ def _escape(board: Board, ref: str, num: str, reach: float = 0.5, width: Optiona
 
 
 # ---- a small maze router (Lee wavefronts on a grid, two layers, vias) ---------------------------------------------------
-def route(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_cost: float = 8.0, layers: str = "FB",
+def route(board: Board, net: str, *a, **kw) -> List[str]:
+    """``_route_net`` (below), and the net's copper as the live run's "copper" event when it is done"""
+    probs = _route_net(board, net, *a, **kw)
+    if LIVE is not None:
+        live_copper(board, net)
+        live("net", net=net, ok=not probs, problems=probs[:3])
+    return probs
+
+
+def _route_net(board: Board, net: str, width: float = 0.3, grid: float = 0.25, via_cost: float = 8.0, layers: str = "FB",
           keepout=None, via: Tuple[float, float] = (0.3, 0.6), only: Optional[Sequence[Tuple[str, str]]] = None,
           amps: Optional[float] = None, track_keepout=None,
           seed_pins: Optional[Sequence[Tuple[str, str]]] = None) -> List[str]:
@@ -3295,6 +3304,7 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             continue
         pos[r] = (float(best[1]), float(best[2]), best[3])
         placed.add(r)
+        live("place", ref=r, at=[round(pos[r][0], 3), round(pos[r][1], 3)], rot=pos[r][2], side=side[r])
     # 2. anneal: move, turn or swap a part; keep what shortens the wire (and, early on, some of what does not)
     mov = [r for r in move if r in placed]
     if len(mov) >= 1:
@@ -3332,6 +3342,9 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             d = new_c - old_c
             if d > 0 and rng.random() >= math.exp(-d / T):
                 pos.update(old)
+            if live_due("anneal", 0.25):                 # (a few frames a second of the annealer at work)
+                live("places", phase="anneal", frac=round(frac, 3),
+                     places={q: [round(pos[q][0], 3), round(pos[q][1], 3), pos[q][2], side[q]] for q in mov})
     # 3. settle: a part still further than its "within d mm" (a requirement, a decoupling cap) goes to the
     # cheapest legal spot round its partner's pin within that distance, if there is one
     mov_set = set(mov) if len(mov) >= 1 else set()
@@ -3412,6 +3425,9 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
             c["at"], c["rot"] = (round(pos[r][0], 3), round(pos[r][1], 3)), pos[r][2]
             c.pop("unplaced", None)
     board.__dict__.pop("_pads_memo", None)
+    live("places", phase="final", places={r: [board.comps[r]["at"][0], board.comps[r]["at"][1], board.comps[r]["rot"],
+                                              board.comps[r].get("side", "F")] for r in move if r in placed},
+         failed=failed)
     return failed
 
 
@@ -3538,6 +3554,106 @@ def near_misses(board: Board) -> List[str]:
 
 PROGRESS = None    # a callable given {"kind": "tries", ...} and {"kind": "try", ...} as place_and_route goes
 
+# ---- the live run: every step as it happens, for the viewer (out/live.jsonl, one JSON object a line) ----
+LIVE: Optional[str] = None   # the file the run's events go to (pcb_view.Progress sets it); None: no events
+_LIVE_TRY: Optional[int] = None   # the place-and-route try the events belong to (each try's own process too)
+_LIVE_DUE: Dict[str, float] = {}
+
+
+def live(kind: str, **ev) -> None:
+    """one event of the live run, appended to ``LIVE``: {"t": unix time, "kind": ..., "try": k, ...}. Tries in
+    their own processes write to the same file (a line at a time, appended); a viewer's trouble never stops a run"""
+    if LIVE is None:
+        return
+    import json
+    import time
+    try:
+        line = json.dumps({"t": round(time.time(), 3), "kind": kind, "try": _LIVE_TRY, **ev},
+                          separators=(",", ":"), default=lambda o: float(o) if hasattr(o, "__float__") else str(o))
+        with open(LIVE, "a") as f:
+            f.write(line + "\n")
+    except Exception:
+        pass
+
+
+def live_due(key: str, every: float) -> bool:
+    """at most one event of ``key`` every ``every`` seconds (the annealer's thousands of moves: a few frames)"""
+    import time
+    if LIVE is None:
+        return False
+    now = time.time()
+    if now - _LIVE_DUE.get(key, 0.0) < every:
+        return False
+    _LIVE_DUE[key] = now
+    return True
+
+
+def _live_cu(items) -> list:
+    """tracks and vias, compact: [net, layer, width, points] and [net, x, y, diameter]"""
+    return [[t["net"], t["layer"], round(t["w"], 3), [[round(p[0], 3), round(p[1], 3)] for p in t["pts"]]]
+            if "pts" in t else [t["net"], round(t["at"][0], 3), round(t["at"][1], 3), round(t["dia"], 3)]
+            for t in items]
+
+
+def live_copper(board: "Board", net: Optional[str] = None) -> None:
+    """the copper as it stands: one net's (after it is routed), or the whole board's"""
+    if LIVE is None:
+        return
+    tr = [t for t in board.tracks if net is None or t["net"] == net]
+    vi = [v for v in board.vias if net is None or v["net"] == net]
+    live("copper", net=net, tracks=_live_cu(tr), vias=_live_cu(vi))
+
+
+def live_state(board: "Board", note: str = "", probs: Optional[Sequence[str]] = None) -> None:
+    """the whole board as it stands, for a viewer that joined late or a step that changed much at once: every part's
+    place, all the copper, the metrics"""
+    if LIVE is None:
+        return
+    live("places", phase=note or "state", places={r: [c["at"][0], c["at"][1], c["rot"], c.get("side", "F")]
+                                                   for r, c in board.comps.items() if not c.get("unplaced")})
+    live_copper(board)
+    live_metrics(board, probs, note=note)
+
+
+def live_metrics(board: "Board", probs: Optional[Sequence[str]] = None, note: str = "") -> dict:
+    """where the board stands: parts placed, nets joined, the length still to route (each split net's pieces joined
+    by their shortest pad-to-pad links, as a ratsnest), tracks and vias; sent as a "metrics" event"""
+    import math
+    m = {"parts": len(board.comps), "placed": sum(1 for c in board.comps.values() if not c.get("unplaced")),
+         "tracks": len(board.tracks), "vias": len(board.vias), "nets": 0, "routed": 0, "ratsnest": 0.0,
+         "unrouted": [], "note": note}
+    if probs is not None:
+        m["problems"] = len(probs)
+    if LIVE is None:
+        return m
+    try:
+        if m["placed"] == m["parts"]:
+            pads, pn, cu = board.pad_shapes(), board.pad_net(), board.copper()
+            at = {(r, n): (g.centroid.x, g.centroid.y) for r, n, L, g, d in pads}
+            for net, d in board.nets.items():
+                if len(d["pins"]) < 2:
+                    continue
+                m["nets"] += 1
+                isl = board.islands(net, cu=cu, pads=pads, pn=pn)
+                if len(isl) <= 1:
+                    m["routed"] += 1
+                    continue
+                m["unrouted"].append(net)
+                pts = [[at[tuple(p)] for p in g if tuple(p) in at] for g in isl]
+                pts = [g for g in pts if g]
+                done, tot = [pts[0]], 0.0                # (Prim's tree over the pieces, pad to nearest pad)
+                rest = pts[1:]
+                while rest:
+                    best = min(((min(math.dist(a, b) for a in sum(done, []) for b in g), i) for i, g in enumerate(rest)))
+                    tot += best[0]
+                    done.append(rest.pop(best[1]))
+                m["ratsnest"] += tot
+            m["ratsnest"] = round(m["ratsnest"], 1)
+    except Exception:
+        pass
+    live("metrics", **m)
+    return m
+
 
 def _progress(**ev):
     if PROGRESS is not None:
@@ -3551,22 +3667,34 @@ def _one_try(board: Board, move, k: int, gap: float, route_kw, router: str, kw) 
     """one placement and routing of ``place_and_route``: (score, problems, placement, tracks, vias, fan, line,
     clean, router, seconds)"""
     import time as _t
+    global _LIVE_TRY
+    _LIVE_TRY = k
     t0_ = _t.perf_counter()
+    live("try", state="start", seed=k)
     left = autoplace(board, move=move, gap=gap + 0.25 * min(k, 3), seed=k, **kw)   # (later tries: other seeds at
+    live_metrics(board, note="placed")
     if left:                                             # the same room, not ever more than fits; a part that
         probs = [f"{r}: no room to place it (a bigger board, smaller parts, or both sides)" for r in left]
     else:                                                # found no room is not routed round: said at once)
+        live("phase", name="route", router=router)
         probs = route_board(board, router, **(route_kw or {}))
+        live_copper(board)
+        live("phase", name="check")
         probs += [p for p in board.check() if p not in probs]
     miss = near_misses(board)
+    live_metrics(board, probs + miss, note="checked")
     score = severity(probs) + 50 * len(left) + 5 * len(miss)   # (a part left off the board is worse than any miss;
     # a short worse than a slip; a requirement's "within d mm" missed counts)
     line = f"place and route, try {k + 1}: " + ("clean" if not probs and not miss and not left else
            "; ".join(([f"{len(probs)} problems ({probs[0][:70]})"] if probs else []) + miss[:2] +
                      ([f"no room for {', '.join(left)}"] if left else [])))
+    secs = round(_t.perf_counter() - t0_, 2)
+    live("try", state="end", clean=not probs and not miss, problems=(probs + miss)[:12], n=len(probs) + len(miss),
+         seconds=secs, line=line)
+    _LIVE_TRY = None
     return (score, probs, {r: (board.comps[r]["at"], board.comps[r]["rot"]) for r in move},
             list(board.tracks), list(board.vias), set(getattr(board, "_fan", set())), line,
-            not probs and not miss, getattr(board, "router_used", None), round(_t.perf_counter() - t0_, 2))
+            not probs and not miss, getattr(board, "router_used", None), secs)
 
 
 def _try_worker(blob: bytes, move, k, gap, route_kw, router, kw) -> tuple:
@@ -3648,6 +3776,9 @@ def place_and_route(board: Board, move: Optional[Sequence[str]] = None, tries: i
         board.comps[r].pop("unplaced", None)
     board.tracks, board.vias, board._fan = best[3], best[4], best[5]
     board.router_used = best[8] or "not routed: parts without room"
+    live("kept", k=next(k for k in results if results[k] is best), clean=best[7], n=len(best[1]),
+         places={r: [round(at[0], 3), round(at[1], 3), rot, board.comps[r].get("side", "F")]
+                 for r, (at, rot) in best[2].items()})
     board.__dict__.pop("_pads_memo", None)
     board.__dict__.pop("_cu_memo", None)
     return best[1]
@@ -5180,6 +5311,7 @@ def route_jobs(board: Board, jobs: Sequence[Tuple[str, float, Optional[Sequence[
                     if n in board.nets and len(board.islands(n)) > 1 and not any(f"route {n}:" in m for m in got)]
             print(f"rip-up within {rr} mm of {len(circles)} pads ({len(torn)} nets torn up): "
                   f"{len(best[0])} problems before, {len(got)} after", flush=True)
+            live_copper(board)                           # (the nets torn up and routed again: the whole board)
             if len(got) < len(best[0]):
                 best = (got, list(board.tracks), list(board.vias))
             if not best[0]:

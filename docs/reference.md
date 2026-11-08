@@ -58,7 +58,11 @@ What it does (`pcb.py`, its docstring has the details):
   `bench/` are wired this way.
 - **Viewer**: every run opens the board in your browser (the stage, the try it is on, about how long is left)
   and leaves it open after, one tab per output folder (`--no-view`, or `CI` set, turns it off); `prometheus view out/`
-  opens a finished run.
+  opens a finished run. While the run goes, the board fills in live: each part as it is placed, the airwires of the
+  nets still open, the copper net by net. The run log under the board shows every line the run prints, its parts
+  and nets as links. The Live tab has the steps, the tries (each one's board a click away), the counts and the
+  checks as they run. A finished run can be replayed. The events are in `out/live.jsonl` (`PCB_LIVE=1` writes it
+  without a viewer, `PCB_LIVE=0` never).
   Layout with layers to switch, an interactive 3D view (and KiCad's photoreal render when KiCad is installed), a
   the KiCad schematic as KiCad draws it, and every finding: click one and the board zooms to it.
 

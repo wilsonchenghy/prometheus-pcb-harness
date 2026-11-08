@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+**Added: the run, live in the viewer**
+- The run writes each step as it happens to `out/live.jsonl`: each part the placer puts down (and a few frames a
+  second of its annealing), each net's copper as the router finishes it, each try's start and end, the counts at
+  each checkpoint (parts placed, nets joined, the length left to route as a ratsnest, tracks, vias, problems), each
+  check as it starts and ends, and every line the run prints, tagged (`route`, `place`, `try`, `drc`, ...). Tries in
+  their own processes write to it too. It is written while a viewer is open, or with `PCB_LIVE=1`.
+- The viewer plays it:
+  - The board fills in as the run goes: parts slide into place (those not placed yet wait beside the board),
+    airwires show the nets still open, and the copper lands net by net with the newest net lit.
+  - The AI's cursor goes where the run is working, its tag saying what: it rides in with each part placed, follows
+    the router to the end of each net, and goes to a check as it starts.
+  - The stage is on the board (`02 · PLACE & ROUTE · TRY 3/6 · ROUTING`).
+  - The run log runs under the board, filterable and copyable; parts and nets in it are links.
+  - The Live tab has the numbered steps with their times, a chip per try (click one to see its board), bars for
+    parts placed and nets routed, the length left to route with its curve, and the checks as they run.
+  - "Replay the run" plays a finished run again at 1x, 4x or 16x.
+- `GET /api/events?since=` serves the events after a byte offset (whole lines only).
+- Fixed on the way: a pan or zoom frame queued as the view was redrawn threw `Cannot read properties of null`.
+
 Found by building 26 boards (on branch claude/pcb-collection) and judging every one with KiCad 9's DRC, a random-board fuzz with KiCad as the
 second judge (`bench/fuzz.py --kicad`), and an export/import round trip.
 
