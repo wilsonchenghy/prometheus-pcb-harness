@@ -2843,3 +2843,76 @@ def test_a_pin_on_the_exposed_pads_net_is_tied_straight_in():
         for (r, n), g in pads.items():
             if pn.get((r, n)) != "GND":
                 assert line.distance(g) >= b.clear - 1e-6
+
+
+def test_a_run_writes_its_live_events_for_the_viewer(tmp_path, monkeypatch):
+    """PCB_LIVE=1: out/live.jsonl holds the run as it happened - each part placed, each net's copper, each try, the
+    metrics, the checks, every printed line (tagged) - and the streams the run wrapped are put back after"""
+    import pcb
+    import pcb_cli
+    monkeypatch.setenv("PCB_LIVE", "1")
+    monkeypatch.setenv("PCB_WORKERS", "1")
+    out = tmp_path / "o"
+    script = tmp_path / "tiny.py"                        # (parts left to the placer, nets left to the router)
+    script.write_text(
+        "from pcb import Board\n"
+        "def build():\n"
+        "    b = Board('live_tiny', [(0, 0), (16, 0), (16, 12), (0, 12)], rules='jlcpcb-2')\n"
+        "    b.place('J1', 'Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical', (2.5, 6), 0, 'PWR')\n"
+        "    b.place('R1', 'Resistor_SMD:R_0603_1608Metric', None, 0, '1k')\n"
+        "    b.place('R2', 'Resistor_SMD:R_0603_1608Metric', None, 0, '1k')\n"
+        "    b.place('D1', 'LED_SMD:LED_0603_1608Metric', None, 0, 'red')\n"
+        "    b.net('V', [('J1', '1'), ('R1', '1'), ('R2', '1')])\n"
+        "    b.net('A', [('R1', '2'), ('D1', '2')])\n"
+        "    b.net('G', [('J1', '2'), ('D1', '1'), ('R2', '2')])\n"
+        "    return b\n")
+    so, se = sys.stdout, sys.stderr
+    pcb_cli.main([str(script), str(out), "--kicad-drc", "off", "--router", "harness", "--no-view", "--no-lcsc",
+                  "--stage", "route"])
+    assert sys.stdout is so and sys.stderr is se and pcb.LIVE is None
+    evs = [json.loads(ln) for ln in (out / "live.jsonl").read_text().splitlines()]
+    kinds = [e["kind"] for e in evs]
+    assert kinds[0] == "run" and kinds[-1] == "done"
+    for k in ("stage", "tries", "try", "place", "places", "copper", "net", "metrics", "checks", "log", "kept"):
+        assert k in kinds, k
+    r = json.load(open(out / "result.json"))
+    placed = {e["ref"] for e in evs if e["kind"] == "place" and e["try"] == 0}
+    assert placed and placed <= set(r["placement"])
+    fin = [e for e in evs if e["kind"] == "metrics" and e.get("note") == "final"][-1]
+    assert fin["placed"] == fin["parts"] == r["parts"] and (fin["routed"] == fin["nets"]) == (not fin["unrouted"])
+    tries = [e for e in evs if e["kind"] == "try"]
+    assert tries[0]["state"] == "start" and any(t["state"] == "end" for t in tries)
+    assert all(e["try"] is not None for e in evs if e["kind"] in ("place", "net"))
+    logs = [e for e in evs if e["kind"] == "log"]
+    assert any(e["tag"] == "try" and "place and route, try 1" in e["text"] for e in logs)
+
+
+def test_live_events_are_read_a_whole_line_at_a_time(tmp_path):
+    """the page asks for the events after a byte offset: only whole lines (a try may be half-way through one), the
+    offset to ask from next, and from the start again when the file began again (a new run)"""
+    import pcb_view
+    f = tmp_path / "live.jsonl"
+    f.write_text('{"kind":"run","started":1.0}\n{"kind":"log","text":"a"}\n{"kind":"lo')
+    r = pcb_view.read_events(tmp_path, 0)
+    assert [e["kind"] for e in r["events"]] == ["run", "log"] and r["run"] == 1.0
+    with open(f, "a") as fh:
+        fh.write('g","text":"b"}\n')
+    r2 = pcb_view.read_events(tmp_path, r["next"])
+    assert [e["text"] for e in r2["events"]] == ["b"]
+    f.write_text('{"kind":"run","started":2.0}\n')
+    r3 = pcb_view.read_events(tmp_path, r2["next"])
+    assert r3["events"][0]["started"] == 2.0
+    assert pcb_view.read_events(tmp_path / "none", 0) == {"events": [], "next": 0, "run": None}
+
+
+def test_no_live_log_without_a_viewer(tmp_path, monkeypatch):
+    """--no-view (or CI) and no PCB_LIVE: nothing is written for a page nobody looks at"""
+    import pcb_cli
+    import pcb_view
+    monkeypatch.delenv("PCB_LIVE", raising=False)
+    pcb_cli.main([str(Path(__file__).parent.parent / "bench" / "blinker.py"), str(tmp_path / "o"), "--stage", "critic",
+                  "--no-view"])
+    assert not (tmp_path / "o" / "live.jsonl").exists()
+    assert pcb_view.log_tag("place and route, try 2: clean") == "try"
+    assert pcb_view.log_tag("KiCad DRC: clean") == "drc" and pcb_view.log_tag("   F.Cu: x", "drc") == "drc"
+    assert pcb_view.log_tag("rip-up within 2.5 mm of 1 pads") == "route"

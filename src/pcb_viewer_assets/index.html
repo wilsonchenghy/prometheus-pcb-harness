@@ -239,6 +239,50 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 .app.focus { grid-template-columns: 0 1fr 0; } .app.focus .left, .app.focus .right { display: none; }
 ::-webkit-scrollbar { width: 10px; } ::-webkit-scrollbar-thumb { background: var(--line); border: 3px solid #fff; }
 @media (max-width: 1000px) { .app { grid-template-columns: 0 1fr 320px; } .left { display: none; } }
+
+/* the live run: the stage on the board, the run log under it, the Live tab */
+#lstage { left: 20px; top: 40px; z-index: 6; display: none; align-items: baseline; gap: 10px; padding: 6px 12px; font: 500 10.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--text2); }
+#lstage.on { display: flex; } #lstage b { font: 700 15px/1 var(--disp); color: var(--blue); letter-spacing: .04em; }
+#lstage span:not(.m) { color: var(--text); } #lstage .m { color: var(--text3); letter-spacing: .1em; } #lstage .rp { color: var(--gold); }
+.canvas.running.live svg.pan { filter: none; } .canvas.live .shimmer { display: none !important; }
+.lvhot { filter: drop-shadow(0 0 .35px #fff) brightness(1.35); }
+.lvpulse { animation: lvp 1s ease-out infinite; } @keyframes lvp { 50% { opacity: .35; } }
+.console { position: absolute; left: 0; right: 0; bottom: 0; z-index: 7; height: 34px; display: flex; flex-direction: column; background: rgba(255,255,255,.93);
+  backdrop-filter: blur(10px); border-top: 1px solid var(--line); transition: height .25s cubic-bezier(.2,.8,.2,1); }
+.console.open { height: 190px; }
+.console .chd { display: flex; align-items: center; gap: 10px; padding: 0 12px; height: 33px; flex: none; border-bottom: 1px solid var(--line2); font: 500 10.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--text2); }
+.console .chd b { color: var(--text); font-weight: 500; } .console .sp { flex: 1; }
+.console .chd button { border: 1px solid transparent; background: none; padding: 3px 7px; cursor: pointer; font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--text2); }
+.console .chd button:hover { border-color: var(--line); background: var(--tint); } .console .chd button.on { color: var(--blue); border-color: #c7d6ea; background: var(--tint); }
+#ctags { display: flex; gap: 2px; } #ccount { color: var(--text3); letter-spacing: .08em; text-transform: none; }
+.clines { flex: 1; overflow: auto; padding: 4px 0 6px; font: 400 11.5px/1.55 var(--mono); }
+.cline { display: grid; grid-template-columns: 58px 74px 1fr; padding: 0 12px; white-space: pre-wrap; word-break: break-word; }
+.cline:hover { background: var(--tint); } .cline .ct { color: var(--text3); } .cline .cg { font-weight: 500; } .cline .cx { color: var(--text); }
+.cline a { color: var(--blue); cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; } .cline a.cn { color: #6a4fb0; }
+.canvas.con .tools, .canvas.con .looks, .canvas.con .editcard { bottom: 204px; } .canvas.con .brk.bl, .canvas.con .brk.br { display: none; }
+.canvas:not(.con) .tools, .canvas:not(.con) .looks, .canvas:not(.con) .editcard { bottom: 48px; }
+.canvas.con #layout, .canvas.con #schem { bottom: 190px; } .canvas:not(.con) #layout, .canvas:not(.con) #schem { bottom: 34px; }
+.canvas.live .prog { left: auto; right: 18px; transform: none; min-width: 340px; }
+.tabs2 { padding: 0 6px; } .tabs2 button { white-space: nowrap; padding-left: 6px; padding-right: 6px; letter-spacing: .1em; font-size: 10.5px; } .tabs2 .badge { margin-left: 4px; }
+.badge.live { color: var(--text3); background: none; border: 0; } .badge.live.on { color: var(--gold); animation: blink 1.2s ease-in-out infinite; }
+#livep h4 { margin: 16px 0 8px; } #livep h4:first-child { margin-top: 2px; } #livep .mute { color: var(--text3); text-transform: none; letter-spacing: 0; font-family: var(--sans); }
+.lsteps { display: grid; gap: 0; border-top: 1px solid var(--line2); }
+.ls { display: grid; grid-template-columns: 30px 1fr auto; align-items: baseline; gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--line2); font: 500 11px var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--text2); }
+.ls b { font: 700 14px/1 var(--disp); color: var(--text3); } .ls em { font-style: normal; color: var(--text3); letter-spacing: 0; }
+.ls.ok b { color: var(--green); } .ls.cur { color: var(--text); } .ls.cur b { color: var(--gold); animation: blink 1.2s ease-in-out infinite; }
+.ltries { display: flex; flex-wrap: wrap; gap: 6px; }
+.lt { position: relative; display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 10px; border: 1px solid var(--line); background: #fff; cursor: pointer; font: 600 13px var(--disp); }
+.lt i { font: 500 10.5px var(--mono); font-style: normal; color: var(--text3); } .lt.clean i { color: var(--green); } .lt.bad i { color: var(--red); } .lt.run i { color: var(--gold); }
+.lt s { text-decoration: none; position: absolute; top: -8px; right: -6px; font: 600 8.5px var(--mono); letter-spacing: .1em; text-transform: uppercase; background: var(--ink); color: #fff; padding: 1px 4px; }
+.lt.on { border-color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); } .lt.follow { font: 500 10px var(--mono); letter-spacing: .14em; text-transform: uppercase; color: var(--text2); }
+.lm { margin: 10px 0; } .lmh { display: flex; justify-content: space-between; font-size: 12px; color: var(--text2); } .lmh b { font: 500 12px var(--mono); color: var(--text); }
+.lmb { height: 4px; background: var(--line2); margin-top: 5px; } .lmb i { display: block; height: 100%; background: var(--blue); transition: width .4s; }
+.spark { display: block; margin-top: 4px; width: 100%; height: 26px; } .spark polyline:first-child { vector-effect: non-scaling-stroke; }
+.lkv { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 12px; color: var(--text2); margin-top: 12px; } .lkv b { font: 500 12px var(--mono); color: var(--text); }
+.lchecks div { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line2); font-size: 12.5px; }
+.lchecks em { font: 500 11px var(--mono); font-style: normal; } .lchecks .ok { color: var(--green); } .lchecks .bad { color: var(--red); } .lchecks .run { color: var(--gold); }
+.lreplay { display: flex; align-items: center; gap: 6px; margin-top: 16px; flex-wrap: wrap; } .lreplay .sp { padding: 5px 9px; } .lreplay .sp.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.lvempty { display: grid; gap: 6px; padding: 30px 6px; text-align: center; color: var(--text2); } .lvempty b { color: var(--text); font: 600 16px var(--disp); }
 </style>
 </head>
 <body>
@@ -285,6 +329,8 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     </div>
     <div class="float looks" id="looks"><button class="on" data-m="board">As made</button><button data-m="glow">Light</button><button data-m="xray">Layers</button></div>
     <div class="float editcard" id="editcard"></div>
+    <div class="float" id="lstage"></div>
+    <div class="console" id="console"><div class="chd"><b>Run log</b><span id="ctags"><button class="on" data-t="all">all</button><button data-t="place">place</button><button data-t="route">route</button><button data-t="try">tries</button><button data-t="check">checks</button><button data-t="error">errors</button></span><span id="ccount"></span><span class="sp"></span><button id="cfollow" class="on" title="Keep the newest line in view">follow</button><button id="ccopy" title="Copy the lines shown">copy</button><button id="ctoggle" title="Show or hide the log (the ` key)">▾</button></div><div class="clines" id="clines"></div></div>
     <div id="msg"></div>
     <div class="dsheet" id="dsheet"><div class="dsh-top"><span class="k" id="dstitle">Datasheet</span><span class="dsstep"><button id="pfprev" title="Previous pin (←)">‹</button><b id="pfpin"></b><span class="st" id="pfst"></span><button id="pfnext" title="Next pin (→)">›</button></span><span class="sp"></span>
       <button id="dsprev" title="Previous page">‹</button><span class="k" id="dspage"></span><button id="dsnext" title="Next page">›</button>
@@ -294,7 +340,8 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 
   <div class="right">
     <div class="verdict"><div class="k" id="vk">Verdict</div><div class="v run" id="vv">Loading.</div><div class="s" id="vs"></div></div>
-    <div class="tabs2"><button class="on" data-p="checks">Checks<span class="badge" id="bchecks">0</span></button><button data-p="run">Run</button><button data-p="files">Outputs</button><button data-p="evidence">Evidence<span class="badge" id="bevidence">0</span></button></div>
+    <div class="tabs2"><button data-p="live">Live<span class="badge live" id="blive">●</span></button><button class="on" data-p="checks">Checks<span class="badge" id="bchecks">0</span></button><button data-p="run">Run</button><button data-p="files">Outputs</button><button data-p="evidence">Evidence<span class="badge" id="bevidence">0</span></button></div>
+    <div class="pane" id="p-live"><div id="livep"></div></div>
     <div class="pane on" id="p-checks"><div id="checks"></div></div>
     <div class="pane" id="p-run"><div id="runp"></div></div>
     <div class="pane" id="p-files"><div id="files"></div></div>
@@ -371,7 +418,8 @@ $$("#seg button").forEach(b => b.onclick = () => {
   $("#loupeb").style.display = b.dataset.v === "layout" ? "" : "none"; $("#moveb").style.display = b.dataset.v === "layout" ? "" : "none";
   if (b.dataset.v !== "layout") { setMove(false); $("#editcard").classList.remove("on"); } $("#explode").style.display = b.dataset.v === "v3d" ? "" : "none";
   if (b.dataset.v !== "layout") setLoupe(false);
-  $("#tools").style.display = b.dataset.v === "parts" ? "none" : "";
+  $("#tools").style.display = b.dataset.v === "parts" ? "none" : ""; $("#console").style.display = b.dataset.v === "parts" ? "none" : "";
+  $("#canvas").classList.toggle("con", b.dataset.v !== "parts" && LV.conOpen); $("#lstage").style.display = b.dataset.v === "layout" ? "" : "none";
   $(".app").classList.toggle("focus", b.dataset.v === "parts" || b.dataset.v === "schem");   // (a figure or a sheet: the whole width)
   const vi = $$("#seg button").indexOf(b) + 1; $("#vtag").innerHTML = `${b.textContent} · <b>0${vi}/04</b>`;          // (a part's figure gets the whole width)
   if (b.dataset.v === "parts") setTimeout(drawParts, 380);
@@ -396,7 +444,7 @@ function panZoom(svg, onChange) {
   const apply = () => { svg.setAttribute("viewBox", st.vb.join(" ")); base = null; svg.style.transform = ""; timed(); if (onChange) onChange(st.vb); };
   const live = () => { if (!base && cheap) { if (!raf) raf = requestAnimationFrame(() => { raf = 0; apply(); }); return; }
     if (!base) { rect(); base = st.vb.slice(); svg.style.transformOrigin = "0 0"; svg.style.willChange = "transform"; }
-    if (!raf) raf = requestAnimationFrame(() => { raf = 0; const r = box, sn = r.width / st.vb[2], sb = r.width / base[2];
+    if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (!base) return; const r = box, sn = r.width / st.vb[2], sb = r.width / base[2];
       svg.style.transform = `translate(${(base[0] - st.vb[0]) * sn}px,${(base[1] - st.vb[1]) * sn}px) scale(${sn / sb})`;
       if (onChange) onChange(st.vb); });
     clearTimeout(idle); idle = setTimeout(draw, 150); };
@@ -485,6 +533,7 @@ function drawLayout() {
       p.addEventListener("click", () => selectNet(c.net));
     }
   }
+  if (B.live) lvCopper(svg, layers);                     // (the live run: its tracks as drawn so far)
   if (layerOn.pads) { const g = el("g", { id: "padsg" }, svg);
     for (const c of B.comps) for (const p of c.pads) {
       if (!p.drill && (made ? p.layer !== topL() : !layerOn[p.layer])) continue;
@@ -510,7 +559,7 @@ function drawLayout() {
       t.textContent = c.ref; } }
   // findings as numbered pins on the board
   window._pins = [];
-  if (layerOn.pins) { const g = el("g", {}, svg);
+  if (layerOn.pins && !B.live) { const g = el("g", {}, svg);
     issues().forEach((f, i) => { const at = issueAt(f); if (!at) return;
       const x = X(at[0]), y = Y(at[1]), c = f._sev === "error" ? "#ff5d5d" : "#f0a35e", pg = el("g", { class: "pin" }, g);
       el("circle", { cx: x, cy: y, r: 0.9, fill: c, opacity: .35, class: "halo" }, pg);
@@ -521,6 +570,7 @@ function drawLayout() {
       hover(pg, esc(f.text)); pg.addEventListener("click", () => openIssue(i)); window._pins[i] = pg; }); }
   if (selNet) focusNet(selNet, true);
   drawRats(svg);
+  if (B.live) lvAir(svg);
   if (!window._built) { window._built = true; buildUp(host, svg); }
 }
 function buildUp(host, root) {
@@ -1060,6 +1110,9 @@ function drawHeader() {
     const erc = B && !B.error && B.comps.some(c => c.symbol);
     vs.textContent = (R.clean ? `Design, house rules${R.kicad_drc && R.kicad_drc.run ? ", KiCad DRC" : ""}${erc ? " and ERC" : ""} pass.` : "Click one to see it on the board.")
       + (R.skipped && R.skipped.length ? " Skipped: " + R.skipped.map(s => s.what).join(", ") + "." : ""); }
+  const nm = (B && B.name) || (R && R.board) || "board";   // (the tab's title: the run's state from another tab)
+  document.title = running ? `${P.eta == null ? "…" : Math.round(Math.max(0.03, Math.min(0.98, P.elapsed / (P.elapsed + P.eta))) * 100) + "%"} ${P.stage} · ${nm}`
+    : R && R.board ? `${R.clean ? "✓ clean" : "✗ " + n + (n === 1 ? " issue" : " issues")} · ${nm}` : "Prometheus · AI PCB Harness";
   const card = $("#prog"); $("#canvas").classList.toggle("running", !!running); card.classList.toggle("on", !!running);
   if (running) {
     const frac = P.eta == null ? 0.03 : Math.max(0.03, Math.min(0.98, P.elapsed / (P.elapsed + P.eta)));
@@ -1354,6 +1407,307 @@ async function openBoards() {
 $("#bswitch").onclick = (e) => { e.stopPropagation(); openBoards(); };
 document.addEventListener("click", e => { if (!e.target.closest("#bmenu")) $("#bmenu").classList.remove("on"); });
 
+// ---------- the live run: out/live.jsonl's events, played onto the board as they come (and replayed after) ----------
+// The run writes each step as it happens (a part placed, a net routed, a try ended, a check run, every line it
+// printed); the page follows it: the parts move into place, the copper lands net by net, the unrouted connections
+// show as airwires, the log runs below the board, and the Live tab keeps the counts. A finished run can be replayed.
+const LV = { since: 0, run: null, evs: [], on: false, view: null, follow: true, tries: {}, main: null, stages: [],
+             checks: {}, hist: [], ntries: null, kept: null, done: false, last: null, lastNet: null, base: null,
+             replay: null, conOpen: true, conFollow: true, conTag: "all", lines: 0 };
+const LTAG = { route: "#2f6fb5", place: "#8a5f19", try: "#6a4fb0", check: "#237a4b", house: "#237a4b", drc: "#237a4b",
+               sch: "#237a4b", critic: "#a5621a", export: "#5a6774", parts: "#5a6774", error: "#b3261e", warn: "#a5621a",
+               note: "#5a6774", run: "#5a6774", view: "#8a95a1", metrics: "#1f5fa8", stage: "#18212b" };
+const mkState = () => ({ places: {}, cu: {}, metrics: null, unrouted: null, routed: new Set(), phase: "place", t0: null });
+LV.main = mkState();
+
+function lvReset() {
+  Object.assign(LV, { tries: {}, main: mkState(), stages: [], checks: {}, hist: [], ntries: null, kept: null, done: false,
+                      last: null, lastNet: null, view: null, follow: true });
+  $("#clines").innerHTML = ""; LV.lines = 0;
+}
+const lvState = () => LV.view != null && LV.tries[LV.view] ? LV.tries[LV.view].st : LV.main;
+const stOf = (e) => e.try != null ? (LV.tries[e.try] || (LV.tries[e.try] = { state: "run", st: mkState(), t0: e.t })).st : LV.main;
+function groupCu(tracks, vias) { const cu = {};
+  for (const t of tracks || []) (cu[t[0]] || (cu[t[0]] = { tracks: [], vias: [] })).tracks.push(t);
+  for (const v of vias || []) (cu[v[0]] || (cu[v[0]] = { tracks: [], vias: [] })).vias.push(v);
+  return cu; }
+
+// one event into the state (and, for most, a line in the log); returns true when the board picture changed
+function lvApply(e, quiet) {
+  const st = stOf(e), T = e.t; LV.tnow = T;
+  switch (e.kind) {
+    case "run": lvReset(); LV.run = e.started; LV.t0 = e.started; conLine(T, "run", `run of ${e.script}`); return true;
+    case "stage": LV.stages.push({ name: e.name, t: T }); if (e.name !== "done") conLine(T, "stage", `${String(LV.stages.length).padStart(2, "0")} · ${e.name}`); return false;
+    case "tries": LV.ntries = e.tries; conLine(T, "try", `up to ${e.tries} placements, ${e.workers} at a time`); return false;
+    case "try":
+      if (e.state === "start") { LV.tries[e.try] = { state: "run", st: mkState(), t0: T, seed: e.seed }; LV.tries[e.try].st.t0 = T;
+        if (LV.follow) LV.view = e.try; conLine(T, "try", `try ${e.try + 1}: placing (seed ${e.seed})`); return true; }
+      Object.assign(LV.tries[e.try] || (LV.tries[e.try] = { st: mkState() }), { state: e.clean ? "clean" : "bad", n: e.n, seconds: e.seconds, problems: e.problems });
+      return false;
+    case "place": st.places[e.ref] = [e.at[0], e.at[1], e.rot, e.side]; st.phase = "place"; LV.last = { ref: e.ref, t: performance.now(), try: e.try };
+      return true;
+    case "places": Object.assign(st.places, e.places);
+      if (e.phase === "anneal") st.phase = "anneal";
+      if (e.phase === "final") conLine(T, "place", `placed ${Object.keys(e.places).length} parts` + (e.failed && e.failed.length ? `; no room for ${e.failed.join(", ")}` : ""));
+      return true;
+    case "phase": st.phase = e.name; if (e.name === "route") { st.routed = new Set(); conLine(T, "route", `try ${e.try + 1}: routing (${e.router === "freerouting" ? "FreeRouting" : "built-in router"})`); }
+      return true;
+    case "copper": if (e.net == null) { st.cu = groupCu(e.tracks, e.vias); if (LV.follow && e.try != null && LV.kept == null) LV.view = e.try; }   // (a try's routing done: shown)
+      else st.cu[e.net] = groupCu(e.tracks, e.vias)[e.net] || { tracks: [], vias: [] };
+      if (e.net) LV.lastNet = { net: e.net, t: performance.now(), try: e.try };
+      return true;
+    case "net": if (e.ok) st.routed.add(e.net); else conLine(T, "route", (e.problems || [])[0] || `${e.net}: not joined`);
+      return true;
+    case "metrics": st.metrics = e; st.unrouted = new Set(e.unrouted || []); if (e.placed === e.parts && e.nets) st.routedAll = e.routed === e.nets;
+      LV.hist.push({ t: T, try: e.try, ratsnest: e.ratsnest, routed: e.routed, nets: e.nets, placed: e.placed, parts: e.parts, problems: e.problems });
+      if (e.note === "placed") conLine(T, "metrics", `try ${e.try + 1} placed: ${e.routed}/${e.nets} nets joined already, ${e.ratsnest.toFixed(1)} mm to route`);
+      if (e.note === "checked") conLine(T, "metrics", `try ${e.try + 1}: ${e.routed}/${e.nets} nets routed · ${e.tracks} tracks · ${e.vias} vias · ${e.problems || 0} problems`);
+      return true;
+    case "kept": LV.kept = e.k; LV.main.places = Object.assign({}, e.places); const kt = LV.tries[e.k];
+      if (kt) { LV.main.cu = kt.st.cu; LV.main.metrics = kt.st.metrics; LV.main.unrouted = kt.st.unrouted; }
+      LV.main.phase = "kept"; if (LV.follow) LV.view = null;
+      conLine(T, "try", `kept try ${e.k + 1}` + (e.clean ? " (clean)" : ` (${e.n} problems: the fewest)`)); return true;
+    case "checks": LV.checks[e.stage] = e;
+      if (e.state === "running") conLine(T, "check", `${e.stage}: checking…`);
+      return false;
+    case "findings": LV.findings = e.items; return false;
+    case "log": conLine(T, e.tag, e.text); return false;
+    case "snap": return false;
+    case "done": LV.done = true; LV.doneClean = e.clean; conLine(T, e.clean ? "check" : "error", e.clean ? `done in ${e.seconds} s: clean` : `done in ${e.seconds} s: not clean yet`); return true;
+  }
+  return false;
+}
+
+// ---------- the board as it stands in the run: the base board's parts moved, the run's copper on it ----------
+const rot = (p, a) => { const c = Math.cos(a), s = Math.sin(a); return [p[0] * c - p[1] * s, p[0] * s + p[1] * c]; };
+function lvBase(b) {                                     // each part's pads and courtyard in its own frame, once
+  const base = JSON.parse(JSON.stringify(b));
+  for (const c of base.comps) { const a = -(c.rot || 0) * Math.PI / 180, o = c.at, loc = (q) => rot([q[0] - o[0], q[1] - o[1]], a);
+    c._pads = c.pads.map(p => ({ p, poly: p.poly.map(pg => pg.map(r => r.map(loc))), at: loc(p.at) }));
+    c._court = (c.courtyard || []).map(pg => pg.map(r => r.map(loc)));
+    const xs = [], ys = []; for (const q of c._pads) for (const pg of q.poly) for (const r of pg) for (const v of r) { xs.push(v[0]); ys.push(v[1]); }
+    for (const pg of c._court) for (const r of pg) for (const v of r) { xs.push(v[0]); ys.push(v[1]); }
+    c._box = xs.length ? [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)] : [-1, -1, 1, 1]; }
+  return base;
+}
+function lvMoved(c, at, deg) {                           // a copy of part c at ``at``, turned ``deg``
+  const a = deg * Math.PI / 180, put = (q) => { const r = rot(q, a); return [r[0] + at[0], r[1] + at[1]]; };
+  return Object.assign({}, c, { at: [at[0], at[1]], rot: deg, silk: "center", unplaced: false,
+    pads: c._pads.map(q => Object.assign({}, q.p, { poly: q.poly.map(pg => pg.map(r => r.map(put))), at: put(q.at) })),
+    courtyard: c._court.map(pg => pg.map(r => r.map(put))) });
+}
+function lvStrip(base, refs) {                           // the parts not placed yet, in rows beside the board
+  const [x0, y0, x1, y1] = base.bounds, out = {}, H = Math.max(y1 - y0, 20);
+  let cx = x0 - 4, colW = 0, y = y1;
+  const list = refs.map(r => base.comps.find(c => c.ref === r)).filter(Boolean).sort((a, b) => (b._box[3] - b._box[1]) * (b._box[2] - b._box[0]) - (a._box[3] - a._box[1]) * (a._box[2] - a._box[0]));
+  for (const c of list) { const w = c._box[2] - c._box[0], h = c._box[3] - c._box[1];
+    if (y - h < y1 - H) { cx -= colW + 1.5; colW = 0; y = y1; }
+    colW = Math.max(colW, w); out[c.ref] = [cx - c._box[2] - (colW - w) * 0, y - c._box[3]]; y -= h + 1.2; }
+  return out;
+}
+let lvTween = null;
+function lvBoard() {                                     // B for drawLayout: the live picture
+  const base = LV.base; if (!base) return null; const st = lvState(), pl = Object.assign({}, LV.main.places, st.places);
+  const waiting = base.comps.filter(c => c._wasUnplaced && !pl[c.ref]).map(c => c.ref), strip = lvStrip(base, waiting);
+  const now = performance.now(), tw = lvTween;
+  const comps = base.comps.map(c => { let p = pl[c.ref], at, deg;
+    if (p) { at = [p[0], p[1]]; deg = p[2]; } else if (strip[c.ref]) { at = strip[c.ref]; deg = 0; } else return c._wasUnplaced ? lvMoved(c, c.at, c.rot) : c;
+    if (tw && tw.from[c.ref]) { const k = Math.min(1, (now - tw.t0) / tw.dur), e = 1 - Math.pow(1 - k, 3), f = tw.from[c.ref];
+      if (f[0] !== at[0] || f[1] !== at[1]) at = [f[0] + (at[0] - f[0]) * e, f[1] + (at[1] - f[1]) * e]; }
+    return lvMoved(c, at, deg); });
+  const tracks = [], vias = [];
+  for (const n in st.cu) { for (const t of st.cu[n].tracks) tracks.push({ net: t[0], layer: t[1], w: t[2], pts: t[3] });
+                           for (const v of st.cu[n].vias) vias.push({ net: v[0], at: [v[1], v[2]], dia: v[3], drill: v[3] * 0.5 }); }
+  let [x0, y0, x1, y1] = base.bounds;
+  for (const c of comps) if (strip[c.ref]) { x0 = Math.min(x0, c.at[0] + c._box[0] - 1); y0 = Math.min(y0, c.at[1] + c._box[1] - 1); }
+  return Object.assign({}, base, { live: true, comps, tracks, vias, copper: [], bounds: [x0, y0, x1, y1], _strip: strip });
+}
+function lvPositions() { const b = B, out = {}; if (b && b.comps) for (const c of b.comps) out[c.ref] = [c.at[0], c.at[1]]; return out; }
+
+// the copper the run has drawn so far, as tracks (the merged copper comes with the finished board)
+function lvCopper(svg, layers) {
+  const st = lvState(), made = look === "board", glow = look === "glow", xray = look === "xray", now = performance.now();
+  const hot = LV.lastNet && now - LV.lastNet.t < 1600 && (LV.lastNet.try == null || LV.lastNet.try === LV.view) ? LV.lastNet.net : null;
+  for (const L of layers) { if (!layerOn[L]) continue; const g = el("g", { "stroke-linecap": "round", "stroke-linejoin": "round", fill: "none" }, svg);
+    const col = made ? "#2a8a5c" : xray ? (EDITOR[L] || COLOR[L]) : COLOR[L], isTop = L === topL();
+    for (const t of B.tracks) { if (t.layer !== L) continue;
+      const p = el("polyline", { points: t.pts.map(q => X(q[0]).toFixed(3) + "," + Y(q[1]).toFixed(3)).join(" "), stroke: col, "stroke-width": t.w,
+        opacity: made ? .95 : isTop ? .92 : .55, "data-net": t.net, class: t.net === hot ? "lvhot" : "" }, g);
+      hover(p, `<span class="m">${esc(t.net)}</span> · ${L}.Cu · ${t.w} mm`, t.net); p.addEventListener("click", () => selectNet(t.net)); } }
+}
+// airwires: each net's pins not yet joined, as the shortest tree over its pads
+function lvAir(svg) {
+  const st = lvState(); if (!B || !B.live) return; const g = el("g", { "pointer-events": "none" }, svg);
+  const poured = new Set((B.pours || []).map(p => p.net)), pads = {};
+  for (const c of B.comps) { if (B._strip[c.ref]) continue; for (const p of c.pads) if (p.net) (pads[p.net] || (pads[p.net] = [])).push(p.at); }
+  const open = (n) => { if (st.unrouted && st.phase !== "route") return st.unrouted.has(n); return !st.routed.has(n) && !(st.cu[n] && st.cu[n].tracks.length && st.phase === "kept"); };
+  LV.ratLive = 0;
+  for (const n in pads) { const ps = pads[n]; if (ps.length < 2 || ps.length > 60 || !open(n)) continue;
+    const inT = [ps[0]], rest = ps.slice(1), dash = poured.has(n) ? ".25 .35" : ".6 .35", w = poured.has(n) ? .05 : .08;
+    while (rest.length) { let best = null;
+      for (let i = 0; i < rest.length; i++) for (const a of inT) { const d = Math.hypot(a[0] - rest[i][0], a[1] - rest[i][1]); if (!best || d < best[0]) best = [d, i, a]; }
+      const b = rest.splice(best[1], 1)[0]; inT.push(b); LV.ratLive += best[0];
+      el("line", { x1: X(best[2][0]), y1: Y(best[2][1]), x2: X(b[0]), y2: Y(b[1]), stroke: "#d29a2e", "stroke-width": w, "stroke-dasharray": dash, opacity: .85 }, g); } }
+  const L = LV.last; if (L && performance.now() - L.t < 1400 && (L.try == null || L.try === LV.view)) {    // (the part just placed)
+    const c = B.comps.find(x => x.ref === L.ref); if (c) { const bx = c._box, x = c.at[0], y = c.at[1];
+      el("rect", { x: Math.min(X(x + bx[0]), X(x + bx[2])) - .4, y: Y(y + bx[3]) - .4, width: bx[2] - bx[0] + .8, height: bx[3] - bx[1] + .8, fill: "none", stroke: "#1f5fa8", "stroke-width": .14, class: "lvpulse" }, g);
+      const t = el("text", { x: X(x + bx[2]) + .6, y: Y(y + bx[1]) + 1.4, fill: "#1f5fa8", "font-size": 1.05, style: `font-family:'IBM Plex Mono';font-weight:600` }, g); t.textContent = "placing " + c.ref; } }
+}
+
+// ---------- applying events: as they come (or from the replay), redrawn at most a few times a second ----------
+let lvFrame = 0;
+function lvRedraw(animate) {
+  if (!LV.on || !LV.base) return;
+  if (animate) lvTween = { from: lvPositions(), t0: performance.now(), dur: 380 };
+  if (lvFrame) return;
+  lvFrame = requestAnimationFrame(function step() { lvFrame = 0; B = lvBoard(); if (activeView() === "layout") drawLayout();
+    const sv = lvState(); if (sv.phase === "route" && LV.view != null && LV.ratLive != null) {   // (the length left, as it falls)
+      const h = LV.hist, l = h[h.length - 1]; if (!l || l.try !== LV.view || Math.abs(l.ratsnest - LV.ratLive) > .05) h.push({ t: LV.tnow, try: LV.view, ratsnest: LV.ratLive, nets: 1 }); }
+    drawLive(); drawStageTag();
+    if (lvTween && performance.now() - lvTween.t0 < lvTween.dur) lvFrame = requestAnimationFrame(step); else lvTween = null; });
+}
+function lvStart(b) {                                    // live mode on, from the board as the run first wrote it
+  LV.base = lvBase(b); for (const c of LV.base.comps) c._wasUnplaced = !!c.unplaced || LV.base.comps.length && lvMovedRefs().has(c.ref);
+  LV.on = true; $("#canvas").classList.add("live"); B = lvBoard(); drawLayout(); fitLayout(true);
+}
+function lvMovedRefs() { const s = new Set(); for (const e of LV.evs) { if (e.kind === "place") s.add(e.ref); if (e.kind === "places" && e.phase === "final") for (const r in e.places) s.add(r); } return s; }
+function lvStop() { LV.on = false; LV.base = null; $("#canvas").classList.remove("live"); drawStageTag(); }
+
+async function pollEvents() {
+  const r = await getJ("/api/events?since=" + LV.since);
+  if (r && r.events) {
+    if (r.run && LV.run && r.run !== LV.run && !LV.replay) { LV.since = 0; LV.evs = []; lvReset(); LV.run = r.run; return setTimeout(pollEvents, 50); }
+    if (r.next < LV.since) { LV.since = 0; LV.evs = []; lvReset(); }
+    LV.since = r.next; let moved = false, changed = false;
+    for (const e of r.events) { LV.evs.push(e); if (LV.replay) continue; const before = e.kind === "place" || e.kind === "places" || e.kind === "kept";
+      if (lvApply(e)) { changed = true; if (before) moved = true; } }
+    if (!LV.replay && (r.events.length || !LV.on)) {
+      if (changed) lvRedraw(moved); else drawLive(); }
+  }
+  setTimeout(pollEvents, P && !P.done ? 350 : 3000);
+}
+
+// ---------- the stage on the board: 02 · PLACE · TRY 1/6 ----------
+function drawStageTag() {
+  const box = $("#lstage"); if (!LV.on) { box.classList.remove("on"); return; }
+  const n = LV.stages.length, s = LV.stages[n - 1], st = lvState(), k = LV.view;
+  const ph = st.phase === "anneal" ? "improving the placement" : st.phase === "place" ? "placing" : st.phase === "route" ? "routing" : st.phase === "check" ? "checking" : st.phase === "kept" ? "kept" : st.phase;
+  const name = s ? (s.name === "place+route" ? "place & route" : s.name) : "loading";
+  box.innerHTML = `<b>${String(Math.max(n, 1)).padStart(2, "0")}</b><span>${esc(name)}</span>` + (k != null ? `<span class="m">try ${k + 1}${LV.ntries ? "/" + LV.ntries : ""} · ${esc(ph)}</span>` : (LV.kept != null ? `<span class="m">try ${LV.kept + 1} kept</span>` : "")) +
+    (LV.replay ? `<span class="m rp">replay ${LV.replay.speed}×</span>` : "");
+  box.classList.add("on");
+}
+
+// ---------- the Live tab: the steps, the tries, the counts, the checks ----------
+function spark(vals, w = 120, h = 26) {
+  if (vals.length < 2) return ""; const mx = Math.max(...vals, 1e-6), step = w / (vals.length - 1);
+  const pts = vals.map((v, i) => `${(i * step).toFixed(1)},${(h - 2 - (v / mx) * (h - 4)).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" height="${h}"><polyline points="${pts}" fill="none" stroke="#1f5fa8" stroke-width="1.4"/><polyline points="0,${h} ${pts} ${w},${h}" fill="rgba(31,95,168,.08)" stroke="none"/></svg>`;
+}
+function bar(label, a, b, extra) { const f = b ? Math.max(0, Math.min(1, a / b)) : 0;
+  return `<div class="lm"><div class="lmh"><span>${label}</span><b>${a == null ? "—" : a} / ${b == null ? "—" : b}</b></div><div class="lmb"><i style="width:${(f * 100).toFixed(1)}%"></i></div>${extra || ""}</div>`; }
+function drawLive() {
+  const box = $("#livep"); if (!box) return; const has = LV.evs.length > 0;
+  $("#blive").className = "badge live" + (P && !P.done ? " on" : "");
+  if (!has) { box.innerHTML = `<div class="lvempty"><b>No live run here yet</b><span>Run <code>prometheus board.py out/</code>: each step shows here as it happens.</span></div>`; return; }
+  const st = lvState(), m = st.metrics || LV.main.metrics, t0 = LV.t0 || (LV.evs[0] && LV.evs[0].t) || 0;
+  const tEnd = LV.replay ? LV.tnow : LV.done ? (LV.evs[LV.evs.length - 1] || {}).t : Date.now() / 1000;
+  let h = `<h4>Steps</h4><div class="lsteps">`;
+  LV.stages.forEach((s, i) => { const nx = LV.stages[i + 1], end = nx ? nx.t : (LV.done ? tEnd : null), cur = !nx && !LV.done;
+    if (s.name === "done") return;
+    h += `<div class="ls ${cur ? "cur" : "ok"}"><b>${String(i + 1).padStart(2, "0")}</b><span>${esc(s.name)}</span><em>${end ? secs(end - s.t) : cur ? secs(tEnd - s.t) : ""}</em></div>`; });
+  h += `</div>`;
+  const ks = Object.keys(LV.tries).map(Number).sort((a, b) => a - b);
+  if (ks.length) { h += `<h4>Tries${LV.ntries ? ` <span class="mute">up to ${LV.ntries}</span>` : ""}</h4><div class="ltries">`;
+    for (const k of ks) { const t = LV.tries[k], on = LV.view === k;
+      h += `<button class="lt ${t.state} ${on ? "on" : ""}" data-k="${k}" title="${esc((t.problems || []).slice(0, 3).join("\n") || "")}">${k + 1}<i>${t.state === "run" ? "…" : t.state === "clean" ? "✓" : (t.n || 0)}</i>${LV.kept === k ? "<s>kept</s>" : ""}</button>`; }
+    h += `<button class="lt follow ${LV.follow ? "on" : ""}" data-k="f">${LV.done || LV.kept != null ? "result" : "follow"}</button></div>`; }
+  const hist = LV.hist.filter(x => (LV.view == null ? x.try == null || x.try === LV.kept : x.try === LV.view) && x.nets);
+  h += `<h4>Board${LV.view != null ? ` <span class="mute">try ${LV.view + 1}</span>` : ""}</h4>`;
+  const placed = st.metrics ? st.metrics.placed : Object.keys(Object.assign({}, LV.main.places, st.places)).length;
+  const parts = (m && m.parts) || (LV.base && LV.base.comps.length) || (B && B.comps && B.comps.length);
+  h += bar("Parts placed", Math.min(placed, parts || placed), parts);
+  const nets = m ? m.nets : B && B.nets ? Object.values(B.nets).filter(n => n.pins.length > 1).length : null, routing = st.phase === "route";
+  const routed = routing ? (st.unrouted ? nets - [...st.unrouted].filter(n => !st.routed.has(n)).length : st.routed.size) : st.metrics ? st.metrics.routed : null;
+  h += bar("Nets routed", routed, nets);
+  const rat = routing && LV.ratLive != null ? LV.ratLive : st.metrics ? st.metrics.ratsnest : null;
+  h += `<div class="lm"><div class="lmh"><span>Left to route</span><b>${rat == null ? "—" : rat.toFixed(1) + " mm"}</b></div>${spark(hist.map(x => x.ratsnest))}</div>`;
+  const nt = Object.values(st.cu).reduce((a, c) => a + c.tracks.length, 0), nv = Object.values(st.cu).reduce((a, c) => a + c.vias.length, 0);
+  h += `<div class="lkv"><span>Tracks · vias</span><b>${nt} · ${nv}</b><span>Problems</span><b>${st.metrics && st.metrics.problems != null ? st.metrics.problems : "—"}</b><span>Elapsed</span><b>${clock(tEnd - t0)}</b></div>`;
+  const CK = [["design", "Design check"], ["house", "House rules"], ["kicad", "KiCad DRC"], ["schematic", "Schematic"], ["critic", "Critic"]];
+  h += `<h4>Checks</h4><div class="lchecks">` + CK.map(([k, lab]) => { const c = LV.checks[k];
+    const s = !c ? `<em class="mute">not run</em>` : c.state === "running" ? `<em class="run">checking…</em>` : c.n ? `<em class="bad">${c.n} found</em>` : `<em class="ok">clean${c.warnings ? ` · ${c.warnings} warnings` : ""}</em>`;
+    return `<div><span>${lab}</span>${s}</div>`; }).join("") + `</div>`;
+  if (LV.done || LV.replay) h += `<div class="lreplay">${LV.replay ? `<button class="btn" id="lvstop">Stop replay</button>` : `<button class="btn primary" id="lvplay">Replay the run</button>`}<span class="mute">speed</span>${[1, 4, 16].map(s => `<button class="btn sp ${(LV.replay ? LV.replay.speed : LV.speed || 4) === s ? "on" : ""}" data-s="${s}">${s}×</button>`).join("")}</div>`;
+  box.innerHTML = h;
+  box.querySelectorAll(".lt").forEach(b => b.onclick = () => { if (b.dataset.k === "f") { LV.follow = true; LV.view = LV.kept != null || LV.done ? null : Math.max(...ks); }
+    else { LV.follow = false; LV.view = +b.dataset.k; } if (!LV.on && LV.done) lvViewTry(); else lvRedraw(true); drawLive(); });
+  if ($("#lvplay")) $("#lvplay").onclick = () => replayRun(LV.speed || 4);
+  if ($("#lvstop")) $("#lvstop").onclick = stopReplay;
+  box.querySelectorAll(".sp").forEach(b => b.onclick = () => { LV.speed = +b.dataset.s; if (LV.replay) LV.replay.speed = LV.speed; drawLive(); });
+}
+async function lvViewTry() {                             // a finished run: one try's board (or back to the result)
+  if (LV.view == null) { lvStop(); await loadAll(); return; }
+  if (!LV.on) { const b = await getJ("/api/board"); if (b && !b.error) { lvStart(b); for (const c of LV.base.comps) c._wasUnplaced = lvMovedRefs().has(c.ref); } }
+  lvRedraw(true);
+}
+
+// ---------- replay: the whole run again, at a few times its speed ----------
+async function replayRun(speed) {
+  stopReplay(); const evs = LV.evs.slice(); if (!evs.length) return;
+  const b = await getJ("/api/board"); if (!b || b.error) return;
+  $$("#seg button")[0].click();
+  LV.replay = { speed, i: 0, timer: 0 }; lvReset(); LV.evs = evs; lvStart(b);
+  const moved = lvMovedRefs(); for (const c of LV.base.comps) c._wasUnplaced = moved.has(c.ref);
+  LV.view = null; LV.follow = true; lvRedraw(false); fitLayout(true);
+  const step = () => { const R_ = LV.replay; if (!R_) return; let moved_ = false, changed = false, k = 0;
+    while (R_.i < evs.length && k < 40) { const e = evs[R_.i++]; k++; if (lvApply(e)) { changed = true; if (/^place|kept/.test(e.kind)) moved_ = true; }
+      const nx = evs[R_.i]; if (!nx) break; const gap = (nx.t - e.t) / R_.speed; if (gap > 0.012) { R_.timer = setTimeout(step, Math.min(gap, 1.2 / Math.sqrt(R_.speed)) * 1000); break; } }
+    if (changed) lvRedraw(moved_); drawLive();
+    if (R_.i >= evs.length) { R_.timer = setTimeout(() => { stopReplay(); }, 1500); } else if (k >= 40) R_.timer = setTimeout(step, 16); };
+  step();
+}
+async function stopReplay() { if (!LV.replay) return; clearTimeout(LV.replay.timer); LV.replay = null;
+  lvReset(); for (const e of LV.evs) lvApply(e, true); lvStop(); await loadAll(); drawLive(); }
+
+// ---------- the run log under the board ----------
+const conT = (t) => { const s = Math.max(0, t - (LV.t0 || t)); return s.toFixed(1).padStart(6, "0"); };
+function conLink(text) {                                  // part refs (U1, U1.3) and net names: click to find them
+  const nets = B && B.nets ? B.nets : {};
+  return esc(text).replace(/\b([A-Z]{1,4}\d{1,3})(\.[A-Za-z0-9_]+)?\b|\b([A-Za-z_][A-Za-z0-9_+\-]*)\b/g, (m, ref, pin, w) => {
+    if (ref && B && B.comps && B.comps.some(c => c.ref === ref)) return `<a class="cl" data-ref="${ref}">${m}</a>`;
+    if (w && nets[w] && w.length > 1) return `<a class="cn" data-net="${w}">${m}</a>`;
+    return m; });
+}
+function conLine(t, tag, text) {
+  const box = $("#clines"); if (!box) return;
+  const d = document.createElement("div"); d.className = "cline"; d.dataset.tag = tag;
+  d.innerHTML = `<span class="ct">${conT(t)}</span><span class="cg" style="color:${LTAG[tag] || "#5a6774"}">[${esc(tag)}]</span><span class="cx">${conLink(text)}</span>`;
+  if (LV.conTag !== "all" && LV.conTag !== tag) d.style.display = "none";
+  box.appendChild(d); LV.lines++;
+  if (LV.lines > 3000) { box.firstChild.remove(); LV.lines--; }
+  if (LV.conFollow) box.scrollTop = box.scrollHeight;
+  $("#ccount").textContent = LV.lines + " lines";
+}
+function conInit() {
+  const box = $("#clines");
+  box.addEventListener("click", e => { const a = e.target.closest("a"); if (!a) return;
+    if (a.dataset.net) { $$("#seg button")[0].click(); selectNet(a.dataset.net); }
+    if (a.dataset.ref) { $$("#seg button")[0].click(); const c = B && B.comps.find(x => x.ref === a.dataset.ref); if (c) { const m = 6; LZ.set(X(c.at[0]) - m, Y(c.at[1]) - m * .7, 2 * m, 1.4 * m, true); } } });
+  box.addEventListener("scroll", () => { const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 8; LV.conFollow = atEnd; $("#cfollow").classList.toggle("on", atEnd); });
+  $("#cfollow").onclick = () => { LV.conFollow = true; box.scrollTop = box.scrollHeight; $("#cfollow").classList.add("on"); };
+  $("#ctoggle").onclick = () => setCon(!LV.conOpen);
+  $$("#ctags button").forEach(b => b.onclick = () => { LV.conTag = b.dataset.t; $$("#ctags button").forEach(x => x.classList.toggle("on", x === b));
+    box.querySelectorAll(".cline").forEach(d => d.style.display = LV.conTag === "all" || d.dataset.tag === LV.conTag || (LV.conTag === "check" && /^(check|house|drc|sch|critic)$/.test(d.dataset.tag)) ? "" : "none");
+    box.scrollTop = box.scrollHeight; });
+  $("#ccopy").onclick = () => { const t = [...box.querySelectorAll(".cline")].filter(d => d.style.display !== "none").map(d => d.textContent).join("\n");
+    navigator.clipboard && navigator.clipboard.writeText(t); $("#ccopy").textContent = "copied"; setTimeout(() => $("#ccopy").textContent = "copy", 1200); };
+  setCon(localStorage.getItem("pcbcon") !== "0");
+}
+function setCon(open) { LV.conOpen = open; $("#canvas").classList.toggle("con", open); $("#console").classList.toggle("open", open); localStorage.setItem("pcbcon", open ? "1" : "0");
+  $("#ctoggle").textContent = open ? "▾" : "▴"; if (open) { const b = $("#clines"); b.scrollTop = b.scrollHeight; }
+  setTimeout(() => { if (activeView() === "layout") fitLayout(true); }, 260); }    // (the board refits the room the log leaves)
+
 // ---------- data ----------
 async function getJ(u) { try { return await (await fetch(u, { cache: "no-store" })).json(); } catch (e) { return null; } }
 async function loadAll() {
@@ -1365,16 +1719,18 @@ async function loadAll() {
 let wasRunning = false, snap = null;
 async function poll() {
   P = await getJ("/api/progress"); drawHeader();
-  if (P && !P.done && P.snap !== snap) { snap = P.snap; if (snap) await loadAll(); }   // (each stage's board as it lands)
-  if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; await loadAll(); }
-  setTimeout(poll, P && !P.done ? 1000 : 4000);
+  if (P && !P.done && P.snap !== snap) { snap = P.snap;          // (the board as the run first wrote it: the live picture
+    if (snap && !LV.on) { await loadAll();                       //  starts from it)
+      if (P.live && B && !B.error && !LV.replay) { lvStart(B); $$(".tabs2 button")[0].click(); } } }
+  if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; snap = null; if (!LV.replay) { lvStop(); await loadAll(); drawLive(); } }
+  setTimeout(poll, P && !P.done ? 500 : 4000);
 }
-(async () => { P = await getJ("/api/progress"); await loadAll(); poll(); pollLive(); })();
+(async () => { P = await getJ("/api/progress"); conInit(); await loadAll(); poll(); pollLive(); pollEvents(); })();
 window.addEventListener("resize", fitLayout);
 let pW = 0; new ResizeObserver(([e]) => { const w = Math.round(e.contentRect.width);     // (the cards fit the panel as it
   if (w && w !== pW && activeView() === "parts") { pW = w; drawParts(); } }).observe($("#psvg"));   // settles, not a frame late)
 window.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return;
-  if (e.key === "f") fitLayout(true); for (const i of [1, 2, 3, 4]) if (e.key === String(i)) $$("#seg button")[i - 1].click();
+  if (e.key === "f") fitLayout(true); if (e.key === "`") setCon(!LV.conOpen); for (const i of [1, 2, 3, 4]) if (e.key === String(i)) $$("#seg button")[i - 1].click();
   if (e.key === "Escape") { selectNet(null); setLoupe(false); proof ? closeProof() : $("#dsheet").classList.remove("on"); }
   if (e.key === "l" && activeView() === "layout") setLoupe(!loupeOn);
   if (e.key === "e" && activeView() === "v3d") $("#explode").click(); });
