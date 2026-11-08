@@ -20,6 +20,11 @@
   - "Replay the run" plays a finished run again at 1x, 4x or 16x.
 - `GET /api/events?since=` serves the events after a byte offset (whole lines only).
 - Fixed on the way: a pan or zoom frame queued as the view was redrawn threw `Cannot read properties of null`.
+- The viewer served the run's board only after the board for live edits was built: the background watcher rebuilt it
+  from the script under a lock each time the run saved its state, and the page's first draw waited on that lock
+  (13 s on the 133-part LED matrix). The run's own `board.json` is now served without the lock, and the watcher
+  leaves the board alone while a run is going. A run with `PCB_LIVE=1` and no viewer of its own also writes the
+  routed board for a viewer opened beside it.
 
 Found by building 26 boards (on branch claude/pcb-collection) and judging every one with KiCad 9's DRC, a random-board fuzz with KiCad as the
 second judge (`bench/fuzz.py --kicad`), and an export/import round trip.

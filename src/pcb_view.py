@@ -342,6 +342,8 @@ class _Cache:
                 try:
                     script = self.script()
                     m = Path(script).stat().st_mtime if script and not script.endswith(".net") else None
+                    if m and self._running():            # (a run going: its board is the run's to change; the board
+                        m = None                         #  for live edits is built when it is done, not fought over)
                     if m:
                         with self.lock:                  # (built, or built again on a run's new state)
                             self._board()
@@ -351,6 +353,17 @@ class _Cache:
                     self.last = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}", "rev": self.rev}
                 time.sleep(every)
         threading.Thread(target=run, daemon=True).start()
+
+    def _running(self) -> bool:
+        """a run is writing into this folder now (its progress.json not done, its process alive)"""
+        try:
+            d = json.loads((self.out / "progress.json").read_text())
+            if d.get("done"):
+                return False
+            os.kill(d.get("pid") or 0, 0) if d.get("pid") else None
+            return True
+        except (OSError, ValueError, ProcessLookupError):
+            return False
 
     def refresh(self) -> dict:
         """the board script as just saved, on the page in a second or two: the parts it does not place where they were,
@@ -520,15 +533,17 @@ class _Cache:
         if not script:
             return {"error": "no run in this folder yet (result.json names the board script)"}
         key = _board_key(self.out, script)
+        if key == self.key:
+            return self.data
+        try:                                             # (the run's own board.json when it is this board: no rebuild,
+            saved = json.loads((self.out / "board.json").read_text())   # and no wait on the lock a rebuild holds)
+            if saved.get("key") == list(key):
+                self.data, self.key = saved["data"], key
+                return self.data
+        except (OSError, ValueError):
+            pass
         with self.lock:
-            if key != self.key:                          # (the run's own board.json when it is this board: no rebuild)
-                try:
-                    saved = json.loads((self.out / "board.json").read_text())
-                    if saved.get("key") == list(key):
-                        self.data, self.key = saved["data"], key
-                        return self.data
-                except (OSError, ValueError):
-                    pass
+            if key != self.key:
                 if script.endswith(".net"):              # (a netlist: as the command line read it, by default)
                     from types import SimpleNamespace
                     b, _ = pcb_cli.load_netlist(script, SimpleNamespace(size=None, layers=2, at=None, amps=None))

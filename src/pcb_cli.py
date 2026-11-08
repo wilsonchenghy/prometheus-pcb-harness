@@ -591,7 +591,7 @@ def _main(argv=None) -> int:
         if store and not from_store and not probs and not b.check():     # (only clean copper into git)
             save_store(b, store, key)
             print(f"routing kept in {os.path.relpath(store)} (commit it: a fresh clone then need not route)")
-        if viewing:                                      # (the placed and routed board, before the checks and export)
+        if viewing or pcb.LIVE is not None:              # (the placed and routed board, before the checks and export)
             prog.snapshot(b, os.path.abspath(a.script))
     lcsc_auto, lcsc_suggested = {}, {}
     if stage in ("export", "all") and not a.no_lcsc and not os.environ.get("CI"):   # (JLCPCB assembly: a C-number each)

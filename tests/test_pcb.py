@@ -2918,3 +2918,27 @@ def test_no_live_log_without_a_viewer(tmp_path, monkeypatch):
     assert pcb_view.log_tag("place and route, try 2: clean") == "try"
     assert pcb_view.log_tag("KiCad DRC: clean") == "drc" and pcb_view.log_tag("   F.Cu: x", "drc") == "drc"
     assert pcb_view.log_tag("rip-up within 2.5 mm of 1 pads") == "route"
+
+
+def test_the_viewer_serves_the_runs_board_without_waiting_on_a_rebuild(tmp_path):
+    """the page's board is the run's own board.json when its key matches, read without the lock a rebuild for live
+    edits holds (a 133-part board's rebuild took 13 s and held the page's first draw that long); and while a run is
+    going, the background watcher leaves the board to it"""
+    import pcb_view
+    out = tmp_path / "o"
+    out.mkdir()
+    script = tmp_path / "b.py"
+    script.write_text("x = 1\n")
+    (out / "result.json").write_text(json.dumps({"script": str(script)}))
+    key = pcb_view._board_key(out, str(script))
+    (out / "board.json").write_text(json.dumps({"key": list(key), "data": {"name": "saved"}}))
+    c = pcb_view._Cache(str(out))
+    c.lock.acquire()                                     # (a rebuild under way)
+    try:
+        assert c.board() == {"name": "saved"}
+    finally:
+        c.lock.release()
+    (out / "progress.json").write_text(json.dumps({"done": False, "pid": os.getpid()}))
+    assert c._running()
+    (out / "progress.json").write_text(json.dumps({"done": True, "pid": os.getpid()}))
+    assert not c._running()
