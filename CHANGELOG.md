@@ -19,6 +19,8 @@
     parts placed and nets routed, the length left to route with its curve, and the checks as they run.
   - "Replay the run" plays a finished run again at 1x, 4x or 16x.
 - `GET /api/events?since=` serves the events after a byte offset (whole lines only).
+- The verdict and the header say what the run is doing ("Placing.", "Checking.", "Writing the order files."), where
+  they said "Routing." whatever the stage.
 - `prometheus say out/ "text" --at U1` (or `pcb.say(text, ref=...)` in a board script): the agent's word to the engineer
   watching. It is a line in the run log tagged `ai`, and on the board the AI's cursor takes it to the part during a
   run; after the run it is a callout pointing at the part.
