@@ -1112,13 +1112,15 @@ function drawHeader() {
   if (R && R.script) $("#folder").textContent = R.script.split("/").slice(-2, -1)[0] || "board";
   const pill = $("#pill"), t = $("#pilltext"), running = P && !P.done && P.stage !== "none";
   const n = issues().filter(i => i._sev === "error").length;
-  if (running) { pill.className = "pill run"; t.textContent = "Routing"; }
+  const doing = running ? ({ "place+route": "Placing and routing", place: "Placing", route: "Routing", critic: "Reviewing", check: "Checking",
+    export: "Writing the order files", "kicad drc": "Running KiCad's DRC", loading: "Loading" }[P.stage] || "Working") : "";   // (what the run is doing now)
+  if (running) { pill.className = "pill run"; t.textContent = doing; }
   else if (R && R.board) { pill.className = "pill " + (R.clean ? "ok" : "bad"); t.textContent = R.clean ? "Clean" : n + (n === 1 ? " issue" : " issues"); }
   $("#gerbers").style.display = R && R.files && R.files.gerbers ? "" : "none"; $("#report").style.display = R && R.files && R.files.report ? "" : "none";
   $("#srouter").textContent = R && R.router ? R.router : ""; $("#skicad").textContent = R && R.kicad_drc && R.kicad_drc.run ? "KiCad " + R.kicad_drc.version : "";
   $("#stime").textContent = R && R.seconds ? secs(R.seconds) : "";
   const vv = $("#vv"), vs = $("#vs");
-  if (running) { vv.className = "v run"; vv.textContent = "Routing."; vs.textContent = P.tries ? `Try ${Math.min(P.tries_done + 1, P.tries)} of ${P.tries}` : ""; }
+  if (running) { vv.className = "v run"; vv.textContent = doing + "."; vs.textContent = P.tries ? `Try ${Math.min(P.tries_done + 1, P.tries)} of ${P.tries}` : ""; }
   else if (P && P.stopped) { vv.className = "v bad"; vv.textContent = "Stopped."; vs.textContent = "The run ended before it finished: run it again."; }
   else if (R && R.board) { vv.className = "v " + (R.clean ? "ok" : "bad"); vv.textContent = R.clean ? "Ready to order." : (n === 1 ? "1 issue." : n + " issues.");
     const erc = B && !B.error && B.comps.some(c => c.symbol);
