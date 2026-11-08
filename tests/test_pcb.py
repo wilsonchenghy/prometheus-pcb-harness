@@ -2873,8 +2873,9 @@ def test_a_run_writes_its_live_events_for_the_viewer(tmp_path, monkeypatch):
     evs = [json.loads(ln) for ln in (out / "live.jsonl").read_text().splitlines()]
     kinds = [e["kind"] for e in evs]
     assert kinds[0] == "run" and kinds[-1] == "done"
-    for k in ("stage", "tries", "try", "place", "places", "copper", "net", "metrics", "checks", "log", "kept"):
-        assert k in kinds, k
+    for k in ("stage", "tries", "try", "place", "places", "copper", "metrics", "checks", "log", "kept"):
+        assert k in kinds, k                             # ("net" too, when the router ran: a cached routing has none)
+    assert any(e["kind"] == "copper" and e["tracks"] for e in evs)
     r = json.load(open(out / "result.json"))
     placed = {e["ref"] for e in evs if e["kind"] == "place" and e["try"] == 0}
     assert placed and placed <= set(r["placement"])
@@ -2883,6 +2884,7 @@ def test_a_run_writes_its_live_events_for_the_viewer(tmp_path, monkeypatch):
     tries = [e for e in evs if e["kind"] == "try"]
     assert tries[0]["state"] == "start" and any(t["state"] == "end" for t in tries)
     assert all(e["try"] is not None for e in evs if e["kind"] in ("place", "net"))
+    assert all(isinstance(e["tracks"][0][3], list) for e in evs if e["kind"] == "copper" and e["tracks"])
     logs = [e for e in evs if e["kind"] == "log"]
     assert any(e["tag"] == "try" and "place and route, try 1" in e["text"] for e in logs)
 

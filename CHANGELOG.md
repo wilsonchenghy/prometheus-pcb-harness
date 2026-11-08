@@ -11,6 +11,8 @@
 - The viewer plays it:
   - The board fills in as the run goes: parts slide into place (those not placed yet wait beside the board),
     airwires show the nets still open, and the copper lands net by net with the newest net lit.
+  - The AI's cursor goes where the run is working, its tag saying what: it rides in with each part placed, follows
+    the router to the end of each net, and goes to a check as it starts.
   - The stage is on the board (`02 · PLACE & ROUTE · TRY 3/6 · ROUTING`).
   - The run log runs under the board, filterable and copyable; parts and nets in it are links.
   - The Live tab has the numbered steps with their times, a chip per try (click one to see its board), bars for

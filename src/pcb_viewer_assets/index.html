@@ -241,6 +241,12 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 @media (max-width: 1000px) { .app { grid-template-columns: 0 1fr 320px; } .left { display: none; } }
 
 /* the live run: the stage on the board, the run log under it, the Live tab */
+#aicur { position: absolute; left: 0; top: 0; z-index: 8; pointer-events: none; display: none; transition: transform .38s cubic-bezier(.3,.7,.2,1), opacity .4s; will-change: transform; }
+#aicur.on { display: block; } #aicur.idle { opacity: .35; }
+#aicur svg { display: block; width: 18px; height: 22px; filter: drop-shadow(0 2px 3px rgba(17,24,39,.35)); }
+#aicur span { position: absolute; left: 15px; top: 17px; white-space: nowrap; padding: 2px 7px 2px 5px; background: var(--blue); color: #fff; font: 500 10px var(--mono); letter-spacing: .06em; border-radius: 3px; box-shadow: 0 4px 10px -4px rgba(17,24,39,.5); }
+#aicur span i { font-style: normal; font-weight: 600; margin-right: 6px; padding: 0 4px; background: rgba(255,255,255,.22); border-radius: 2px; letter-spacing: .1em; }
+#aicur.click svg { animation: aiclick .3s ease-out; } @keyframes aiclick { 40% { transform: scale(.82); } }
 #lstage { left: 20px; top: 40px; z-index: 6; display: none; align-items: baseline; gap: 10px; padding: 6px 12px; font: 500 10.5px var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--text2); }
 #lstage.on { display: flex; } #lstage b { font: 700 15px/1 var(--disp); color: var(--blue); letter-spacing: .04em; }
 #lstage span:not(.m) { color: var(--text); } #lstage .m { color: var(--text3); letter-spacing: .1em; } #lstage .rp { color: var(--gold); }
@@ -330,6 +336,7 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
     <div class="float looks" id="looks"><button class="on" data-m="board">As made</button><button data-m="glow">Light</button><button data-m="xray">Layers</button></div>
     <div class="float editcard" id="editcard"></div>
     <div class="float" id="lstage"></div>
+    <div id="aicur"><svg viewBox="0 0 18 22"><path d="M1.5 1.5 L1.5 17.5 L5.6 13.6 L8.4 20 L11.2 18.8 L8.5 12.6 L14.2 12.4 Z" fill="#1f5fa8" stroke="#fff" stroke-width="1.4" stroke-linejoin="round"/></svg><span id="aicurt"><i>AI</i><b></b></span></div>
     <div class="console" id="console"><div class="chd"><b>Run log</b><span id="ctags"><button class="on" data-t="all">all</button><button data-t="place">place</button><button data-t="route">route</button><button data-t="try">tries</button><button data-t="check">checks</button><button data-t="error">errors</button></span><span id="ccount"></span><span class="sp"></span><button id="cfollow" class="on" title="Keep the newest line in view">follow</button><button id="ccopy" title="Copy the lines shown">copy</button><button id="ctoggle" title="Show or hide the log (the ` key)">▾</button></div><div class="clines" id="clines"></div></div>
     <div id="msg"></div>
     <div class="dsheet" id="dsheet"><div class="dsh-top"><span class="k" id="dstitle">Datasheet</span><span class="dsstep"><button id="pfprev" title="Previous pin (←)">‹</button><b id="pfpin"></b><span class="st" id="pfst"></span><button id="pfnext" title="Next pin (→)">›</button></span><span class="sp"></span>
@@ -469,7 +476,7 @@ function panZoom(svg, onChange) {
   return st;
 }
 let fitW = 1;
-const LZ = panZoom($("#lsvg"), vb => { $("#zm").textContent = Math.round(fitW / vb[2] * 100) + "%"; }), SZ = panZoom($("#ssvg"));
+const LZ = panZoom($("#lsvg"), vb => { $("#zm").textContent = Math.round(fitW / vb[2] * 100) + "%"; if (window.aiPlace) aiPlace(true); }), SZ = panZoom($("#ssvg"));
 $("#zin").onclick = () => (activeView() === "schem" ? SZ : LZ).zoom(0.7);
 $("#zout").onclick = () => (activeView() === "schem" ? SZ : LZ).zoom(1.4);
 $("#fit").onclick = () => activeView() === "schem" ? drawSchem() : activeView() === "layout" ? fitLayout(true) : build3d();
@@ -1445,16 +1452,20 @@ function lvApply(e, quiet) {
       Object.assign(LV.tries[e.try] || (LV.tries[e.try] = { st: mkState() }), { state: e.clean ? "clean" : "bad", n: e.n, seconds: e.seconds, problems: e.problems });
       return false;
     case "place": st.places[e.ref] = [e.at[0], e.at[1], e.rot, e.side]; st.phase = "place"; LV.last = { ref: e.ref, t: performance.now(), try: e.try };
+      if (e.try == null || e.try === LV.view) aiAt(e.at[0], e.at[1], "placing " + e.ref, true);
       return true;
     case "places": Object.assign(st.places, e.places);
-      if (e.phase === "anneal") st.phase = "anneal";
+      if (e.phase === "anneal") { st.phase = "anneal"; if (e.try == null || e.try === LV.view) { const ks = Object.keys(e.places), r = ks[Math.floor(Math.random() * ks.length)];
+        if (r) aiAt(e.places[r][0], e.places[r][1], `improving · ${Math.round((e.frac || 0) * 100)}%`); } }
       if (e.phase === "final") conLine(T, "place", `placed ${Object.keys(e.places).length} parts` + (e.failed && e.failed.length ? `; no room for ${e.failed.join(", ")}` : ""));
       return true;
-    case "phase": st.phase = e.name; if (e.name === "route") { st.routed = new Set(); conLine(T, "route", `try ${e.try + 1}: routing (${e.router === "freerouting" ? "FreeRouting" : "built-in router"})`); }
+    case "phase": st.phase = e.name; if (e.name === "route") { st.routed = new Set(); conLine(T, "route", `try ${e.try + 1}: routing (${e.router === "freerouting" ? "FreeRouting" : "built-in router"})`);
+        const c = aiCenter(); if (c && e.router === "freerouting" && (e.try == null || e.try === LV.view)) aiAt(c[0], c[1], "FreeRouting…"); }
       return true;
     case "copper": if (e.net == null) { st.cu = groupCu(e.tracks, e.vias); if (LV.follow && e.try != null && LV.kept == null) LV.view = e.try; }   // (a try's routing done: shown)
       else st.cu[e.net] = groupCu(e.tracks, e.vias)[e.net] || { tracks: [], vias: [] };
-      if (e.net) LV.lastNet = { net: e.net, t: performance.now(), try: e.try };
+      if (e.net) { LV.lastNet = { net: e.net, t: performance.now(), try: e.try };
+        if (e.try == null || e.try === LV.view) { const p = (e.tracks && e.tracks.length) ? e.tracks[e.tracks.length - 1][3].slice(-1)[0] : null; if (p) aiAt(p[0], p[1], "routing " + e.net, true); } }
       return true;
     case "net": if (e.ok) st.routed.add(e.net); else conLine(T, "route", (e.problems || [])[0] || `${e.net}: not joined`);
       return true;
@@ -1468,7 +1479,7 @@ function lvApply(e, quiet) {
       LV.main.phase = "kept"; if (LV.follow) LV.view = null;
       conLine(T, "try", `kept try ${e.k + 1}` + (e.clean ? " (clean)" : ` (${e.n} problems: the fewest)`)); return true;
     case "checks": LV.checks[e.stage] = e;
-      if (e.state === "running") conLine(T, "check", `${e.stage}: checking…`);
+      if (e.state === "running") { conLine(T, "check", `${e.stage}: checking…`); const c = aiCenter(); if (c) aiAt(c[0], c[1], e.stage === "kicad" ? "KiCad DRC" : e.stage + " check", true); }
       return false;
     case "findings": LV.findings = e.items; return false;
     case "log": conLine(T, e.tag, e.text); return false;
@@ -1551,7 +1562,7 @@ function lvAir(svg) {
   const L = LV.last; if (L && performance.now() - L.t < 1400 && (L.try == null || L.try === LV.view)) {    // (the part just placed)
     const c = B.comps.find(x => x.ref === L.ref); if (c) { const bx = c._box, x = c.at[0], y = c.at[1];
       el("rect", { x: Math.min(X(x + bx[0]), X(x + bx[2])) - .4, y: Y(y + bx[3]) - .4, width: bx[2] - bx[0] + .8, height: bx[3] - bx[1] + .8, fill: "none", stroke: "#1f5fa8", "stroke-width": .14, class: "lvpulse" }, g);
-      const t = el("text", { x: X(x + bx[2]) + .6, y: Y(y + bx[1]) + 1.4, fill: "#1f5fa8", "font-size": 1.05, style: `font-family:'IBM Plex Mono';font-weight:600` }, g); t.textContent = "placing " + c.ref; } }
+      } }
 }
 
 // ---------- applying events: as they come (or from the replay), redrawn at most a few times a second ----------
@@ -1563,7 +1574,7 @@ function lvRedraw(animate) {
   lvFrame = requestAnimationFrame(function step() { lvFrame = 0; B = lvBoard(); if (activeView() === "layout") drawLayout();
     const sv = lvState(); if (sv.phase === "route" && LV.view != null && LV.ratLive != null) {   // (the length left, as it falls)
       const h = LV.hist, l = h[h.length - 1]; if (!l || l.try !== LV.view || Math.abs(l.ratsnest - LV.ratLive) > .05) h.push({ t: LV.tnow, try: LV.view, ratsnest: LV.ratLive, nets: 1 }); }
-    drawLive(); drawStageTag();
+    drawLive(); drawStageTag(); aiPlace(false);
     if (lvTween && performance.now() - lvTween.t0 < lvTween.dur) lvFrame = requestAnimationFrame(step); else lvTween = null; });
 }
 function lvStart(b) {                                    // live mode on, from the board as the run first wrote it
@@ -1571,23 +1582,44 @@ function lvStart(b) {                                    // live mode on, from t
   LV.on = true; $("#canvas").classList.add("live"); B = lvBoard(); drawLayout(); fitLayout(true);
 }
 function lvMovedRefs() { const s = new Set(); for (const e of LV.evs) { if (e.kind === "place") s.add(e.ref); if (e.kind === "places" && e.phase === "final") for (const r in e.places) s.add(r); } return s; }
-function lvStop() { LV.on = false; LV.base = null; $("#canvas").classList.remove("live"); drawStageTag(); }
+function lvStop() { LV.on = false; LV.base = null; LV.cur = null; $("#canvas").classList.remove("live"); $("#aicur").classList.remove("on"); drawStageTag(); }
 
 async function pollEvents() {
   const r = await getJ("/api/events?since=" + LV.since);
   if (r && r.events) {
     if (r.run && LV.run && r.run !== LV.run && !LV.replay) { LV.since = 0; LV.evs = []; lvReset(); LV.run = r.run; return setTimeout(pollEvents, 50); }
     if (r.next < LV.since) { LV.since = 0; LV.evs = []; lvReset(); }
-    LV.since = r.next; let moved = false, changed = false;
+    LV.since = r.next; let moved = false, changed = false, paced = 0;
     for (const e of r.events) { LV.evs.push(e); if (LV.replay) continue; const before = e.kind === "place" || e.kind === "places" || e.kind === "kept";
-      if (lvApply(e)) { changed = true; if (before) moved = true; } }
+      if (lvApply(e)) { changed = true; if (before) moved = true; }
+      if (e.kind === "place" && LV.on && paced < 60 && (e.try == null || e.try === LV.view)) {   // (the placer puts parts down a
+        paced++; lvRedraw(true); await new Promise(ok => setTimeout(ok, 110)); } }                 //  few ms apart: shown one by one)
     if (!LV.replay && (r.events.length || !LV.on)) {
-      if (changed) lvRedraw(moved); else drawLive(); }
+      if (changed && LV.on) lvRedraw(moved); else drawLive(); }
   }
   setTimeout(pollEvents, P && !P.done ? 350 : 3000);
 }
 
 // ---------- the stage on the board: 02 · PLACE · TRY 1/6 ----------
+// ---------- the AI's cursor: where the run is working, as a pointer on the board ----------
+// it goes to the part being placed (and rides along as the part slides in), to the end of the net just routed,
+// to the board's middle for a check; it fades when the run is quiet and goes when the run is done
+function aiAt(x, y, label, click) { LV.cur = { x, y, label, t: performance.now(), click }; aiPlace(false); }
+function aiPlace(instant) {
+  const c = $("#aicur"), cur = LV.cur;
+  if (!LV.on || !cur || activeView() !== "layout" || (LV.done && !LV.replay)) { c.classList.remove("on"); return; }
+  const svg = $("#lsvg"), m = svg.getScreenCTM(); if (!m) return;
+  const pt = svg.createSVGPoint(); pt.x = X(cur.x); pt.y = Y(cur.y); const q = pt.matrixTransform(m), r = $("#canvas").getBoundingClientRect();
+  if (instant) { c.style.transition = "none"; requestAnimationFrame(() => c.style.transition = ""); }
+  c.style.transform = `translate(${(q.x - r.left - 2).toFixed(1)}px,${(q.y - r.top - 2).toFixed(1)}px)`;
+  $("#aicurt b").textContent = cur.label; c.classList.add("on"); c.classList.toggle("idle", performance.now() - cur.t > 3500);
+  if (cur.click && !instant) { c.classList.remove("click"); void c.offsetWidth; c.classList.add("click"); cur.click = false; }
+}
+setInterval(() => { if (LV.cur && LV.on) $("#aicur").classList.toggle("idle", performance.now() - LV.cur.t > 3500); }, 700);
+function aiTrack(net) {                                  // the end of the net's last track: where the router stopped
+  const c = lvState().cu[net], t = c && c.tracks[c.tracks.length - 1]; if (!t) return null; const p = t[3][t[3].length - 1]; return p; }
+function aiCenter() { const b = LV.base && LV.base.bounds; return b ? [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2] : null; }
+
 function drawStageTag() {
   const box = $("#lstage"); if (!LV.on) { box.classList.remove("on"); return; }
   const n = LV.stages.length, s = LV.stages[n - 1], st = lvState(), k = LV.view;
@@ -1662,7 +1694,8 @@ async function replayRun(speed) {
   LV.view = null; LV.follow = true; lvRedraw(false); fitLayout(true);
   const step = () => { const R_ = LV.replay; if (!R_) return; let moved_ = false, changed = false, k = 0;
     while (R_.i < evs.length && k < 40) { const e = evs[R_.i++]; k++; if (lvApply(e)) { changed = true; if (/^place|kept/.test(e.kind)) moved_ = true; }
-      const nx = evs[R_.i]; if (!nx) break; const gap = (nx.t - e.t) / R_.speed; if (gap > 0.012) { R_.timer = setTimeout(step, Math.min(gap, 1.2 / Math.sqrt(R_.speed)) * 1000); break; } }
+      const nx = evs[R_.i]; if (!nx) break; let gap = (nx.t - e.t) / R_.speed;
+      if (e.kind === "place" && (e.try == null || e.try === LV.view)) gap = Math.max(gap, 0.22 / Math.sqrt(R_.speed));   /* (one part at a time) */ if (gap > 0.012) { R_.timer = setTimeout(step, Math.min(gap, 1.2 / Math.sqrt(R_.speed)) * 1000); break; } }
     if (changed) lvRedraw(moved_); drawLive();
     if (R_.i >= evs.length) { R_.timer = setTimeout(() => { stopReplay(); }, 1500); } else if (k >= 40) R_.timer = setTimeout(step, 16); };
   step();

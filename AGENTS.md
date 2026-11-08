@@ -116,7 +116,8 @@ KiCad's part models, the schematic and the findings, and live progress with an e
 in the background, so the command still returns; later runs into the same folder reuse the page. Give the user the
 address it prints (`viewer: ...` on stderr). Pass `--no-view` in unattended runs (it is off when `CI` is set).
 
-The page follows the run as it happens. Each part moves onto the board as the placer puts it. The airwires of the
+The page follows the run as it happens. Each part moves onto the board as the placer puts it, and the AI's cursor goes
+where the run is working (the part being placed, the end of the net just routed, the check being run). The airwires of the
 nets not yet routed are drawn, and they go as the copper lands net by net (the built-in router; FreeRouting's copper
 comes when its pass ends). The stage shows on the board. The Live tab keeps the numbered steps, one chip per
 place-and-route try (click one to see that try's board), the counts (parts placed, nets routed, length left to
