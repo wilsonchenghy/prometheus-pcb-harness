@@ -27,7 +27,9 @@ and let them choose; explain each fix with its finding's `why`. Build end to end
    `critic` in the JSON. `--stage critic` reviews in milliseconds; `--stage check` / `export` reuse the last
    placement and routing (`out/board_state.pkl`).
    For a person watching, `prometheus view out/` opens the board in their browser:
-   layout, 3D, schematic, findings, and live progress with the time left; give them the address it prints.
+   layout, 3D, schematic, findings; while the run goes, the board fills in live (parts placed, copper net by net, the
+   run log, the AI's cursor where the run is working). Give them the address it prints. Tell them each decision
+   there as you make it: `prometheus say out/ "why" --at U1` (a line in the log, a callout at the part).
 5. Fix each finding by changing the design (positions, widths, outline), never by loosening rules; run again.
 6. Done only when `clean` is true. Say which router ran (`router`) and whether KiCad's DRC ran (`kicad_drc.run`);
    name any pin numbers you assumed. The order files are in `out/`: `gerbers.zip`, `bom_jlc.csv`, `cpl.csv`,
