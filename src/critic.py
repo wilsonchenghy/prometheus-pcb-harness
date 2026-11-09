@@ -250,6 +250,45 @@ def review(board, spec: Optional[dict] = None) -> List[dict]:
                         notes.append(_note("warning", "crystal", f"crystal {r} is {d:.1f} mm from {ic} (keep within "
                                            "6 mm: long oscillator traces pick up noise)", [r, ic],
                                            hint=f"move {r} next to {ic}'s oscillator pins"))
+        # what the netlist says belongs together (pcb.implied_near: the placer holds the same pairs), checked where the
+        # checks above do not: a small regulator's capacitors, a regulator's output, an inductor by its switch pin,
+        # a feedback divider by FB
+        import pcb as _pcb
+        seen_pins = set()
+        for it in _pcb.implied_near(board):
+            to_ref, to_pin = it["to"]
+            sym = board.comps[to_ref].get("symbol") or {}
+            out_pin = any(q["num"] == to_pin and q["type"] == "power_out" for q in sym.get("pins", []))
+            if it["kind"] == "crystal" or (it["kind"] == "decoupling" and to_ref in ics and not out_pin):
+                continue                                 # (the decoupling and crystal checks above have it)
+            b_ = (to_ref, to_pin)
+            if b_ not in pads:
+                continue
+            name = _pcb._pin_name(board.comps[to_ref], to_pin)
+            pin_s = f"{to_ref}.{to_pin}{' (' + name + ')' if name else ''}"
+            if it["kind"] == "decoupling":               # (the pin's nearest capacitor of its net, whichever: the bulk
+                if b_ in seen_pins:                      #  one may sit back while a ceramic is close)
+                    continue
+                seen_pins.add(b_)
+                n = pn.get(b_)
+                ds = [min(x.distance(y) for x in pads[(c, cn)] for y in pads[b_]) for c in caps
+                      for cn in board.comps[c]["pads"] if pn.get((c, cn)) == n and (c, cn) in pads]
+                d = min(ds) if ds else None
+                if d is not None and d > it["limit"] * 1.5:
+                    notes.append(_note("warning", "decoupling", f"{pin_s} ({n}): its nearest capacitor is {d:.1f} mm "
+                                       f"away (keep one within {it['limit'] * 1.5:g} mm)", [to_ref],
+                                       hint=f"move a capacitor of {n} next to {pin_s}, or hold it there with near in "
+                                            "the requirements"))
+                continue
+            a_ = (it["ref"], it["pin"])
+            if a_ not in pads:
+                continue
+            d = min(x.distance(y) for x in pads[a_] for y in pads[b_])
+            if d > it["limit"] * 1.5:
+                notes.append(_note("warning", "near", f"{it['ref']} is {d:.1f} mm from {pin_s}: {it['why']}, which "
+                                   f"wants it within {it['limit']:g} mm", [it["ref"], to_ref],
+                                   hint=f"move {it['ref']} next to {pin_s}, or hold it there with near in the "
+                                        "requirements"))
         # connectors at the edge
         for r, c in board.comps.items():
             if not r.upper().startswith("J") or c["overhang"]:
