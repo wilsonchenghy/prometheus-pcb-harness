@@ -1634,6 +1634,13 @@ function lvRedraw(animate) {
   if (animate) lvTween = { from: lvPositions(), t0: performance.now(), dur: 420 };
   animKick();
 }
+// the run is done: the picture plays out what is still queued (a fast run ends before its parts are down), then the
+// finished board, as the run wrote it
+async function finishLive() {
+  if (LV.replay) return;
+  if (LV.on && (LV.pending.length || animBusy() || ANIM.glide)) { setTimeout(finishLive, 300); return; }
+  lvStop(); await loadAll(); drawLive();
+}
 // the events in order: a part placed queues its move, and what comes after waits until the parts are down
 function pump() {
   let changed = false, moved = false;
@@ -1861,7 +1868,7 @@ async function poll() {
       if (P.live && B && !B.error && !LV.replay) { lvStart(B); $$(".tabs2 button")[0].click();
         const evs = LV.evs.slice(); lvReset(); LV.evs = evs; B = lvBoard(); LV.pending = evs.slice(); pump(); } } }   // (what the run did before
         //  the page went live, played through: the parts carried in, then on with the run as it comes)
-  if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; snap = null; if (!LV.replay) { lvStop(); await loadAll(); drawLive(); } }
+  if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; snap = null; if (!LV.replay) finishLive(); }
   setTimeout(poll, P && !P.done ? 500 : 4000);
 }
 (async () => { P = await getJ("/api/progress"); conInit(); await loadAll(); poll(); pollLive(); pollEvents(); })();
