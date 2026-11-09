@@ -34,6 +34,8 @@
     parts placed and nets routed, the length left to route with its curve, and the checks as they run.
   - "Replay the run" plays a finished run again at 1x, 4x or 16x.
 - `GET /api/events?since=` serves the events after a byte offset (whole lines only).
+- A run that ends before its parts are shown down (a small board places and routes in seconds) plays out on the
+  page before the finished board replaces it. The picture used to jump to the result mid-placement.
 - A try that is not clean is said on the board before the next one starts. The notice reads like "try 1: 6 problems,
   route XTAL1: could not reach U1.7. Tearing it up and placing again with another seed.", the pins it failed at
   are ringed, its copper fades out as it is torn up, and only then are the parts placed again. When the parts moved
