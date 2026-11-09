@@ -2962,3 +2962,33 @@ def test_prometheus_say_puts_the_agents_word_in_the_live_log(tmp_path, monkeypat
     monkeypatch.setattr(pcb, "LIVE", str(out / "live.jsonl"))
     pcb.say("in the run", ref="C1")
     assert json.loads((out / "live.jsonl").read_text().splitlines()[-1])["ref"] == "C1"
+
+
+def test_the_netlist_holds_an_ldos_capacitors_by_its_pins():
+    """an LDO in SOT-23-5 (five pads: once too few to count as a chip) gets its input and output capacitors by its
+    VIN and VOUT pins with no requirement written (its input capacitor was placed 16-18 mm away, by the connector);
+    the critic flags one left far"""
+    import critic
+    import pcb
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).parent / "data" / "ldo_caps.py"))
+    kinds = {(it["ref"], it["to"]): it["kind"] for it in pcb.implied_near(b)}
+    assert kinds[("C1", ("U1", "1"))] == "decoupling" and kinds[("C2", ("U1", "5"))] == "decoupling"   # (VOUT: power_out)
+    pcb.autoplace(b, seed=0)
+    pads = {(r, n): g for r, n, L, g, d in b.pad_shapes()}
+    assert pads[("C1", "1")].distance(pads[("U1", "1")]) < 3.5
+    assert pads[("C2", "1")].distance(pads[("U1", "5")]) < 3.5
+    b.comps["C1"]["at"] = (5.0, 4.0)
+    b.__dict__.pop("_pads_memo", None)
+    far = [n for n in critic.review(b) if n["kind"] == "decoupling"]
+    assert far and "U1.1 (VIN)" in far[0]["text"] and "nearest capacitor" in far[0]["text"]
+
+
+def test_a_bucks_inductor_and_divider_belong_by_its_switch_and_feedback_pins():
+    """on the LMR33630 buck (boards/12): the inductor by SW, the divider's resistors by FB, the input caps by VIN"""
+    import pcb
+    import pcb_cli
+    b, _ = pcb_cli.load(str(Path(__file__).parent.parent / "boards" / "12_buck_12v_to_5v" / "board.py"))
+    got = {(it["kind"], it["ref"], it["to"][1]) for it in pcb.implied_near(b)}
+    assert ("switch node", "L1", "8") in got and ("feedback", "R1", "5") in got and ("feedback", "R2", "5") in got
+    assert any(k == "decoupling" and to == "2" for k, r, to in got)

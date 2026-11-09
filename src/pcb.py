@@ -3020,6 +3020,104 @@ def from_netlist(path: str, outline, name: Optional[str] = None, at: Optional[Di
     return b
 
 
+GROUND_NET = re.compile(r"^(A|D|P|S)?GND\w*$|^VSS\w*$|^0V$|^GROUND$|^EARTH$", re.I)
+
+
+def _chips(board) -> set:
+    """the parts a capacitor, crystal, inductor or divider is held to: a chip (six pads or more), and a small one (a
+    U or IC with three pads or more: an LDO in SOT-23-5, a reference, a load switch)"""
+    return {r for r, c in board.comps.items()
+            if len(c["pads"]) >= 6 or (re.match(r"^(U|IC)\d", r, re.I) and len([n for n in c["pads"] if n]) >= 3)}
+
+
+def _pin_name(c: dict, num: str) -> str:
+    sym = c.get("symbol")
+    if not sym:
+        return ""
+    return next((q.get("name", "") for q in sym.get("pins", []) if q["num"] == num), "")
+
+
+def implied_near(board, refs=None) -> List[dict]:
+    """the parts the netlist says belong together, though no requirement names them: each a dict of ``ref`` and its
+    ``pin`` held within ``limit`` mm of ``to`` (a chip's pin), with the ``kind`` and ``why``. The placer holds them by
+    springs and the critic checks them:
+
+    - decoupling: a two-pin capacitor between a supply and ground belongs by one of that supply's chip pins (a
+      symbol's power input, or a regulator's output); the netlist does not say which, so the capacitors are dealt
+      over those pins in turn, 3 mm;
+    - crystal: a crystal by its chip's oscillator pin, 5 mm (its load capacitors follow as decoupling of that net);
+    - switch node: a switching regulator's inductor by its SW / LX pin, 4 mm (the loop that radiates);
+    - feedback: the divider's resistor by the FB pin, 4 mm (the node that picks up noise).
+
+    ``refs``: only these parts (the placer's moving ones); a part a requirement places (``board.near``) is left to it"""
+    pnet = board.pad_net()
+    poured = {pz["net"] for pz in board.pours}
+    ground = lambda n: bool(n) and (n in poured or bool(GROUND_NET.match(n)))
+    chips = _chips(board)
+    told = {x.partition(".")[0] for a_, b_, _ in getattr(board, "near", []) for x in (a_, b_)}
+    pool = set(board.comps) if refs is None else set(refs)
+    out: List[dict] = []
+    deal: Dict[str, int] = {}
+    two = lambda c: len([n for n in c["pads"] if n]) == 2
+    for r in sorted(pool, key=lambda r: (len(r), r)):
+        c = board.comps[r]
+        if r in told or not r.upper().startswith("C") or not two(c):
+            continue
+        ns = {num: pnet.get((r, num)) for num in c["pads"] if num}
+        sup = [(num, n) for num, n in ns.items() if n and not ground(n)]
+        if len(sup) != 1 or not any(ground(n) for n in ns.values()) or sup[0][1] not in board.nets:
+            continue
+        num, n = sup[0]
+        targets = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in chips and p_[0] != r
+                   and _decap_target(board.comps[p_[0]], p_[0], p_[1]) is not False]
+        if not targets:
+            continue
+        k = deal.get(n, 0)
+        deal[n] = k + 1
+        tgt = targets[k % len(targets)]
+        tht = any(p_.get("drill") for p_ in board.comps[tgt[0]]["pads"].get(tgt[1], []))
+        if _decap_target(board.comps[tgt[0]], *tgt):    # (one dealt to a connector's pin is left free: the chip's
+            out.append({"ref": r, "pin": num, "to": tgt, "limit": 5.0 if tht else 3.0, "kind": "decoupling",   # own stay as many;
+            #                                              a through-hole pin's (a TO-220's) pads stand further apart)
+                        "why": f"{r} decouples {tgt[0]}.{tgt[1]} ({n})"})
+    for r in sorted(pool):
+        c = board.comps[r]
+        if r in told:
+            continue
+        if re.match(r"^(Y|X)\d", r):                     # a crystal held to its IC's oscillator pins
+            for num in c["pads"]:
+                n = pnet.get((r, num))
+                if not n or ground(n) or n not in board.nets:
+                    continue
+                ic_pins = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in chips and p_[0] != r]
+                if ic_pins:
+                    out.append({"ref": r, "pin": num, "to": ic_pins[0], "limit": 5.0, "kind": "crystal",
+                                "why": f"crystal {r} by {ic_pins[0][0]}'s oscillator pin ({n})"})
+        elif re.match(r"^L\d", r, re.I) and two(c):     # an inductor by the switch pin it is on
+            for num in c["pads"]:
+                n = pnet.get((r, num))
+                if not n or n not in board.nets:
+                    continue
+                sw = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in chips and p_[0] != r
+                      and re.match(r"^(SW|LX|PH|PHASE|SWITCH|L)\d*$", _pin_name(board.comps[p_[0]], p_[1]), re.I)]
+                if sw:
+                    out.append({"ref": r, "pin": num, "to": sw[0], "limit": 4.0, "kind": "switch node",
+                                "why": f"inductor {r} by {sw[0][0]}'s switch pin ({n})"})
+                    break
+        elif re.match(r"^R\d", r, re.I) and two(c):     # a divider's resistor by the FB pin it sets
+            for num in c["pads"]:
+                n = pnet.get((r, num))
+                if not n or n not in board.nets:
+                    continue
+                fb = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in chips and p_[0] != r
+                      and re.match(r"^(V?FB|ADJ|FEEDBACK|VSENSE)\d*$", _pin_name(board.comps[p_[0]], p_[1]), re.I)]
+                if fb:
+                    out.append({"ref": r, "pin": num, "to": fb[0], "limit": 4.0, "kind": "feedback",
+                                "why": f"{r} sets {fb[0][0]}'s feedback ({n})"})
+                    break
+    return out
+
+
 def _decap_target(c: dict, ref: str, num: str):
     """a pin a decoupling capacitor belongs by: a chip's supply pin (a symbol's power input). A connector's pin is
     None: it takes its turn in the deal (so the chip's pins get as many as before) but holds no capacitor; a
@@ -3028,7 +3126,7 @@ def _decap_target(c: dict, ref: str, num: str):
         return None
     sym = c.get("symbol")
     if sym and not sym.get("auto"):                      # (a generic symbol says nothing of a chip's supply pins)
-        return any(q["num"] == num and q["type"] == "power_in" for q in sym["pins"])
+        return any(q["num"] == num and q["type"] in ("power_in", "power_out") for q in sym["pins"])
     return True
 
 
@@ -3094,36 +3192,9 @@ def autoplace(board: Board, move: Optional[Sequence[str]] = None, gap: float = 1
     NETS = dict(board.nets)
     pnet = board.pad_net()
     many = {r for r, c in board.comps.items() if len(c["pads"]) >= 6}
-    deal: Dict[str, int] = {}
-    told = {x.partition(".")[0] for a_, b_, _ in getattr(board, "near", []) for x in (a_, b_)}    # (a requirement says where it goes)
-    for r in sorted(mset, key=lambda r: (len(r), r)):
-        c = board.comps[r]
-        if r in told or not r.upper().startswith("C") or len([n for n in c["pads"] if n]) != 2:
-            continue
-        ns = {num: pnet.get((r, num)) for num in c["pads"] if num}
-        sup = [(num, n) for num, n in ns.items() if n and n not in poured]
-        if len(sup) != 1 or not any(n in poured for n in ns.values()):
-            continue
-        num, n = sup[0]
-        targets = [tuple(p_) for p_ in NETS[n]["pins"] if p_[0] in many and _decap_target(board.comps[p_[0]], p_[0], p_[1])
-                   is not False]
-        if not targets:
-            continue
-        k = deal.get(n, 0)
-        deal[n] = k + 1
-        tgt = targets[k % len(targets)]
-        if _decap_target(board.comps[tgt[0]], *tgt):    # (one dealt to a connector's pin is left free: the chip's
-            NETS[f"~decap {r}"] = {"pins": [(r, num), tgt], "amps": 5.0, "limit": 3.0}   # own stay as many)
-    for r in sorted(mset):                               # a crystal held to its IC's oscillator pins (short, quiet
-        if not re.match(r"^(Y|X)\d", r):                 # traces), its load capacitors following through their nets
-            continue
-        for num in board.comps[r]["pads"]:
-            n = pnet.get((r, num))
-            if not n or n in poured or n not in board.nets:
-                continue
-            ic_pins = [tuple(p_) for p_ in board.nets[n]["pins"] if p_[0] in many and p_[0] != r]
-            if ic_pins:
-                NETS[f"~xtal {r}.{num}"] = {"pins": [(r, num), ic_pins[0]], "amps": 5.0, "limit": 5.0}
+    for it in implied_near(board, refs=mset):           # the parts the netlist says belong together (decoupling by its
+        NETS[f"~{it['kind']} {it['ref']}.{it['pin']}"] = {   # pin, a crystal by its chip, an inductor by the switch pin,
+            "pins": [(it["ref"], it["pin"]), it["to"]], "amps": 5.0, "limit": it["limit"]}   # a divider by FB): springs
     for a0, b0, dmax in getattr(board, "near", []):     # the requirements' "within d mm of": a spring that turns
         ta, tb = near_target(board, a0), near_target(board, b0)   # stiff past d (pins on a shared net, else the
         if not ta or not tb:                                      # centres; "U1.9": that pin)

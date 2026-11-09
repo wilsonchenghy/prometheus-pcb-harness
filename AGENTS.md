@@ -102,6 +102,17 @@ is not given, a board far larger than its parts: an error, shrink the outline to
 milliseconds; an `error` makes the run not clean. The placer honours `near` too: each part held near another is
 placed right after it and moved within its distance if it ends up further.
 
+Some parts belong together whatever the requirements say, and the netlist shows which (`pcb.implied_near(board)`
+lists them). The placer holds them and the critic checks them:
+- each decoupling capacitor goes by a supply pin of its net: any chip's, a small regulator's (SOT-23-5) included, and
+  a regulator's output; 3 mm, or 5 mm by a through-hole pin;
+- a crystal goes by its chip's oscillator pin, 5 mm;
+- a switching regulator's inductor goes by its SW / LX pin, 4 mm;
+- a feedback divider's resistors go by the FB pin, 4 mm.
+
+A part named in `near` is left to that requirement. Write `near` when the datasheet asks for something tighter, or
+for any other pair.
+
 **Keep the routing in git:** make a `routes/` folder beside the board script. A clean run then writes its placement
 and copper there (`<board>_<design>.json.gz`, the board's older one replaced), and a later run of the same design,
 on any machine, loads it instead of placing and routing (seconds, the same copper). Commit it with the script;
