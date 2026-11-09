@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**Fixed: parts that belong together, from the netlist**
+- An LDO in SOT-23-5 got its input capacitor 16-18 mm away, by the connector, and the critic said nothing. The
+  placer held decoupling capacitors only to chips of six pads or more, only to their power inputs (not a
+  regulator's output), and only when ground had a pour.
+- Now `pcb.implied_near(board)` lists what the netlist says belongs together, and the placer and the critic use the
+  same list:
+  - decoupling capacitors by the supply pins of any chip, small regulators and their outputs included (3 mm; 5 mm
+    by a through-hole pin), with ground known by its name as well as its pour;
+  - a crystal by its chip's oscillator pin (5 mm);
+  - a switching regulator's inductor by its SW / LX pin (4 mm);
+  - a feedback divider's resistors by the FB pin (4 mm).
+- The critic warns of a pin whose nearest capacitor of its supply, or a part whose pin, is further than 1.5 times
+  that.
+- The LDO's input capacitor now lands 1.5-1.8 mm from VIN. The 26 boards in `boards/` gain no new warning.
+
 **Added: the run, live in the viewer**
 - The run writes each step as it happens to `out/live.jsonl`: each part the placer puts down (and a few frames a
   second of its annealing), each net's copper as the router finishes it, each try's start and end, the counts at
