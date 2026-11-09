@@ -19,6 +19,10 @@
     parts placed and nets routed, the length left to route with its curve, and the checks as they run.
   - "Replay the run" plays a finished run again at 1x, 4x or 16x.
 - `GET /api/events?since=` serves the events after a byte offset (whole lines only).
+- A try that is not clean is said on the board before the next one starts. The notice reads like "try 1: 6 problems,
+  route XTAL1: could not reach U1.7. Tearing it up and placing again with another seed.", the pins it failed at
+  are ringed, its copper fades out as it is torn up, and only then are the parts placed again. When the parts moved
+  after routing, it looked like the page had changed its mind. The try that is kept is said too.
 - The AI's cursor and the parts move together. One animation loop draws the board and puts the cursor in the same
   frame (the cursor had a CSS easing of its own, so it ran ahead of or behind the part). Each part placed is a move
   of its own: the cursor reaches where the part waits, then carries it to its place, the part drawn under it. Events
