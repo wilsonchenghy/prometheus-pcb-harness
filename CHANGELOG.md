@@ -19,6 +19,12 @@
     parts placed and nets routed, the length left to route with its curve, and the checks as they run.
   - "Replay the run" plays a finished run again at 1x, 4x or 16x.
 - `GET /api/events?since=` serves the events after a byte offset (whole lines only).
+- The AI's cursor and the parts move together. One animation loop draws the board and puts the cursor in the same
+  frame (the cursor had a CSS easing of its own, so it ran ahead of or behind the part). Each part placed is a move
+  of its own: the cursor reaches where the part waits, then carries it to its place, the part drawn under it. Events
+  after a placement wait until the parts are down, so copper never lands before the parts it joins. A page that
+  goes live after the placer finished plays what it missed. The agent's words (`prometheus say`) are a callout and
+  no longer take the cursor away from the work.
 - The verdict and the header say what the run is doing ("Placing.", "Checking.", "Writing the order files."), where
   they said "Routing." whatever the stage.
 - `prometheus say out/ "text" --at U1` (or `pcb.say(text, ref=...)` in a board script): the agent's word to the engineer
