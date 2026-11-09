@@ -247,7 +247,8 @@ svg.pan { width: 100%; height: 100%; display: block; cursor: grab; } svg.pan.dra
 #aisay .x { position: absolute; right: 4px; top: 2px; border: 0; background: none; color: var(--text3); cursor: pointer; font-size: 12px; }
 #aisay::after { content: ""; position: absolute; left: 18px; bottom: -7px; width: 12px; height: 12px; background: #fff; border-right: 1px solid #c7d6ea; border-bottom: 1px solid #c7d6ea; transform: rotate(45deg); }
 #aisay.free::after { display: none; }
-#aicur { position: absolute; left: 0; top: 0; z-index: 8; pointer-events: none; display: none; transition: transform .38s cubic-bezier(.3,.7,.2,1), opacity .4s; will-change: transform; }
+#aicur { position: absolute; left: 0; top: 0; z-index: 8; pointer-events: none; display: none; transition: opacity .4s; will-change: transform; }
+#aicur.carry svg { transform: scale(.88); transform-origin: 2px 2px; } #aicur svg { transition: transform .12s; }
 #aicur.on { display: block; } #aicur.idle { opacity: .35; }
 #aicur svg { display: block; width: 18px; height: 22px; filter: drop-shadow(0 2px 3px rgba(17,24,39,.35)); }
 #aicur span { position: absolute; left: 15px; top: 17px; white-space: nowrap; padding: 2px 7px 2px 5px; background: var(--blue); color: #fff; font: 500 10px var(--mono); letter-spacing: .06em; border-radius: 3px; box-shadow: 0 4px 10px -4px rgba(17,24,39,.5); }
@@ -1434,7 +1435,7 @@ const LTAG = { ai: "#0b7a75", route: "#2f6fb5", place: "#8a5f19", try: "#6a4fb0"
                sch: "#237a4b", critic: "#a5621a", export: "#5a6774", parts: "#5a6774", error: "#b3261e", warn: "#a5621a",
                note: "#5a6774", run: "#5a6774", view: "#8a95a1", metrics: "#1f5fa8", stage: "#18212b" };
 const mkState = () => ({ places: {}, cu: {}, metrics: null, unrouted: null, routed: new Set(), phase: "place", t0: null });
-LV.main = mkState(); LV.pageT = Date.now() / 1000;
+LV.main = mkState(); LV.pageT = Date.now() / 1000; LV.pending = [];
 
 function lvReset() {
   Object.assign(LV, { tries: {}, main: mkState(), stages: [], checks: {}, hist: [], ntries: null, kept: null, done: false,
@@ -1460,21 +1461,20 @@ function lvApply(e, quiet) {
         if (LV.follow) LV.view = e.try; conLine(T, "try", `try ${e.try + 1}: placing (seed ${e.seed})`); return true; }
       Object.assign(LV.tries[e.try] || (LV.tries[e.try] = { st: mkState() }), { state: e.clean ? "clean" : "bad", n: e.n, seconds: e.seconds, problems: e.problems });
       return false;
-    case "place": st.places[e.ref] = [e.at[0], e.at[1], e.rot, e.side]; st.phase = "place"; LV.last = { ref: e.ref, t: performance.now(), try: e.try };
-      if (e.try == null || e.try === LV.view) aiAt(e.at[0], e.at[1], "placing " + e.ref, true);
+    case "place": st.places[e.ref] = [e.at[0], e.at[1], e.rot, e.side]; st.phase = "place";
+      if (LV.on && (e.try == null || e.try === LV.view)) animPlace(e.ref, [e.at[0], e.at[1]]);
       return true;
     case "places": Object.assign(st.places, e.places);
-      if (e.phase === "anneal") { st.phase = "anneal"; if (e.try == null || e.try === LV.view) { const ks = Object.keys(e.places), r = ks[Math.floor(Math.random() * ks.length)];
-        if (r) aiAt(e.places[r][0], e.places[r][1], `improving · ${Math.round((e.frac || 0) * 100)}%`); } }
+      if (e.phase === "anneal") { st.phase = "anneal"; if (e.try == null || e.try === LV.view) aiLabel(`improving the placement · ${Math.round((e.frac || 0) * 100)}%`); }
       if (e.phase === "final") conLine(T, "place", `placed ${Object.keys(e.places).length} parts` + (e.failed && e.failed.length ? `; no room for ${e.failed.join(", ")}` : ""));
       return true;
     case "phase": st.phase = e.name; if (e.name === "route") { st.routed = new Set(); conLine(T, "route", `try ${e.try + 1}: routing (${e.router === "freerouting" ? "FreeRouting" : "built-in router"})`);
-        const c = aiCenter(); if (c && e.router === "freerouting" && (e.try == null || e.try === LV.view)) aiAt(c[0], c[1], "FreeRouting…"); }
+        const c = aiCenter(); if (c && e.router === "freerouting" && (e.try == null || e.try === LV.view)) aiGlide(c, "FreeRouting…"); }
       return true;
     case "copper": if (e.net == null) { st.cu = groupCu(e.tracks, e.vias); if (LV.follow && e.try != null && LV.kept == null) LV.view = e.try; }   // (a try's routing done: shown)
       else st.cu[e.net] = groupCu(e.tracks, e.vias)[e.net] || { tracks: [], vias: [] };
       if (e.net) { LV.lastNet = { net: e.net, t: performance.now(), try: e.try };
-        if (e.try == null || e.try === LV.view) { const p = (e.tracks && e.tracks.length) ? e.tracks[e.tracks.length - 1][3].slice(-1)[0] : null; if (p) aiAt(p[0], p[1], "routing " + e.net, true); } }
+        if (e.try == null || e.try === LV.view) { const p = (e.tracks && e.tracks.length) ? e.tracks[e.tracks.length - 1][3].slice(-1)[0] : null; if (p) aiGlide(p, "routing " + e.net); } }
       return true;
     case "net": if (e.ok) st.routed.add(e.net); else conLine(T, "route", (e.problems || [])[0] || `${e.net}: not joined`);
       return true;
@@ -1488,7 +1488,7 @@ function lvApply(e, quiet) {
       LV.main.phase = "kept"; if (LV.follow) LV.view = null;
       conLine(T, "try", `kept try ${e.k + 1}` + (e.clean ? " (clean)" : ` (${e.n} problems: the fewest)`)); return true;
     case "checks": LV.checks[e.stage] = e;
-      if (e.state === "running") { conLine(T, "check", `${e.stage}: checking…`); const c = aiCenter(); if (c) aiAt(c[0], c[1], e.stage === "kicad" ? "KiCad DRC" : e.stage + " check", true); }
+      if (e.state === "running") { conLine(T, "check", `${e.stage}: checking…`); const c = aiCenter(); if (c) aiGlide(c, e.stage === "kicad" ? "KiCad DRC" : e.stage + " check"); }
       return false;
     case "findings": LV.findings = e.items; return false;
     case "log": conLine(T, e.tag, e.text); return false;
@@ -1534,6 +1534,7 @@ function lvBoard() {                                     // B for drawLayout: th
   const now = performance.now(), tw = lvTween;
   const comps = base.comps.map(c => { let p = pl[c.ref], at, deg;
     if (p) { at = [p[0], p[1]]; deg = p[2]; } else if (strip[c.ref]) { at = strip[c.ref]; deg = 0; } else return c._wasUnplaced ? lvMoved(c, c.at, c.rot) : c;
+    if (ANIM.hold[c.ref]) { const h = ANIM.hold[c.ref]; return lvMoved(c, [h[0], h[1]], h[2] != null ? h[2] : deg); }   // (waiting, or carried)
     if (tw && tw.from[c.ref]) { const k = Math.min(1, (now - tw.t0) / tw.dur), e = 1 - Math.pow(1 - k, 3), f = tw.from[c.ref];
       if (f[0] !== at[0] || f[1] !== at[1]) at = [f[0] + (at[0] - f[0]) * e, f[1] + (at[1] - f[1]) * e]; }
     return lvMoved(c, at, deg); });
@@ -1541,7 +1542,7 @@ function lvBoard() {                                     // B for drawLayout: th
   for (const n in st.cu) { for (const t of st.cu[n].tracks) tracks.push({ net: t[0], layer: t[1], w: t[2], pts: t[3] });
                            for (const v of st.cu[n].vias) vias.push({ net: v[0], at: [v[1], v[2]], dia: v[3], drill: v[3] * 0.5 }); }
   let [x0, y0, x1, y1] = base.bounds;
-  for (const c of comps) if (strip[c.ref]) { x0 = Math.min(x0, c.at[0] + c._box[0] - 1); y0 = Math.min(y0, c.at[1] + c._box[1] - 1); }
+  for (const c of comps) if (strip[c.ref] || ANIM.hold[c.ref]) { x0 = Math.min(x0, c.at[0] + c._box[0] - 1); y0 = Math.min(y0, c.at[1] + c._box[1] - 1); }
   return Object.assign({}, base, { live: true, comps, tracks, vias, copper: [], bounds: [x0, y0, x1, y1], _strip: strip });
 }
 function lvPositions() { const b = B, out = {}; if (b && b.comps) for (const c of b.comps) out[c.ref] = [c.at[0], c.at[1]]; return out; }
@@ -1576,37 +1577,77 @@ function lvAir(svg) {
       } }
 }
 
-// ---------- applying events: as they come (or from the replay), redrawn at most a few times a second ----------
-let lvFrame = 0;
+// ---------- the animation: one loop draws the board and puts the AI's cursor, in the same frame ----------
+// A part placed is a move of its own: the cursor goes to where the part waits, picks it up, and carries it to its
+// place (the part drawn under the cursor all the way). The events after it wait until it lands, so the copper never
+// comes before the parts it joins. The cursor glides to where the router or a check works; the agent's words
+// (prometheus say) are a callout and leave the cursor alone.
+const ANIM = { q: [], job: null, hold: {}, cur: null, glide: null, label: "", act: 0, raf: 0, lastLive: 0 };
+const ease = (k) => k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+const lerp = (a, b, k) => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k];
+const animBusy = () => !!(ANIM.job || ANIM.q.length);
+function animPlace(ref, to) {                            // queued: the part stays where it is drawn until its turn
+  const c = B && B.live && B.comps.find(x => x.ref === ref), from = c ? [c.at[0], c.at[1]] : to;
+  if (!ANIM.hold[ref]) ANIM.hold[ref] = [from[0], from[1], c ? c.rot : null];
+  ANIM.q.push({ ref, to }); animKick();
+}
+function aiGlide(to, label) { ANIM.glide = { from: ANIM.cur ? ANIM.cur.slice() : to.slice(), to: to.slice(), t0: performance.now(), dur: 360 }; aiLabel(label); animKick(); }
+function aiLabel(label) { ANIM.label = label; ANIM.act = performance.now(); if (!ANIM.cur) { const c = aiCenter(); if (c) ANIM.cur = c; } animKick(); }
+function animKick() { if (!ANIM.raf && LV.on) ANIM.raf = requestAnimationFrame(animStep); }
+function animStep(now) {
+  ANIM.raf = 0; if (!LV.on || !LV.base) return;
+  if (!ANIM.job && ANIM.q.length) {                      // the next part: reach it, then carry it
+    const it = ANIM.q.shift(), h = ANIM.hold[it.ref] || [it.to[0], it.to[1]], k = ANIM.q.length > 16 ? .35 : ANIM.q.length > 6 ? .6 : 1;
+    const from = [h[0], h[1]], far = Math.hypot(it.to[0] - from[0], it.to[1] - from[1]) > .05;
+    ANIM.job = { ref: it.ref, from, to: it.to, rot: h[2], t0: now, reach: (ANIM.cur ? 260 : 0) * k, carry: (far ? 520 : 120) * k, cur0: ANIM.cur ? ANIM.cur.slice() : from };
+    ANIM.label = "placing " + it.ref; ANIM.act = now; ANIM.glide = null; }
+  if (ANIM.job) { const j = ANIM.job, t = now - j.t0;
+    if (t < j.reach) { ANIM.cur = lerp(j.cur0, j.from, ease(t / j.reach)); j.phase = "reach"; }
+    else if (t < j.reach + j.carry) { const p = lerp(j.from, j.to, ease((t - j.reach) / j.carry)); ANIM.hold[j.ref] = [p[0], p[1], null]; ANIM.cur = p; j.phase = "carry"; }
+    else { delete ANIM.hold[j.ref]; ANIM.cur = j.to.slice(); LV.last = { ref: j.ref, t: performance.now(), try: LV.view }; ANIM.job = null; ANIM.act = now; } }
+  else if (ANIM.glide) { const g = ANIM.glide, k = Math.min(1, (now - g.t0) / g.dur); ANIM.cur = lerp(g.from, g.to, ease(k)); if (k >= 1) ANIM.glide = null; }
+  B = lvBoard(); if (activeView() === "layout") drawLayout();
+  const sv = lvState(); if (sv.phase === "route" && LV.view != null && LV.ratLive != null) {   // (the length left, as it falls)
+    const h = LV.hist, l = h[h.length - 1]; if (!l || l.try !== LV.view || Math.abs(l.ratsnest - LV.ratLive) > .05) h.push({ t: LV.tnow, try: LV.view, ratsnest: LV.ratLive, nets: 1 }); }
+  if (now - ANIM.lastLive > 250 || !(animBusy() || ANIM.glide)) { ANIM.lastLive = now; drawLive(); }
+  drawStageTag(); aiPlace(); sayPlace();
+  const tweening = lvTween && now - lvTween.t0 < lvTween.dur; if (!tweening) lvTween = null;
+  if (animBusy() || ANIM.glide || tweening || (LV.last && now - LV.last.t < 1500)) ANIM.raf = requestAnimationFrame(animStep);
+  if (!animBusy() && LV.pending.length) pump();          // (the parts down: the events after them, in order)
+}
 function lvRedraw(animate) {
   if (!LV.on || !LV.base) return;
-  if (animate) lvTween = { from: lvPositions(), t0: performance.now(), dur: 380 };
-  if (lvFrame) return;
-  lvFrame = requestAnimationFrame(function step() { lvFrame = 0; B = lvBoard(); if (activeView() === "layout") drawLayout();
-    const sv = lvState(); if (sv.phase === "route" && LV.view != null && LV.ratLive != null) {   // (the length left, as it falls)
-      const h = LV.hist, l = h[h.length - 1]; if (!l || l.try !== LV.view || Math.abs(l.ratsnest - LV.ratLive) > .05) h.push({ t: LV.tnow, try: LV.view, ratsnest: LV.ratLive, nets: 1 }); }
-    drawLive(); drawStageTag(); aiPlace(false);
-    if (lvTween && performance.now() - lvTween.t0 < lvTween.dur) lvFrame = requestAnimationFrame(step); else lvTween = null; });
+  if (animate) lvTween = { from: lvPositions(), t0: performance.now(), dur: 420 };
+  animKick();
+}
+// the events in order: a part placed queues its move, and what comes after waits until the parts are down
+function pump() {
+  let changed = false, moved = false;
+  while (LV.pending.length) {
+    const e = LV.pending[0];
+    if (animBusy() && e.kind !== "place") break;
+    LV.pending.shift();
+    if (lvApply(e)) { changed = true; if (e.kind === "places" || e.kind === "kept") moved = true; }
+  }
+  if (changed) lvRedraw(moved); else drawLive();
 }
 function lvStart(b) {                                    // live mode on, from the board as the run first wrote it
   LV.base = lvBase(b); for (const c of LV.base.comps) c._wasUnplaced = !!c.unplaced || LV.base.comps.length && lvMovedRefs().has(c.ref);
   LV.on = true; $("#canvas").classList.add("live"); B = lvBoard(); drawLayout(); fitLayout(true);
 }
 function lvMovedRefs() { const s = new Set(); for (const e of LV.evs) { if (e.kind === "place") s.add(e.ref); if (e.kind === "places" && e.phase === "final") for (const r in e.places) s.add(r); } return s; }
-function lvStop() { LV.on = false; LV.base = null; LV.cur = null; $("#canvas").classList.remove("live"); $("#aicur").classList.remove("on"); drawStageTag(); }
+function lvStop() { LV.on = false; LV.base = null; LV.pending = []; Object.assign(ANIM, { q: [], job: null, hold: {}, cur: null, glide: null, label: "" });
+  $("#canvas").classList.remove("live"); $("#aicur").classList.remove("on"); drawStageTag(); }
 
 async function pollEvents() {
   const r = await getJ("/api/events?since=" + LV.since);
   if (r && r.events) {
     if (r.run && LV.run && r.run !== LV.run && !LV.replay) { LV.since = 0; LV.evs = []; lvReset(); LV.run = r.run; return setTimeout(pollEvents, 50); }
     if (r.next < LV.since) { LV.since = 0; LV.evs = []; lvReset(); }
-    LV.since = r.next; let moved = false, changed = false, paced = 0;
-    for (const e of r.events) { LV.evs.push(e); if (LV.replay) continue; const before = e.kind === "place" || e.kind === "places" || e.kind === "kept";
-      if (lvApply(e)) { changed = true; if (before) moved = true; }
-      if (e.kind === "place" && LV.on && paced < 60 && (e.try == null || e.try === LV.view)) {   // (the placer puts parts down a
-        paced++; lvRedraw(true); await new Promise(ok => setTimeout(ok, 110)); } }                 //  few ms apart: shown one by one)
-    if (!LV.replay && (r.events.length || !LV.on)) {
-      if (changed && LV.on) lvRedraw(moved); else drawLive(); }
+    LV.since = r.next; let changed = false;
+    for (const e of r.events) { LV.evs.push(e); if (LV.replay) continue;
+      if (LV.on) LV.pending.push(e); else if (lvApply(e)) changed = true; }
+    if (!LV.replay) { if (LV.on) pump(); else if (r.events.length || changed) drawLive(); }
   }
   setTimeout(pollEvents, P && !P.done ? 350 : 3000);
 }
@@ -1615,26 +1656,24 @@ async function pollEvents() {
 // ---------- the AI's cursor: where the run is working, as a pointer on the board ----------
 // it goes to the part being placed (and rides along as the part slides in), to the end of the net just routed,
 // to the board's middle for a check; it fades when the run is quiet and goes when the run is done
-function aiAt(x, y, label, click) { LV.cur = { x, y, label, t: performance.now(), click }; aiPlace(false); }
-function aiPlace(instant) {
-  const c = $("#aicur"), cur = LV.cur;
-  if (!LV.on || !cur || activeView() !== "layout" || (LV.done && !LV.replay)) { c.classList.remove("on"); return; }
+function aiPlace() {
+  const c = $("#aicur"), cur = ANIM.cur;
+  if (!LV.on || !cur || activeView() !== "layout" || (LV.done && !LV.replay && !animBusy())) { c.classList.remove("on"); return; }
   const svg = $("#lsvg"), m = svg.getScreenCTM(); if (!m) return;
-  const pt = svg.createSVGPoint(); pt.x = X(cur.x); pt.y = Y(cur.y); const q = pt.matrixTransform(m), r = $("#canvas").getBoundingClientRect();
-  if (instant) { c.style.transition = "none"; requestAnimationFrame(() => c.style.transition = ""); }
+  const pt = svg.createSVGPoint(); pt.x = X(cur[0]); pt.y = Y(cur[1]); const q = pt.matrixTransform(m), r = $("#canvas").getBoundingClientRect();
   c.style.transform = `translate(${(q.x - r.left - 2).toFixed(1)}px,${(q.y - r.top - 2).toFixed(1)}px)`;
-  $("#aicurt b").textContent = cur.label; c.classList.add("on"); c.classList.toggle("idle", performance.now() - cur.t > 3500);
-  if (cur.click && !instant) { c.classList.remove("click"); void c.offsetWidth; c.classList.add("click"); cur.click = false; }
+  const b = $("#aicurt b"); if (b.textContent !== ANIM.label) b.textContent = ANIM.label;
+  c.classList.add("on"); c.classList.toggle("idle", !animBusy() && !ANIM.glide && performance.now() - ANIM.act > 3500);
+  c.classList.toggle("carry", !!(ANIM.job && ANIM.job.phase === "carry"));
 }
-setInterval(() => { if (LV.cur && LV.on) $("#aicur").classList.toggle("idle", performance.now() - LV.cur.t > 3500); }, 700);
+setInterval(() => { if (LV.on) aiPlace(); }, 700);
 // a word from the agent (prometheus say, pcb.say): the cursor takes it there during a run; after it, a callout
 function sayTarget(e) { if (!B || !B.comps) return null;
   if (e.ref) { const c = B.comps.find(x => x.ref === e.ref); if (c) return c.at; }
   if (e.net) for (const c of B.comps) for (const p of c.pads) if (p.net === e.net) return p.at;
   return null; }
 function sayAt(e) {
-  const tgt = sayTarget(e), short = e.text.length > 48 ? e.text.slice(0, 46) + "…" : e.text;
-  if (LV.on && activeView() === "layout") { const c = tgt || aiCenter(); if (c) aiAt(c[0], c[1], short, true); }
+  const tgt = sayTarget(e);
   LV.say = { e, tgt }; $("#aisay .tx").textContent = e.text; sayPlace();
   clearTimeout(LV.sayTimer); LV.sayTimer = setTimeout(() => { $("#aisay").classList.remove("on"); LV.say = null; }, 8000 + 45 * e.text.length);
 }
@@ -1727,15 +1766,18 @@ async function replayRun(speed) {
   LV.replay = { speed, i: 0, timer: 0 }; lvReset(); LV.evs = evs; lvStart(b);
   const moved = lvMovedRefs(); for (const c of LV.base.comps) c._wasUnplaced = moved.has(c.ref);
   LV.view = null; LV.follow = true; lvRedraw(false); fitLayout(true);
-  const step = () => { const R_ = LV.replay; if (!R_) return; let moved_ = false, changed = false, k = 0;
-    while (R_.i < evs.length && k < 40) { const e = evs[R_.i++]; k++; if (lvApply(e)) { changed = true; if (/^place|kept/.test(e.kind)) moved_ = true; }
-      const nx = evs[R_.i]; if (!nx) break; let gap = (nx.t - e.t) / R_.speed;
-      if (e.kind === "place" && (e.try == null || e.try === LV.view)) gap = Math.max(gap, 0.22 / Math.sqrt(R_.speed));   /* (one part at a time) */ if (gap > 0.012) { R_.timer = setTimeout(step, Math.min(gap, 1.2 / Math.sqrt(R_.speed)) * 1000); break; } }
-    if (changed) lvRedraw(moved_); drawLive();
-    if (R_.i >= evs.length) { R_.timer = setTimeout(() => { stopReplay(); }, 1500); } else if (k >= 40) R_.timer = setTimeout(step, 16); };
+  const step = () => { const R_ = LV.replay; if (!R_) return;
+    if (LV.pending.length > 200) { R_.timer = setTimeout(step, 50); return; }   // (the parts still landing: wait)
+    let k = 0;
+    while (R_.i < evs.length && k < 60) { const e = evs[R_.i++]; k++; LV.pending.push(e);
+      const nx = evs[R_.i]; if (!nx) break; const gap = (nx.t - e.t) / R_.speed;
+      if (gap > 0.012) { R_.timer = setTimeout(step, Math.min(gap, 1.2 / Math.sqrt(R_.speed)) * 1000); break; } }
+    pump();
+    if (R_.i >= evs.length) { const end = () => { if (!LV.replay) return; if (LV.pending.length || animBusy()) R_.timer = setTimeout(end, 200); else R_.timer = setTimeout(stopReplay, 1500); }; end(); }
+    else if (k >= 60) R_.timer = setTimeout(step, 16); };
   step();
 }
-async function stopReplay() { if (!LV.replay) return; clearTimeout(LV.replay.timer); LV.replay = null;
+async function stopReplay() { if (!LV.replay) return; clearTimeout(LV.replay.timer); LV.replay = null; LV.pending = [];
   lvReset(); for (const e of LV.evs) lvApply(e, true); lvStop(); await loadAll(); drawLive(); }
 
 // ---------- the run log under the board ----------
@@ -1789,7 +1831,9 @@ async function poll() {
   P = await getJ("/api/progress"); drawHeader();
   if (P && !P.done && P.snap !== snap) { snap = P.snap;          // (the board as the run first wrote it: the live picture
     if (snap && !LV.on) { await loadAll();                       //  starts from it)
-      if (P.live && B && !B.error && !LV.replay) { lvStart(B); $$(".tabs2 button")[0].click(); } } }
+      if (P.live && B && !B.error && !LV.replay) { lvStart(B); $$(".tabs2 button")[0].click();
+        const evs = LV.evs.slice(); lvReset(); LV.evs = evs; B = lvBoard(); LV.pending = evs.slice(); pump(); } } }   // (what the run did before
+        //  the page went live, played through: the parts carried in, then on with the run as it comes)
   if (P && !P.done) wasRunning = true; else if (wasRunning) { wasRunning = false; snap = null; if (!LV.replay) { lvStop(); await loadAll(); drawLive(); } }
   setTimeout(poll, P && !P.done ? 500 : 4000);
 }
