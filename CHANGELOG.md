@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+**Changed: `pcb.py` in four modules**
+- `pcb.py` was one module of 5,900 lines. Placement is now `pcb_place.py`, routing (the built-in router, via
+  repairs, the route cache, `route_jobs`) `pcb_route.py`, the order and KiCad outputs `pcb_export.py`, and the design
+  check (`check`, `check_placement`, `islands`, `via_current`, `loose_ends`) `pcb_check.py`, which `Board` inherits;
+  the board itself and the live run's state stay in `pcb.py` (2,300 lines).
+- Nothing to change in a board script: `pcb.autoplace`, `from pcb import route, cached_route`, and every other name,
+  private ones included, reach the same function as before. The function bodies were moved, not rewritten.
+
 **Fixed: parts that belong together, from the netlist**
 - An LDO in SOT-23-5 got its input capacitor 16-18 mm away, by the connector, and the critic said nothing. The
   placer held decoupling capacitors only to chips of six pads or more, only to their power inputs (not a
