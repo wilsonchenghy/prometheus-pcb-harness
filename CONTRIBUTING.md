@@ -43,7 +43,7 @@ pytest -q                  # about 30 s
 ## Code
 
 Plain Python 3.10+, no build step. The main modules, in `src/`: `pcb.py` (the board: footprints, parts, nets, copper,
-the design check, the live run's events), `pcb_place.py` (the placer and `place_and_route`), `pcb_route.py` (the
+the live run's events), `pcb_check.py` (the design check `Board` inherits), `pcb_place.py` (the placer and `place_and_route`), `pcb_route.py` (the
 built-in router, via repairs, the route cache), `pcb_export.py` (Gerbers, STEP, the KiCad project and its DRC),
 `freerouting.py` (FreeRouting and the KiCad round trip), `fab.py` (house rules, order files, carts), `critic.py`
 (the review against requirements), `pcb_cli.py` (the command line), `schem.py` (schematics). Keep lines under 120

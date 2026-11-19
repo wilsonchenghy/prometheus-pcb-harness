@@ -23,7 +23,7 @@ pcb-harness = "pcb_cli:main"   # (the old name, kept working)
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-py-modules = ["pcb", "pcb_route", "pcb_place", "pcb_export", "schem", "vendor_parts", "fab", "pcb_cli", "freerouting", "critic", "pcb_view", "parts", "kicad_sch", "fpgen", "kicad_import", "symgen"]
+py-modules = ["pcb", "pcb_check", "pcb_route", "pcb_place", "pcb_export", "schem", "vendor_parts", "fab", "pcb_cli", "freerouting", "critic", "pcb_view", "parts", "kicad_sch", "fpgen", "kicad_import", "symgen"]
 packages = ["pcb_footprints", "pcb_viewer_assets", "pcb_symbols"]
 
 [tool.setuptools.package-data]

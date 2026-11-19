@@ -16,7 +16,7 @@ problems = b.check()        # connectivity, IPC-2221 current width, clearance, I
 b.plot("layers.png"); b.bom()
 ```
 
-What it does (`pcb.py` and its `pcb_place.py`, `pcb_route.py`, `pcb_export.py`; their docstrings have the details):
+What it does (`pcb.py` and its `pcb_check.py`, `pcb_place.py`, `pcb_route.py`, `pcb_export.py`; their docstrings have the details):
 
 - **Parts** on KiCad's footprint library (fetched once and cached), plus project footprints in `src/pcb_footprints/`.
 - **Placement**: give parts no position (`at=None`) and `place_and_route(board)` places them (short wire, courtyards
